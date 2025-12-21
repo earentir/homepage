@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{.Title}}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style id="theme-css">
+{{.ThemeCSS}}
+</style>
+</head>
+<body>
+<script>
+// Theme management
+(function() {
+  const savedTemplate = localStorage.getItem('template') || '{{.CurrentTemplate}}' || 'nordic';
+  const savedScheme = localStorage.getItem('scheme') || '{{.CurrentScheme}}' || 'default';
+
+  document.documentElement.setAttribute('data-template', savedTemplate);
+  document.documentElement.setAttribute('data-scheme', savedScheme);
+
+  // Add template and scheme switchers to footer
+  window.addEventListener('DOMContentLoaded', function() {
+    const footer = document.querySelector('.footer .right');
+    if (footer) {
+      // Template switcher
+      const templateSwitcher = document.createElement('div');
+      templateSwitcher.className = 'drop';
+      templateSwitcher.style.position = 'relative';
+      templateSwitcher.style.zIndex = '1000';
+      templateSwitcher.innerHTML = '<div class="btn drop" id="templateBtn"><i class="fas fa-palette"></i> Template</div><div class="menu" id="templateMenu" style="display:none;">{{.TemplateMenuHTML}}</div>';
+      footer.insertBefore(templateSwitcher, footer.firstChild);
+
+      const templateBtn = document.getElementById('templateBtn');
+      const templateMenu = document.getElementById('templateMenu');
+
+      templateBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        templateMenu.style.display = templateMenu.style.display === 'none' ? 'block' : 'none';
+        // Close scheme menu if open
+        const schemeMenu = document.getElementById('schemeMenu');
+        if (schemeMenu) schemeMenu.style.display = 'none';
+      });
+
+      // Scheme switcher
+      const schemeSwitcher = document.createElement('div');
+      schemeSwitcher.className = 'drop';
+      schemeSwitcher.style.position = 'relative';
+      schemeSwitcher.style.zIndex = '1000';
+      schemeSwitcher.innerHTML = '<div class="btn drop" id="schemeBtn"><i class="fas fa-fill-drip"></i> Scheme</div><div class="menu" id="schemeMenu" style="display:none;">{{.SchemeMenuHTML}}</div>';
+      footer.insertBefore(schemeSwitcher, templateSwitcher);
+
+      const schemeBtn = document.getElementById('schemeBtn');
+      const schemeMenu = document.getElementById('schemeMenu');
+
+      schemeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        schemeMenu.style.display = schemeMenu.style.display === 'none' ? 'block' : 'none';
+        // Close template menu if open
+        templateMenu.style.display = 'none';
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!templateSwitcher.contains(e.target)) {
+          templateMenu.style.display = 'none';
+        }
+        if (!schemeSwitcher.contains(e.target)) {
+          schemeMenu.style.display = 'none';
+        }
+      });
+
+      // Template selection
+      templateMenu.querySelectorAll('button[data-template]').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const template = this.getAttribute('data-template');
+          document.documentElement.setAttribute('data-template', template);
+          localStorage.setItem('template', template);
+          templateMenu.style.display = 'none';
+          // Update active state
+          templateMenu.querySelectorAll('button[data-template]').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          // Set cookie and reload to load new CSS and schemes
+          document.cookie = 'template=' + template + '; path=/; max-age=31536000';
+          location.reload();
+        });
+      });
+
+      // Scheme selection
+      schemeMenu.querySelectorAll('button[data-scheme]').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const scheme = this.getAttribute('data-scheme');
+          document.documentElement.setAttribute('data-scheme', scheme);
+          localStorage.setItem('scheme', scheme);
+          schemeMenu.style.display = 'none';
+          // Set cookie and reload to load new CSS
+          document.cookie = 'scheme=' + scheme + '; path=/; max-age=31536000';
+          location.reload();
+        });
+      });
+
+      // Mark current template and scheme
+      const currentTemplateBtn = templateMenu.querySelector('button[data-template="' + savedTemplate + '"]');
+      if (currentTemplateBtn) {
+        currentTemplateBtn.classList.add('active');
+      }
+    }
+  });
+})();
+</script>
+  <div class="header">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <div class="h-title">{{.Title}}</div>
+        <div class="h-sub" id="subtitle">Loading…</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <div class="searchbox">
+        <input id="q" placeholder="Search…" autocomplete="off" />
+        <div class="drop">
+          <div class="pill" id="engineBtn">Google ▾</div>
+          <div class="menu" id="engineMenu"></div>
+        </div>
+      </div>
+      <div class="pill" id="goBtn">Go</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="grid" id="moduleGrid">
+      <div class="card span-4" data-module="status" draggable="true">
+        <h3><i class="fas fa-server"></i> Status<i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></h3>
+        <div class="badge"><span class="pulse"></span><span id="statusText">Online</span></div>
+        <div class="kv"><div class="k">Host</div><div class="v mono" id="host">—</div></div>
+        <div class="kv"><div class="k">Uptime</div><div class="v mono" id="uptime">—</div></div>
+        <div class="kv"><div class="k">Server time</div><div class="v mono" id="time">—</div></div>
+      </div>
+
+      <div class="card span-4" data-module="network" draggable="true">
+        <h3><i class="fas fa-network-wired"></i> Network<div class="header-icons"><div class="timer-circle" id="ipTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div class="kv"><div class="k">LAN IPs</div><div class="v mono" id="lanIps">—</div></div>
+        <div class="kv"><div class="k">Public IP</div><div class="v mono" id="pubIp">—</div></div>
+        <div class="small" id="pubIpErr"></div>
+      </div>
+
+      <div class="card span-4" data-module="weather" draggable="true">
+        <h3><i class="fas fa-cloud-sun"></i> Weather<div class="header-icons"><div class="timer-circle" id="weatherTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div class="kv"><div class="k">Athens, Greece</div><div class="v" id="weather">—</div></div>
+        <div id="weatherForecast"></div>
+        <div class="small" id="weatherErr"></div>
+      </div>
+
+      <div class="card span-4" data-module="cpu" draggable="true">
+        <h3><i class="fas fa-microchip"></i> CPU<div class="header-icons"><div class="timer-circle" id="cpuTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div class="kv"><div class="k">Usage</div><div class="v" id="cpuUsage">—</div></div>
+        <div class="small" id="cpuErr"></div>
+      </div>
+
+      <div class="card span-4" data-module="ram" draggable="true">
+        <h3><i class="fas fa-memory"></i> RAM<div class="header-icons"><div class="timer-circle" id="ramTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div class="kv"><div class="k">Used</div><div class="v mono" id="ramUsed">—</div></div>
+        <div class="kv"><div class="k">Total</div><div class="v mono" id="ramTotal">—</div></div>
+        <div class="kv"><div class="k">Available</div><div class="v mono" id="ramAvailable">—</div></div>
+        <div class="kv"><div class="k">Usage</div><div class="v" id="ramPercent">—</div></div>
+        <div class="small" id="ramErr"></div>
+      </div>
+
+      <div class="card span-4" data-module="disk" draggable="true">
+        <h3><i class="fas fa-hdd"></i> Disk<div class="header-icons"><div class="timer-circle" id="diskTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div class="kv"><div class="k">Used</div><div class="v mono" id="diskUsed">—</div></div>
+        <div class="kv"><div class="k">Total</div><div class="v mono" id="diskTotal">—</div></div>
+        <div class="kv"><div class="k">Free</div><div class="v mono" id="diskFree">—</div></div>
+        <div class="kv"><div class="k">Usage</div><div class="v" id="diskPercent">—</div></div>
+        <div class="small" id="diskErr"></div>
+      </div>
+
+      <div class="card span-6" data-module="links" draggable="true">
+        <h3><i class="fas fa-link"></i> Quick Links<i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></h3>
+        <div class="kv"><div class="k">Router</div><div class="v"><a class="btn" href="http://192.168.1.1" target="_blank" rel="noreferrer"><i class="fas fa-network-wired"></i> Open</a></div></div>
+        <div class="kv"><div class="k">Proxmox / NAS</div><div class="v"><span class="small">Edit these in HTML</span></div></div>
+        <div class="kv"><div class="k">Docs</div><div class="v"><span class="small">Add internal wiki links</span></div></div>
+      </div>
+
+      <div class="card span-6" data-module="utilities" draggable="true">
+        <h3><i class="fas fa-tools"></i> Utilities<i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></h3>
+        <div class="kv"><div class="k">Ping</div><div class="v"><span class="small">Add /api/ping later</span></div></div>
+        <div class="kv"><div class="k">Wake-on-LAN</div><div class="v"><span class="small">Add /api/wol later</span></div></div>
+        <div class="kv"><div class="k">Service checks</div><div class="v"><span class="small">Add /api/checks later</span></div></div>
+      </div>
+
+      <div class="card span-6" data-module="github-user" draggable="true">
+        <h3><i class="fab fa-github"></i> GitHub - Earentir<div class="header-icons"><a href="https://github.com/Earentir" target="_blank" rel="noreferrer"><i class="fas fa-external-link-alt"></i></a><div class="timer-circle" id="githubTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div class="small" style="margin-bottom:8px; color:var(--muted);">Total: <span id="userRepoCount">—</span> repositories</div>
+        <div id="githubUserRepos">
+          <div class="small">Loading repositories...</div>
+        </div>
+        <div class="small" id="githubUserErr"></div>
+      </div>
+
+      <div class="card span-6" data-module="github-org" draggable="true">
+        <h3><i class="fab fa-github"></i> GitHub - network-plane<div class="header-icons"><a href="https://github.com/network-plane" target="_blank" rel="noreferrer"><i class="fas fa-external-link-alt"></i></a><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div class="small" style="margin-bottom:8px; color:var(--muted);">Total: <span id="orgRepoCount">—</span> repositories</div>
+        <div id="githubOrgRepos">
+          <div class="small">Loading repositories...</div>
+        </div>
+        <div class="small" id="githubOrgErr"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="left">
+      <div class="small">Shortcuts:</div>
+      <div class="badge"><span class="mono">/</span><span class="small">focus search</span></div>
+      <div class="badge"><span class="mono">Enter</span><span class="small">search</span></div>
+      <div class="badge"><span class="mono">E</span><span class="small">engine</span></div>
+    </div>
+    <div class="right">
+      <a class="btn" href="/api/summary" target="_blank" rel="noreferrer"><i class="fas fa-code"></i> API</a>
+      <a class="btn" href="/healthz" target="_blank" rel="noreferrer"><i class="fas fa-heartbeat"></i> Health</a>
+      <div class="btn" id="refreshBtn"><i class="fas fa-sync-alt"></i> Refresh</div>
+    </div>
+  </div>
+
+<script>
+const engines = [
+  {name:"Google", url:"https://www.google.com/search?q=%s"},
+  {name:"Perplexity", url:"https://www.perplexity.ai/search?q=%s"},
+  {name:"DuckDuckGo", url:"https://duckduckgo.com/?q=%s"},
+  {name:"Brave", url:"https://search.brave.com/search?q=%s"},
+  {name:"Bing", url:"https://www.bing.com/search?q=%s"},
+  {name:"Wikipedia", url:"https://en.wikipedia.org/wiki/Special:Search?search=%s"},
+  {name:"GitHub", url:"https://github.com/search?q=%s"},
+  {name:"Stack Overflow", url:"https://stackoverflow.com/search?q=%s"},
+  {name:"YouTube", url:"https://www.youtube.com/results?search_query=%s"},
+  {name:"Reddit", url:"https://www.reddit.com/search/?q=%s"},
+];
+
+let engine = engines[0];
+
+const q = document.getElementById('q');
+const engineBtn = document.getElementById('engineBtn');
+const engineMenu = document.getElementById('engineMenu');
+
+function renderEngines(){
+  engineMenu.innerHTML = "";
+  engines.forEach((e) => {
+    const b = document.createElement('button');
+    b.textContent = e.name;
+    b.onclick = () => {
+      engine = e;
+      engineBtn.textContent = e.name + " ▾";
+      engineMenu.style.display = "none";
+      q.focus();
+    };
+    engineMenu.appendChild(b);
+  });
+}
+renderEngines();
+
+engineBtn.onclick = () => {
+  engineMenu.style.display = (engineMenu.style.display === "block") ? "none" : "block";
+};
+
+document.addEventListener('click', (ev) => {
+  if (!engineBtn.contains(ev.target) && !engineMenu.contains(ev.target)) {
+    engineMenu.style.display = "none";
+  }
+});
+
+function goSearch(){
+  const term = (q.value || "").trim();
+  if(!term) return;
+  const u = engine.url.replace("%s", encodeURIComponent(term));
+  window.open(u, "_blank", "noreferrer");
+}
+
+document.getElementById('goBtn').onclick = goSearch;
+q.addEventListener('keydown', (e) => { if(e.key === "Enter") goSearch(); });
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === "/") { e.preventDefault(); q.focus(); }
+  if (e.key.toLowerCase() === "e" && document.activeElement !== q) {
+    engineMenu.style.display = "block";
+  }
+});
+
+function fmtUptime(sec){
+  sec = Math.max(0, sec|0);
+  const d = Math.floor(sec/86400); sec%=86400;
+  const h = Math.floor(sec/3600); sec%=3600;
+  const m = Math.floor(sec/60); sec%=60;
+  const parts = [];
+  if(d) parts.push(d+"d");
+  if(h) parts.push(h+"h");
+  if(m) parts.push(m+"m");
+  parts.push(sec+"s");
+  return parts.join(" ");
+}
+
+// Timer management
+const timers = {
+  cpu: {interval: 5000, lastUpdate: 0, timer: null}, // 5 seconds
+  ram: {interval: 5000, lastUpdate: 0, timer: null}, // 5 seconds
+  disk: {interval: 15000, lastUpdate: 0, timer: null}, // 15 seconds
+  github: {interval: 900000, lastUpdate: 0, timer: null}, // 15 minutes
+  weather: {interval: 1800000, lastUpdate: 0, timer: null}, // 30 minutes
+  ip: {interval: 7200000, lastUpdate: 0, timer: null}, // 2 hours
+  general: {interval: 30000, lastUpdate: 0, timer: null} // 30 seconds for other data
+};
+
+function updateTimer(moduleName) {
+  const timer = timers[moduleName];
+  if (!timer) return;
+  const elapsed = Date.now() - timer.lastUpdate;
+  const remaining = Math.max(0, timer.interval - elapsed);
+  const timerEl = document.getElementById(moduleName + "Timer");
+  if (timerEl) {
+    const seconds = Math.ceil(remaining / 1000);
+    const percent = (elapsed / timer.interval) * 100;
+    const percentClamped = Math.min(100, Math.max(0, percent));
+
+    if (remaining > 0) {
+      timerEl.title = "Next refresh in " + seconds + "s (double-click to refresh now)";
+      timerEl.classList.remove("paused");
+      // Update CSS variable for progress percentage
+      timerEl.style.setProperty("--progress-percent", percentClamped + "%");
+    } else {
+      timerEl.title = "Ready to refresh (double-click to refresh now)";
+      timerEl.classList.add("paused");
+      timerEl.style.setProperty("--progress-percent", "100%");
+    }
+  }
+}
+
+function startTimer(moduleName) {
+  const timer = timers[moduleName];
+  if (!timer) return;
+  timer.lastUpdate = Date.now();
+  updateTimer(moduleName);
+  if (timer.timer) clearInterval(timer.timer);
+  timer.timer = setInterval(() => updateTimer(moduleName), 1000);
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(2) + " " + sizes[i];
+}
+
+async function refreshCPU(){
+  try{
+    const res = await fetch("/api/system", {cache:"no-store"});
+    const j = await res.json();
+    if (j.cpu) {
+      if (j.cpu.error) {
+        document.getElementById("cpuUsage").textContent = "—";
+        document.getElementById("cpuErr").textContent = j.cpu.error;
+      } else {
+        document.getElementById("cpuUsage").textContent = (j.cpu.usage || 0).toFixed(1) + "%";
+        document.getElementById("cpuErr").textContent = "";
+      }
+    }
+    startTimer("cpu");
+  } catch(err){
+    console.error("Error refreshing CPU:", err);
+  }
+}
+
+async function refreshRAM(){
+  try{
+    const res = await fetch("/api/system", {cache:"no-store"});
+    const j = await res.json();
+    if (j.ram) {
+      if (j.ram.error) {
+        document.getElementById("ramUsed").textContent = "—";
+        document.getElementById("ramTotal").textContent = "—";
+        document.getElementById("ramAvailable").textContent = "—";
+        document.getElementById("ramPercent").textContent = "—";
+        document.getElementById("ramErr").textContent = j.ram.error;
+      } else {
+        document.getElementById("ramUsed").textContent = formatBytes(j.ram.used || 0);
+        document.getElementById("ramTotal").textContent = formatBytes(j.ram.total || 0);
+        document.getElementById("ramAvailable").textContent = formatBytes(j.ram.available || 0);
+        document.getElementById("ramPercent").textContent = (j.ram.percent || 0).toFixed(1) + "%";
+        document.getElementById("ramErr").textContent = "";
+      }
+    }
+    startTimer("ram");
+  } catch(err){
+    console.error("Error refreshing RAM:", err);
+  }
+}
+
+async function refreshDisk(){
+  try{
+    const res = await fetch("/api/system", {cache:"no-store"});
+    const j = await res.json();
+    if (j.disk) {
+      if (j.disk.error) {
+        document.getElementById("diskUsed").textContent = "—";
+        document.getElementById("diskTotal").textContent = "—";
+        document.getElementById("diskFree").textContent = "—";
+        document.getElementById("diskPercent").textContent = "—";
+        document.getElementById("diskErr").textContent = j.disk.error;
+      } else {
+        document.getElementById("diskUsed").textContent = formatBytes(j.disk.used || 0);
+        document.getElementById("diskTotal").textContent = formatBytes(j.disk.total || 0);
+        document.getElementById("diskFree").textContent = formatBytes(j.disk.free || 0);
+        document.getElementById("diskPercent").textContent = (j.disk.percent || 0).toFixed(1) + "%";
+        document.getElementById("diskErr").textContent = "";
+      }
+    }
+    startTimer("disk");
+  } catch(err){
+    console.error("Error refreshing Disk:", err);
+  }
+}
+
+async function refreshWeather(){
+  try{
+    const res = await fetch("/api/weather", {cache:"no-store"});
+    const j = await res.json();
+
+    document.getElementById("weather").textContent = j.summary || "—";
+    const forecastContainer = document.getElementById("weatherForecast");
+    if (j.forecast && j.forecast.length > 0) {
+      forecastContainer.innerHTML = "";
+      j.forecast.forEach((day) => {
+        const kv = document.createElement("div");
+        kv.className = "kv";
+        const k = document.createElement("div");
+        k.className = "k";
+        k.textContent = day.split(":")[0];
+        const v = document.createElement("div");
+        v.className = "v";
+        v.textContent = day.split(":")[1] || day;
+        kv.appendChild(k);
+        kv.appendChild(v);
+        forecastContainer.appendChild(kv);
+      });
+    } else {
+      forecastContainer.innerHTML = "";
+    }
+    document.getElementById("weatherErr").textContent = j.error || "";
+
+    startTimer("weather");
+  } catch(err){
+    console.error("Error refreshing weather:", err);
+  }
+}
+
+async function refreshGitHub(){
+  try{
+    const res = await fetch("/api/github", {cache:"no-store"});
+    const j = await res.json();
+
+    // GitHub user repos
+    const userContainer = document.getElementById("githubUserRepos");
+    const userErr = document.getElementById("githubUserErr");
+    if (j.userRepos) {
+      if (j.userRepos.repos && j.userRepos.repos.length > 0) {
+        document.getElementById("userRepoCount").textContent = j.userRepos.total || j.userRepos.repos.length;
+        userContainer.innerHTML = "";
+        j.userRepos.repos.forEach((repo) => {
+          const item = document.createElement("div");
+          item.className = "repo-item";
+          const name = document.createElement("div");
+          name.className = "repo-name";
+          const link = document.createElement("a");
+          link.href = repo.url;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.innerHTML = '<i class="fab fa-github"></i> ' + repo.fullName;
+          name.appendChild(link);
+          item.appendChild(name);
+          if (repo.description) {
+            const desc = document.createElement("div");
+            desc.className = "repo-desc";
+            desc.textContent = repo.description;
+            item.appendChild(desc);
+          }
+          const meta = document.createElement("div");
+          meta.className = "repo-meta";
+          if (repo.stars > 0) {
+            const stars = document.createElement("span");
+            stars.innerHTML = '<i class="fas fa-star"></i> ' + repo.stars;
+            meta.appendChild(stars);
+          }
+          if (repo.language) {
+            const lang = document.createElement("span");
+            lang.innerHTML = '<i class="fas fa-code"></i> ' + repo.language;
+            meta.appendChild(lang);
+          }
+          if (repo.updated) {
+            const updated = document.createElement("span");
+            updated.innerHTML = '<i class="fas fa-clock"></i> ' + repo.updated;
+            meta.appendChild(updated);
+          }
+          item.appendChild(meta);
+          userContainer.appendChild(item);
+        });
+        userErr.textContent = "";
+      } else if (j.userRepos && j.userRepos.error) {
+        userContainer.innerHTML = "";
+        userErr.textContent = j.userRepos.error;
+      } else {
+        userContainer.innerHTML = '<div class="small">No repositories found.</div>';
+        userErr.textContent = "";
+      }
+    }
+
+    // GitHub org repos
+    const orgContainer = document.getElementById("githubOrgRepos");
+    const orgErr = document.getElementById("githubOrgErr");
+    if (j.orgRepos) {
+      if (j.orgRepos.repos && j.orgRepos.repos.length > 0) {
+        document.getElementById("orgRepoCount").textContent = j.orgRepos.total || j.orgRepos.repos.length;
+        orgContainer.innerHTML = "";
+        j.orgRepos.repos.forEach((repo) => {
+          const item = document.createElement("div");
+          item.className = "repo-item";
+          const name = document.createElement("div");
+          name.className = "repo-name";
+          const link = document.createElement("a");
+          link.href = repo.url;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.innerHTML = '<i class="fab fa-github"></i> ' + repo.fullName;
+          name.appendChild(link);
+          item.appendChild(name);
+          if (repo.description) {
+            const desc = document.createElement("div");
+            desc.className = "repo-desc";
+            desc.textContent = repo.description;
+            item.appendChild(desc);
+          }
+          const meta = document.createElement("div");
+          meta.className = "repo-meta";
+          if (repo.stars > 0) {
+            const stars = document.createElement("span");
+            stars.innerHTML = '<i class="fas fa-star"></i> ' + repo.stars;
+            meta.appendChild(stars);
+          }
+          if (repo.language) {
+            const lang = document.createElement("span");
+            lang.innerHTML = '<i class="fas fa-code"></i> ' + repo.language;
+            meta.appendChild(lang);
+          }
+          if (repo.updated) {
+            const updated = document.createElement("span");
+            updated.innerHTML = '<i class="fas fa-clock"></i> ' + repo.updated;
+            meta.appendChild(updated);
+          }
+          item.appendChild(meta);
+          orgContainer.appendChild(item);
+        });
+        orgErr.textContent = "";
+      } else if (j.orgRepos && j.orgRepos.error) {
+        orgContainer.innerHTML = "";
+        orgErr.textContent = j.orgRepos.error;
+      } else {
+        orgContainer.innerHTML = '<div class="small">No repositories found.</div>';
+        orgErr.textContent = "";
+      }
+    }
+
+    startTimer("github");
+  } catch(err){
+    console.error("Error refreshing GitHub:", err);
+  }
+}
+
+async function refreshIP(){
+  try{
+    const res = await fetch("/api/ip", {cache:"no-store"});
+    const j = await res.json();
+
+    // Display LAN IPs with PTR records
+    const lanIpsEl = document.getElementById("lanIps");
+    if (j.network && j.network.hostIps && j.network.hostIps.length > 0) {
+      const ipStrings = j.network.hostIps.map(ipInfo => {
+        if (ipInfo.ptr) {
+          return ipInfo.ip + " (" + ipInfo.ptr + ")";
+        }
+        return ipInfo.ip;
+      });
+      lanIpsEl.textContent = ipStrings.join(", ");
+    } else {
+      lanIpsEl.textContent = "—";
+    }
+
+    if (j.public && j.public.ip) {
+      let pubIpText = j.public.ip;
+      if (j.public.ptr) {
+        pubIpText += " (" + j.public.ptr + ")";
+      }
+      document.getElementById("pubIp").textContent = pubIpText;
+      document.getElementById("pubIpErr").textContent = "";
+    } else {
+      document.getElementById("pubIp").textContent = "—";
+      document.getElementById("pubIpErr").textContent = (j.public && j.public.error) || "";
+    }
+
+    startTimer("ip");
+  } catch(err){
+    console.error("Error refreshing IP:", err);
+  }
+}
+
+async function refresh(){
+  try{
+    const res = await fetch("/api/summary", {cache:"no-store"});
+    const j = await res.json();
+
+    document.getElementById("subtitle").textContent =
+      j.server.os + "/" + j.server.arch + " • " + j.server.goVersion;
+
+    document.getElementById("host").textContent = j.server.hostname;
+    document.getElementById("uptime").textContent = fmtUptime(j.server.uptimeSec);
+    document.getElementById("time").textContent = j.server.time;
+
+  } catch(err){
+    document.getElementById("statusText").textContent = "Degraded";
+  }
+}
+
+document.getElementById("refreshBtn").onclick = refresh;
+
+// Setup double-click handlers for timers
+const refreshHandlers = {
+  cpu: refreshCPU,
+  ram: refreshRAM,
+  disk: refreshDisk,
+  github: refreshGitHub,
+  weather: refreshWeather,
+  ip: refreshIP
+};
+
+["cpu", "ram", "disk", "github", "weather", "ip"].forEach(module => {
+  const timerEl = document.getElementById(module + "Timer");
+  if (timerEl) {
+    let lastClick = 0;
+    timerEl.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const handler = refreshHandlers[module];
+      if (handler) handler();
+    });
+    // Also handle click for better compatibility
+    timerEl.addEventListener("click", (e) => {
+      const now = Date.now();
+      if (now - lastClick < 300) {
+        e.preventDefault();
+        e.stopPropagation();
+        const handler = refreshHandlers[module];
+        if (handler) handler();
+      }
+      lastClick = now;
+    });
+  }
+});
+
+// Initial refresh
+refresh();
+refreshCPU();
+refreshRAM();
+refreshDisk();
+refreshGitHub();
+refreshWeather();
+refreshIP();
+
+// Set up intervals - each module refreshes independently
+setInterval(refresh, 30000); // General refresh every 30s (server info only)
+setInterval(refreshCPU, 5000); // CPU every 5s
+setInterval(refreshRAM, 5000); // RAM every 5s
+setInterval(refreshDisk, 15000); // Disk every 15s
+setInterval(refreshGitHub, 900000); // GitHub every 15 minutes (cache handles this)
+setInterval(refreshWeather, 1800000); // Weather every 30 minutes
+setInterval(refreshIP, 7200000); // IP every 2 hours
+
+// Drag and drop module ordering
+(function() {
+  const grid = document.getElementById('moduleGrid');
+  if (!grid) return;
+
+  let draggedElement = null;
+
+  // Load saved order from localStorage
+  function loadModuleOrder() {
+    const savedOrder = localStorage.getItem('moduleOrder');
+    if (!savedOrder) return;
+
+    try {
+      const order = JSON.parse(savedOrder);
+      const cards = Array.from(grid.querySelectorAll('.card[data-module]'));
+
+      // Create a map of modules by their data-module attribute
+      const moduleMap = new Map();
+      cards.forEach(card => {
+        const moduleId = card.getAttribute('data-module');
+        if (moduleId) {
+          moduleMap.set(moduleId, card);
+        }
+      });
+
+      // Reorder based on saved order
+      order.forEach(moduleId => {
+        const card = moduleMap.get(moduleId);
+        if (card) {
+          grid.appendChild(card);
+        }
+      });
+    } catch (e) {
+      console.error('Failed to load module order:', e);
+    }
+  }
+
+  // Save current order to localStorage
+  function saveModuleOrder() {
+    const cards = Array.from(grid.querySelectorAll('.card[data-module]'));
+    const order = cards.map(card => card.getAttribute('data-module')).filter(Boolean);
+    localStorage.setItem('moduleOrder', JSON.stringify(order));
+  }
+
+  // Initialize drag and drop
+  function initDragAndDrop() {
+    const cards = grid.querySelectorAll('.card[data-module]');
+
+    cards.forEach(card => {
+      card.addEventListener('dragstart', function(e) {
+        // Don't start drag if clicking on timer circle, links, or buttons
+        const target = e.target;
+        if (target.classList.contains('timer-circle') ||
+            target.closest('.timer-circle') ||
+            target.tagName === 'A' ||
+            target.closest('a') ||
+            target.tagName === 'BUTTON' ||
+            target.closest('button')) {
+          e.preventDefault();
+          return false;
+        }
+
+        draggedElement = this;
+        this.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', this.innerHTML);
+      });
+
+      card.addEventListener('dragend', function(e) {
+        this.style.opacity = '1';
+        // Remove drag-over styling from all cards
+        cards.forEach(c => {
+          c.classList.remove('drag-over');
+        });
+        draggedElement = null;
+      });
+
+      card.addEventListener('dragover', function(e) {
+        if (e.preventDefault) {
+          e.preventDefault();
+        }
+        e.dataTransfer.dropEffect = 'move';
+
+        if (draggedElement && this !== draggedElement) {
+          this.classList.add('drag-over');
+        }
+        return false;
+      });
+
+      card.addEventListener('dragleave', function(e) {
+        this.classList.remove('drag-over');
+      });
+
+      card.addEventListener('drop', function(e) {
+        if (e.stopPropagation) {
+          e.stopPropagation();
+        }
+
+        if (draggedElement && this !== draggedElement) {
+          // Get the position of the current element
+          const allCards = Array.from(grid.querySelectorAll('.card[data-module]'));
+          const currentIndex = allCards.indexOf(this);
+          const draggedIndex = allCards.indexOf(draggedElement);
+
+          if (draggedIndex < currentIndex) {
+            // Insert after current element
+            grid.insertBefore(draggedElement, this.nextSibling);
+          } else {
+            // Insert before current element
+            grid.insertBefore(draggedElement, this);
+          }
+
+          saveModuleOrder();
+        }
+
+        this.classList.remove('drag-over');
+        return false;
+      });
+    });
+
+    // Prevent drag when clicking on timer circles
+    const timerCircles = grid.querySelectorAll('.timer-circle');
+    timerCircles.forEach(timer => {
+      timer.addEventListener('mousedown', function(e) {
+        e.stopPropagation();
+      });
+      timer.addEventListener('dragstart', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      });
+    });
+  }
+
+  // Load saved order on page load
+  window.addEventListener('DOMContentLoaded', function() {
+    loadModuleOrder();
+    // Delay init to ensure all other handlers are set up first
+    setTimeout(initDragAndDrop, 100);
+  });
+})();
+</script>
+<style>
+.card[data-module] {
+  user-select: none;
+}
+.card h3 .header-icons {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card[data-module] .drag-handle {
+  opacity: 0.3;
+  cursor: grab;
+  font-size: 12px;
+  transition: opacity 0.2s ease;
+  pointer-events: auto;
+}
+.card[data-module]:hover .drag-handle {
+  opacity: 0.6;
+}
+.card[data-module] .drag-handle:active {
+  cursor: grabbing;
+  opacity: 0.8;
+}
+.card.drag-over {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent) !important;
+  transform: scale(1.02);
+}
+.card[data-module] .timer-circle {
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+.card h3 .header-icons a {
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+}
+.card h3 .header-icons a:hover {
+  opacity: 1;
+}
+</style>
+</body>
+</html>

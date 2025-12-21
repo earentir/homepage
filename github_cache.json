@@ -1,0 +1,106 @@
+{
+  "userRepos": {
+    "repos": [
+      {
+        "name": "ntpcl",
+        "fullName": "earentir/ntpcl",
+        "description": "A simple NTP client to fetch and optionally set system time",
+        "url": "https://github.com/earentir/ntpcl",
+        "stars": 1,
+        "language": "Go",
+        "updated": "2025-12-20"
+      },
+      {
+        "name": "gitearelease",
+        "fullName": "earentir/gitearelease",
+        "description": "Access gitea releases over the API",
+        "url": "https://github.com/earentir/gitearelease",
+        "stars": 0,
+        "language": "Go",
+        "updated": "2025-12-20"
+      },
+      {
+        "name": ".trunk",
+        "fullName": "earentir/.trunk",
+        "description": "Used by Trunk. Learn more at https://docs.trunk.io/check/github-integration",
+        "url": "https://github.com/earentir/.trunk",
+        "stars": 0,
+        "language": "",
+        "updated": "2025-12-20"
+      },
+      {
+        "name": "earapi",
+        "fullName": "earentir/earapi",
+        "description": "",
+        "url": "https://github.com/earentir/earapi",
+        "stars": 0,
+        "language": "Go",
+        "updated": "2025-12-20"
+      },
+      {
+        "name": "simplecal",
+        "fullName": "earentir/simplecal",
+        "description": "",
+        "url": "https://github.com/earentir/simplecal",
+        "stars": 0,
+        "language": "JavaScript",
+        "updated": "2025-12-16"
+      }
+    ],
+    "total": 55,
+    "accountUrl": "https://github.com/Earentir"
+  },
+  "orgRepos": {
+    "repos": [
+      {
+        "name": "shareplane",
+        "fullName": "network-plane/shareplane",
+        "description": "",
+        "url": "https://github.com/network-plane/shareplane",
+        "stars": 0,
+        "language": "Go",
+        "updated": "2025-12-21"
+      },
+      {
+        "name": ".github",
+        "fullName": "network-plane/.github",
+        "description": "Network Plane is a platform of tools all sharing the same TUI and console. The idea is that all tools no matter their function share a common interface to work with.",
+        "url": "https://github.com/network-plane/.github",
+        "stars": 0,
+        "language": "",
+        "updated": "2025-12-21"
+      },
+      {
+        "name": "dnsplane",
+        "fullName": "network-plane/dnsplane",
+        "description": "DNS Server for labs and home",
+        "url": "https://github.com/network-plane/dnsplane",
+        "stars": 0,
+        "language": "Go",
+        "updated": "2025-12-20"
+      },
+      {
+        "name": "whichdns",
+        "fullName": "network-plane/whichdns",
+        "description": "Does a DNS request to identify the DNS server that provided the reply",
+        "url": "https://github.com/network-plane/whichdns",
+        "stars": 0,
+        "language": "Go",
+        "updated": "2025-12-20"
+      },
+      {
+        "name": "dhcplane",
+        "fullName": "network-plane/dhcplane",
+        "description": "A highly configurable and efficient DHCP Server with multiple features",
+        "url": "https://github.com/network-plane/dhcplane",
+        "stars": 0,
+        "language": "Go",
+        "updated": "2025-11-30"
+      }
+    ],
+    "total": 9,
+    "accountUrl": "https://github.com/network-plane"
+  },
+  "lastFetch": "2025-12-21T23:42:12+02:00",
+  "hasData": true
+}
