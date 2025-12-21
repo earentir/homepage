@@ -61,8 +61,8 @@
 
       <div class="card span-4" data-module="network" draggable="true">
         <h3><i class="fas fa-network-wired"></i> Network<div class="header-icons"><div class="timer-circle" id="ipTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-        <div class="kv"><div class="k">LAN IPs</div><div class="v mono" id="lanIps">—</div></div>
-        <div class="kv"><div class="k">Public IP</div><div class="v mono" id="pubIp">—</div></div>
+        <div class="kv"><div class="k">LAN IPs</div><div class="v mono"><span id="lanIps">—</span><div class="small ptr" id="lanPtr"></div></div></div>
+        <div class="kv"><div class="k">Public IP</div><div class="v mono"><span id="pubIp">—</span><div class="small ptr" id="pubPtr"></div></div></div>
         <div class="small" id="pubIpErr"></div>
       </div>
 
@@ -693,29 +693,27 @@ async function refreshIP(){
     const res = await fetch("/api/ip", {cache:"no-store"});
     const j = await res.json();
 
-    // Display LAN IPs with PTR records
+    // Display LAN IPs with PTR records on second line
     const lanIpsEl = document.getElementById("lanIps");
+    const lanPtrEl = document.getElementById("lanPtr");
     if (j.network && j.network.hostIps && j.network.hostIps.length > 0) {
-      const ipStrings = j.network.hostIps.map(ipInfo => {
-        if (ipInfo.ptr) {
-          return ipInfo.ip + " (" + ipInfo.ptr + ")";
-        }
-        return ipInfo.ip;
-      });
-      lanIpsEl.textContent = ipStrings.join(", ");
+      const ips = j.network.hostIps.map(ipInfo => ipInfo.ip);
+      const ptrs = j.network.hostIps.map(ipInfo => ipInfo.ptr).filter(p => p);
+      lanIpsEl.textContent = ips.join(", ");
+      lanPtrEl.textContent = ptrs.length > 0 ? ptrs.join(", ") : "";
     } else {
       lanIpsEl.textContent = "—";
+      lanPtrEl.textContent = "";
     }
 
+    // Display Public IP with PTR on second line
     if (j.public && j.public.ip) {
-      let pubIpText = j.public.ip;
-      if (j.public.ptr) {
-        pubIpText += " (" + j.public.ptr + ")";
-      }
-      document.getElementById("pubIp").textContent = pubIpText;
+      document.getElementById("pubIp").textContent = j.public.ip;
+      document.getElementById("pubPtr").textContent = j.public.ptr || "";
       document.getElementById("pubIpErr").textContent = "";
     } else {
       document.getElementById("pubIp").textContent = "—";
+      document.getElementById("pubPtr").textContent = "";
       document.getElementById("pubIpErr").textContent = (j.public && j.public.error) || "";
     }
 
@@ -1217,6 +1215,12 @@ setInterval(refreshIP, timers.ip.interval);
 }
 .card h3 .header-icons a:hover {
   opacity: 1;
+}
+.ptr {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+  font-family: inherit;
 }
 .card[data-module="cpu"] {
   display: flex;
