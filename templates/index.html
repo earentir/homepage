@@ -85,6 +85,7 @@
         <div class="kv"><div class="k">Total / Used / Free (GB)</div><div class="v mono" id="ramSummary">—</div></div>
         <div class="kv"><div class="k">Usage</div><div class="v" id="ramPercent">—</div></div>
         <div class="small" id="ramErr"></div>
+        <div class="usage-graph" id="ramGraph"></div>
       </div>
 
       <div class="card span-4" data-module="disk" draggable="true">
@@ -334,7 +335,7 @@ function formatBytes(bytes) {
   return (bytes / Math.pow(k, i)).toFixed(2) + " " + sizes[i];
 }
 
-// CPU history for bar graph
+// History for bar graphs
 const minBarWidth = 4; // Minimum width of each bar in pixels
 const barGap = 2; // Gap between bars in pixels
 
@@ -349,9 +350,28 @@ try {
   cpuHistory = [];
 }
 
+// Load RAM history from localStorage
+let ramHistory = [];
+try {
+  const saved = localStorage.getItem('ramHistory');
+  if (saved) {
+    ramHistory = JSON.parse(saved);
+  }
+} catch (e) {
+  ramHistory = [];
+}
+
 function saveCpuHistory() {
   try {
     localStorage.setItem('cpuHistory', JSON.stringify(cpuHistory));
+  } catch (e) {
+    // Ignore storage errors
+  }
+}
+
+function saveRamHistory() {
+  try {
+    localStorage.setItem('ramHistory', JSON.stringify(ramHistory));
   } catch (e) {
     // Ignore storage errors
   }
@@ -412,6 +432,61 @@ function updateCpuGraph(usage) {
   }
 }
 
+function renderRamGraph() {
+  const graph = document.getElementById("ramGraph");
+  if (!graph || ramHistory.length === 0) return;
+
+  // Create bars for existing history
+  while (graph.children.length < ramHistory.length) {
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    graph.appendChild(bar);
+  }
+
+  // Update bar heights
+  for (let i = 0; i < ramHistory.length; i++) {
+    const height = Math.max(2, (ramHistory[i] / 100) * 26);
+    graph.children[i].style.height = height + "px";
+  }
+}
+
+function updateRamGraph(usage) {
+  const graph = document.getElementById("ramGraph");
+  if (!graph) return;
+
+  // Calculate how wide each bar would be if we add one more
+  const containerWidth = graph.clientWidth - 6; // Subtract padding
+  const newBarCount = ramHistory.length + 1;
+  const barWidthIfAdded = (containerWidth - (barGap * (newBarCount - 1))) / newBarCount;
+
+  // If adding a new bar would make bars less than 4px, remove oldest first
+  if (barWidthIfAdded < minBarWidth && ramHistory.length > 0) {
+    ramHistory.shift();
+  }
+
+  // Add new value
+  ramHistory.push(usage);
+  saveRamHistory();
+
+  // Create bars if needed
+  while (graph.children.length < ramHistory.length) {
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    graph.appendChild(bar);
+  }
+
+  // Remove extra bars if needed (from the front - oldest)
+  while (graph.children.length > ramHistory.length) {
+    graph.removeChild(graph.firstChild);
+  }
+
+  // Update bar heights (max height is 100% = 26px inside the container)
+  for (let i = 0; i < ramHistory.length; i++) {
+    const height = Math.max(2, (ramHistory[i] / 100) * 26);
+    graph.children[i].style.height = height + "px";
+  }
+}
+
 async function refreshCPU(){
   try{
     const res = await fetch("/api/system", {cache:"no-store"});
@@ -448,8 +523,10 @@ async function refreshRAM(){
         const used = toGB(j.ram.used || 0);
         const available = toGB(j.ram.available || 0);
         document.getElementById("ramSummary").textContent = total + " / " + used + " / " + available;
-        document.getElementById("ramPercent").textContent = (j.ram.percent || 0).toFixed(1) + "%";
+        const percent = j.ram.percent || 0;
+        document.getElementById("ramPercent").textContent = percent.toFixed(1) + "%";
         document.getElementById("ramErr").textContent = "";
+        updateRamGraph(percent);
       }
     }
     startTimer("ram");
@@ -777,6 +854,7 @@ const refreshHandlers = {
 // Initial refresh
 refresh();
 renderCpuGraph(); // Render saved CPU history
+renderRamGraph(); // Render saved RAM history
 refreshCPU();
 refreshRAM();
 refreshDisk();
@@ -940,6 +1018,7 @@ applyModuleVisibility();
   // Clear cache button
   document.getElementById('clearCacheBtn').addEventListener('click', () => {
     localStorage.removeItem('cpuHistory');
+    localStorage.removeItem('ramHistory');
     localStorage.removeItem('githubData');
     alert('Cache cleared!');
   });
@@ -1220,11 +1299,13 @@ setInterval(refreshIP, timers.ip.interval);
   margin-top: 2px;
   font-family: inherit;
 }
-.card[data-module="cpu"] {
+.card[data-module="cpu"],
+.card[data-module="ram"] {
   display: flex;
   flex-direction: column;
 }
-.cpu-graph {
+.cpu-graph,
+.usage-graph {
   display: flex;
   align-items: flex-end;
   gap: 2px;
@@ -1236,7 +1317,8 @@ setInterval(refreshIP, timers.ip.interval);
   overflow: hidden;
   padding: 3px;
 }
-.cpu-graph .bar {
+.cpu-graph .bar,
+.usage-graph .bar {
   flex: 1;
   min-width: 0;
   background: var(--accent);
@@ -1244,7 +1326,8 @@ setInterval(refreshIP, timers.ip.interval);
   transition: height 0.3s ease;
   opacity: 0.8;
 }
-.cpu-graph .bar:last-child {
+.cpu-graph .bar:last-child,
+.usage-graph .bar:last-child {
   opacity: 1;
 }
 
