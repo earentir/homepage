@@ -19,93 +19,12 @@
   document.documentElement.setAttribute('data-template', savedTemplate);
   document.documentElement.setAttribute('data-scheme', savedScheme);
 
-  // Add template and scheme switchers to footer
+  // Hidden scheme menu for preferences modal to read from
   window.addEventListener('DOMContentLoaded', function() {
-    const footer = document.querySelector('.footer .right');
-    if (footer) {
-      // Template switcher
-      const templateSwitcher = document.createElement('div');
-      templateSwitcher.className = 'drop';
-      templateSwitcher.style.position = 'relative';
-      templateSwitcher.style.zIndex = '1000';
-      templateSwitcher.innerHTML = '<div class="btn drop" id="templateBtn"><i class="fas fa-palette"></i> Template</div><div class="menu" id="templateMenu" style="display:none;">{{.TemplateMenuHTML}}</div>';
-      footer.insertBefore(templateSwitcher, footer.firstChild);
-
-      const templateBtn = document.getElementById('templateBtn');
-      const templateMenu = document.getElementById('templateMenu');
-
-      templateBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        templateMenu.style.display = templateMenu.style.display === 'none' ? 'block' : 'none';
-        // Close scheme menu if open
-        const schemeMenu = document.getElementById('schemeMenu');
-        if (schemeMenu) schemeMenu.style.display = 'none';
-      });
-
-      // Scheme switcher
-      const schemeSwitcher = document.createElement('div');
-      schemeSwitcher.className = 'drop';
-      schemeSwitcher.style.position = 'relative';
-      schemeSwitcher.style.zIndex = '1000';
-      schemeSwitcher.innerHTML = '<div class="btn drop" id="schemeBtn"><i class="fas fa-fill-drip"></i> Scheme</div><div class="menu" id="schemeMenu" style="display:none;">{{.SchemeMenuHTML}}</div>';
-      footer.insertBefore(schemeSwitcher, templateSwitcher);
-
-      const schemeBtn = document.getElementById('schemeBtn');
-      const schemeMenu = document.getElementById('schemeMenu');
-
-      schemeBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        schemeMenu.style.display = schemeMenu.style.display === 'none' ? 'block' : 'none';
-        // Close template menu if open
-        templateMenu.style.display = 'none';
-      });
-
-      document.addEventListener('click', function(e) {
-        if (!templateSwitcher.contains(e.target)) {
-          templateMenu.style.display = 'none';
-        }
-        if (!schemeSwitcher.contains(e.target)) {
-          schemeMenu.style.display = 'none';
-        }
-      });
-
-      // Template selection
-      templateMenu.querySelectorAll('button[data-template]').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const template = this.getAttribute('data-template');
-          document.documentElement.setAttribute('data-template', template);
-          localStorage.setItem('template', template);
-          templateMenu.style.display = 'none';
-          // Update active state
-          templateMenu.querySelectorAll('button[data-template]').forEach(b => b.classList.remove('active'));
-          this.classList.add('active');
-          // Set cookie and reload to load new CSS and schemes
-          document.cookie = 'template=' + template + '; path=/; max-age=31536000';
-          location.reload();
-        });
-      });
-
-      // Scheme selection
-      schemeMenu.querySelectorAll('button[data-scheme]').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const scheme = this.getAttribute('data-scheme');
-          document.documentElement.setAttribute('data-scheme', scheme);
-          localStorage.setItem('scheme', scheme);
-          schemeMenu.style.display = 'none';
-          // Set cookie and reload to load new CSS
-          document.cookie = 'scheme=' + scheme + '; path=/; max-age=31536000';
-          location.reload();
-        });
-      });
-
-      // Mark current template and scheme
-      const currentTemplateBtn = templateMenu.querySelector('button[data-template="' + savedTemplate + '"]');
-      if (currentTemplateBtn) {
-        currentTemplateBtn.classList.add('active');
-      }
-    }
+    const hiddenMenus = document.createElement('div');
+    hiddenMenus.style.display = 'none';
+    hiddenMenus.innerHTML = '<div id="schemeMenu">{{.SchemeMenuHTML}}</div>';
+    document.body.appendChild(hiddenMenus);
   });
 })();
 </script>
@@ -224,6 +143,68 @@
       <a class="btn" href="/api/summary" target="_blank" rel="noreferrer"><i class="fas fa-code"></i> API</a>
       <a class="btn" href="/healthz" target="_blank" rel="noreferrer"><i class="fas fa-heartbeat"></i> Health</a>
       <div class="btn" id="refreshBtn"><i class="fas fa-sync-alt"></i> Refresh</div>
+      <div class="btn" id="prefsBtn"><i class="fas fa-cog"></i> Preferences</div>
+    </div>
+  </div>
+
+  <!-- Preferences Modal -->
+  <div class="modal-overlay" id="prefsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2><i class="fas fa-cog"></i> Preferences</h2>
+        <button class="modal-close" id="prefsClose"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="general"><i class="fas fa-sliders-h"></i> General</button>
+        <button class="modal-tab" data-tab="modules"><i class="fas fa-th-large"></i> Modules</button>
+        <button class="modal-tab" data-tab="about"><i class="fas fa-info-circle"></i> About</button>
+      </div>
+      <div class="modal-content">
+        <div class="tab-content active" id="tab-general">
+          <div class="pref-section">
+            <h3>Appearance</h3>
+            <div class="pref-row">
+              <label>Theme</label>
+              <select id="pref-template">
+                {{range .TemplatesList}}<option value="{{.}}">{{.}}</option>{{end}}
+              </select>
+            </div>
+            <div class="pref-row">
+              <label>Color Scheme</label>
+              <select id="pref-scheme"></select>
+            </div>
+          </div>
+          <div class="pref-section">
+            <h3>Data</h3>
+            <div class="pref-row">
+              <label>Clear cached data</label>
+              <button class="btn-small" id="clearCacheBtn"><i class="fas fa-trash"></i> Clear Cache</button>
+            </div>
+            <div class="pref-row">
+              <label>Reset module order</label>
+              <button class="btn-small" id="resetOrderBtn"><i class="fas fa-undo"></i> Reset Order</button>
+            </div>
+          </div>
+        </div>
+        <div class="tab-content" id="tab-modules">
+          <div class="pref-section">
+            <h3>Module Settings</h3>
+            <div class="module-list" id="moduleList"></div>
+          </div>
+        </div>
+        <div class="tab-content" id="tab-about">
+          <div class="pref-section about-section">
+            <div class="about-logo"><i class="fas fa-home fa-3x"></i></div>
+            <h3>Homepage Dashboard</h3>
+            <p class="about-version">Version 1.0.0</p>
+            <p class="about-desc">A personal dashboard for monitoring your system, weather, GitHub activity, and more.</p>
+            <div class="about-links">
+              <a href="https://github.com/Earentir/homepage" target="_blank" rel="noreferrer"><i class="fab fa-github"></i> Source Code</a>
+            </div>
+            <p class="about-copyright">© {{.Year}} Earentir</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -807,14 +788,251 @@ refreshGitHub();
 refreshWeather();
 refreshIP();
 
+// Module configuration with defaults
+const moduleConfig = {
+  status: { name: 'Status', icon: 'fa-server', desc: 'Server status and uptime', hasTimer: false, enabled: true },
+  network: { name: 'Network', icon: 'fa-network-wired', desc: 'LAN and public IP addresses', hasTimer: true, timerKey: 'ip', defaultInterval: 7200, enabled: true },
+  weather: { name: 'Weather', icon: 'fa-cloud-sun', desc: 'Current weather and forecast', hasTimer: true, timerKey: 'weather', defaultInterval: 1800, enabled: true },
+  cpu: { name: 'CPU', icon: 'fa-microchip', desc: 'CPU usage monitoring', hasTimer: true, timerKey: 'cpu', defaultInterval: 5, enabled: true },
+  ram: { name: 'RAM', icon: 'fa-memory', desc: 'Memory usage monitoring', hasTimer: true, timerKey: 'ram', defaultInterval: 5, enabled: true },
+  disk: { name: 'Disk', icon: 'fa-hdd', desc: 'Disk space monitoring', hasTimer: true, timerKey: 'disk', defaultInterval: 15, enabled: true },
+  links: { name: 'Quick Links', icon: 'fa-link', desc: 'Custom shortcut links', hasTimer: false, enabled: true },
+  utilities: { name: 'Utilities', icon: 'fa-tools', desc: 'System utilities', hasTimer: false, enabled: true },
+  'github-user': { name: 'GitHub User', icon: 'fab fa-github', desc: 'Personal GitHub repositories', hasTimer: true, timerKey: 'github', defaultInterval: 900, enabled: true },
+  'github-org': { name: 'GitHub Org', icon: 'fab fa-github', desc: 'Organization repositories', hasTimer: false, enabled: true }
+};
+
+// Load saved module preferences
+function loadModulePrefs() {
+  try {
+    const saved = localStorage.getItem('modulePrefs');
+    if (saved) {
+      const prefs = JSON.parse(saved);
+      Object.keys(prefs).forEach(key => {
+        if (moduleConfig[key]) {
+          if (typeof prefs[key].enabled !== 'undefined') {
+            moduleConfig[key].enabled = prefs[key].enabled;
+          }
+          if (typeof prefs[key].interval !== 'undefined' && moduleConfig[key].hasTimer) {
+            const timerKey = moduleConfig[key].timerKey;
+            if (timers[timerKey]) {
+              timers[timerKey].interval = prefs[key].interval * 1000;
+            }
+          }
+        }
+      });
+    }
+  } catch (e) {
+    console.error('Error loading module prefs:', e);
+  }
+}
+
+function saveModulePrefs() {
+  try {
+    const prefs = {};
+    Object.keys(moduleConfig).forEach(key => {
+      prefs[key] = { enabled: moduleConfig[key].enabled };
+      if (moduleConfig[key].hasTimer) {
+        const timerKey = moduleConfig[key].timerKey;
+        if (timers[timerKey]) {
+          prefs[key].interval = timers[timerKey].interval / 1000;
+        }
+      }
+    });
+    localStorage.setItem('modulePrefs', JSON.stringify(prefs));
+  } catch (e) {
+    console.error('Error saving module prefs:', e);
+  }
+}
+
+function applyModuleVisibility() {
+  Object.keys(moduleConfig).forEach(key => {
+    const card = document.querySelector(`.card[data-module="${key}"]`);
+    if (card) {
+      card.style.display = moduleConfig[key].enabled ? '' : 'none';
+    }
+  });
+}
+
+// Load prefs on startup
+loadModulePrefs();
+applyModuleVisibility();
+
+// Preferences Modal
+(function() {
+  const modal = document.getElementById('prefsModal');
+  const openBtn = document.getElementById('prefsBtn');
+  const closeBtn = document.getElementById('prefsClose');
+  const tabs = document.querySelectorAll('.modal-tab');
+  const tabContents = document.querySelectorAll('.tab-content');
+
+  // Open modal
+  openBtn.addEventListener('click', () => {
+    modal.classList.add('active');
+    renderModuleList();
+    updateSchemeSelect();
+  });
+
+  // Close modal
+  closeBtn.addEventListener('click', () => {
+    modal.classList.remove('active');
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('active');
+    }
+  });
+
+  // Tab switching
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tabContents.forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Template/scheme selects
+  const templateSelect = document.getElementById('pref-template');
+  const schemeSelect = document.getElementById('pref-scheme');
+
+  // Set current template value
+  const currentTemplate = localStorage.getItem('template') || '{{.CurrentTemplate}}' || 'nordic';
+  templateSelect.value = currentTemplate;
+
+  templateSelect.addEventListener('change', () => {
+    const newTemplate = templateSelect.value;
+    localStorage.setItem('template', newTemplate);
+    localStorage.setItem('scheme', 'default'); // Reset scheme when changing template
+    document.cookie = 'template=' + newTemplate + '; path=/; max-age=31536000';
+    document.cookie = 'scheme=default; path=/; max-age=31536000';
+    location.reload();
+  });
+
+  function updateSchemeSelect() {
+    const currentScheme = localStorage.getItem('scheme') || '{{.CurrentScheme}}' || 'default';
+    // Get schemes from the existing scheme menu (uses buttons with data-scheme)
+    const schemeMenu = document.getElementById('schemeMenu');
+    schemeSelect.innerHTML = '';
+    if (schemeMenu) {
+      const schemeButtons = schemeMenu.querySelectorAll('button[data-scheme]');
+      schemeButtons.forEach(btn => {
+        const scheme = btn.getAttribute('data-scheme');
+        const name = btn.textContent.trim();
+        const option = document.createElement('option');
+        option.value = scheme;
+        option.textContent = name;
+        if (scheme === currentScheme) option.selected = true;
+        schemeSelect.appendChild(option);
+      });
+    }
+  }
+
+  schemeSelect.addEventListener('change', () => {
+    const template = localStorage.getItem('template') || '{{.CurrentTemplate}}' || 'nordic';
+    const newScheme = schemeSelect.value;
+    localStorage.setItem('scheme', newScheme);
+    document.cookie = 'scheme=' + newScheme + '; path=/; max-age=31536000';
+    location.reload();
+  });
+
+  // Initialize scheme select on modal open
+  updateSchemeSelect();
+
+  // Clear cache button
+  document.getElementById('clearCacheBtn').addEventListener('click', () => {
+    localStorage.removeItem('cpuHistory');
+    localStorage.removeItem('githubData');
+    alert('Cache cleared!');
+  });
+
+  // Reset order button
+  document.getElementById('resetOrderBtn').addEventListener('click', () => {
+    localStorage.removeItem('moduleOrder');
+    location.reload();
+  });
+
+  // Render module list
+  function renderModuleList() {
+    const list = document.getElementById('moduleList');
+    list.innerHTML = '';
+
+    Object.keys(moduleConfig).forEach(key => {
+      const config = moduleConfig[key];
+      const timerKey = config.timerKey;
+      const currentInterval = timerKey && timers[timerKey] ? timers[timerKey].interval / 1000 : 0;
+
+      const item = document.createElement('div');
+      item.className = 'module-item' + (config.enabled ? '' : ' disabled');
+      item.innerHTML = `
+        <div class="module-icon"><i class="fas ${config.icon}"></i></div>
+        <div class="module-info">
+          <div class="module-name">${config.name}</div>
+          <div class="module-desc">${config.desc}</div>
+        </div>
+        <div class="module-controls">
+          ${config.hasTimer ? `
+            <div class="refresh-control">
+              <input type="number" min="1" value="${currentInterval}" data-module="${key}" data-timer="${timerKey}" data-default="${config.defaultInterval}">
+              <span>sec</span>
+              <button class="reset-btn" title="Reset to default (${config.defaultInterval}s)" data-module="${key}" data-timer="${timerKey}" data-default="${config.defaultInterval}"><i class="fas fa-undo"></i></button>
+            </div>
+          ` : ''}
+          <input type="checkbox" ${config.enabled ? 'checked' : ''} data-module="${key}" title="Enable/disable module">
+        </div>
+      `;
+      list.appendChild(item);
+
+      // Enable/disable handler
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', () => {
+        moduleConfig[key].enabled = checkbox.checked;
+        item.classList.toggle('disabled', !checkbox.checked);
+        saveModulePrefs();
+        applyModuleVisibility();
+      });
+
+      // Interval change handler
+      const intervalInput = item.querySelector('input[type="number"]');
+      if (intervalInput) {
+        intervalInput.addEventListener('change', () => {
+          const newInterval = Math.max(1, parseInt(intervalInput.value) || config.defaultInterval);
+          intervalInput.value = newInterval;
+          if (timers[timerKey]) {
+            timers[timerKey].interval = newInterval * 1000;
+          }
+          saveModulePrefs();
+        });
+      }
+
+      // Reset button handler
+      const resetBtn = item.querySelector('.reset-btn');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          const defaultVal = parseInt(resetBtn.dataset.default);
+          if (intervalInput) {
+            intervalInput.value = defaultVal;
+            if (timers[timerKey]) {
+              timers[timerKey].interval = defaultVal * 1000;
+            }
+            saveModulePrefs();
+          }
+        });
+      }
+    });
+  }
+})();
+
 // Set up intervals - each module refreshes independently
 setInterval(refresh, 30000); // General refresh every 30s (server info only)
-setInterval(refreshCPU, 5000); // CPU every 5s
-setInterval(refreshRAM, 5000); // RAM every 5s
-setInterval(refreshDisk, 15000); // Disk every 15s
-setInterval(refreshGitHub, 900000); // GitHub every 15 minutes (cache handles this)
-setInterval(refreshWeather, 1800000); // Weather every 30 minutes
-setInterval(refreshIP, 7200000); // IP every 2 hours
+setInterval(refreshCPU, timers.cpu.interval);
+setInterval(refreshRAM, timers.ram.interval);
+setInterval(refreshDisk, timers.disk.interval);
+setInterval(refreshGitHub, timers.github.interval);
+setInterval(refreshWeather, timers.weather.interval);
+setInterval(refreshIP, timers.ip.interval);
 
 // Drag and drop module ordering
 (function() {
@@ -1026,6 +1244,303 @@ setInterval(refreshIP, 7200000); // IP every 2 hours
 }
 .cpu-graph .bar:last-child {
   opacity: 1;
+}
+
+/* Preferences Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  padding: 20px;
+}
+.modal-overlay.active {
+  display: flex;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--txt);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 5px;
+  transition: color 0.2s;
+}
+.modal-close:hover {
+  color: var(--txt);
+}
+.modal-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+}
+.modal-tab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.modal-tab:hover {
+  color: var(--txt);
+}
+.modal-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.tab-content {
+  display: none;
+}
+.tab-content.active {
+  display: block;
+}
+.pref-section {
+  margin-bottom: 24px;
+}
+.pref-section:last-child {
+  margin-bottom: 0;
+}
+.pref-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pref-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.pref-row:last-child {
+  border-bottom: none;
+}
+.pref-row label {
+  color: var(--txt);
+  font-size: 13px;
+  font-weight: 500;
+}
+.pref-row select,
+.pref-row input[type="number"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--txt);
+  padding: 6px 10px;
+  font-size: 13px;
+  min-width: 140px;
+}
+.pref-row select:focus,
+.pref-row input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.btn-small {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--txt);
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+.btn-small:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Module List */
+.module-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.module-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+.module-item:hover {
+  border-color: var(--accent);
+}
+.module-item .module-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--accent-rgb, 136,192,208), 0.1);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 14px;
+}
+.module-item .module-info {
+  flex: 1;
+  min-width: 0;
+}
+.module-item .module-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt);
+}
+.module-item .module-desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.module-item .module-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.module-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.module-item .refresh-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.module-item .refresh-control input[type="number"] {
+  width: 60px;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--txt);
+  text-align: center;
+}
+.module-item .refresh-control input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.module-item .refresh-control span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.module-item .reset-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 12px;
+  transition: color 0.2s;
+}
+.module-item .reset-btn:hover {
+  color: var(--accent);
+}
+.module-item.disabled {
+  opacity: 0.5;
+}
+.module-item.disabled .module-controls .refresh-control {
+  pointer-events: none;
+}
+
+/* About Tab */
+.about-section {
+  text-align: center;
+  padding: 20px;
+}
+.about-logo {
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.about-section h3 {
+  font-size: 18px;
+  color: var(--txt);
+  margin-bottom: 4px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.about-version {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+.about-desc {
+  color: var(--txt);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.about-links {
+  margin-bottom: 20px;
+}
+.about-links a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.about-links a:hover {
+  text-decoration: underline;
+}
+.about-copyright {
+  color: var(--muted);
+  font-size: 11px;
 }
 </style>
 </body>

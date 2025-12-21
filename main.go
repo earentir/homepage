@@ -653,6 +653,7 @@ func main() {
 			"SchemeMenuHTML":   template.HTML(schemeMenuHTML.String()),
 			"CurrentTemplate":  templateName,
 			"CurrentScheme":    schemeName,
+			"Year":             time.Now().Year(),
 		})
 	})
 
