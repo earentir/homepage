@@ -322,7 +322,46 @@ a{color:inherit}
   50%{opacity:0.5;}
 }
 .small{font-size:12px; color:var(--muted)}
+.dim{font-size:0.8em; color:var(--muted); font-weight:400}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+
+/* Weather rows */
+.weather-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:6px 0;
+  border-top:1px solid var(--border);
+}
+.weather-row:first-of-type{border-top:none; padding-top:0}
+.weather-label{
+  width:65px;
+  color:var(--muted);
+  font-size:12px;
+  text-transform:uppercase;
+  flex-shrink:0;
+}
+.weather-icon{
+  width:24px;
+  text-align:center;
+  font-size:16px;
+  color:var(--accent);
+  flex-shrink:0;
+  cursor:help;
+}
+.weather-data{
+  flex:1;
+  font-size:13px;
+  text-align:right;
+}
+.weather-data i{
+  color:var(--muted);
+  margin-right:2px;
+  margin-left:8px;
+}
+.weather-data i:first-child{
+  margin-left:0;
+}
 .span-4{grid-column: span 4}
 .span-6{grid-column: span 6}
 .span-8{grid-column: span 8}

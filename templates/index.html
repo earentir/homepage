@@ -67,9 +67,22 @@
       </div>
 
       <div class="card span-4" data-module="weather" draggable="true">
-        <h3><i class="fas fa-cloud-sun"></i> Weather<div class="header-icons"><div class="timer-circle" id="weatherTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-        <div class="kv"><div class="k">Athens, Greece</div><div class="v" id="weather">—</div></div>
-        <div id="weatherForecast"></div>
+        <h3><i class="fas fa-cloud-sun"></i> Weather <span class="dim" id="weatherLocation"></span><div class="header-icons"><div class="timer-circle" id="weatherTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div class="weather-row" id="weatherNow">
+          <span class="weather-label">Now</span>
+          <span class="weather-icon" id="weatherNowIcon">—</span>
+          <span class="weather-data" id="weatherNowData">—</span>
+        </div>
+        <div class="weather-row" id="weatherToday">
+          <span class="weather-label">Today</span>
+          <span class="weather-icon" id="weatherTodayIcon">—</span>
+          <span class="weather-data" id="weatherTodayData">—</span>
+        </div>
+        <div class="weather-row" id="weatherTomorrow">
+          <span class="weather-label">Tomorrow</span>
+          <span class="weather-icon" id="weatherTomorrowIcon">—</span>
+          <span class="weather-data" id="weatherTomorrowData">—</span>
+        </div>
         <div class="small" id="weatherErr"></div>
       </div>
 
@@ -724,41 +737,94 @@ async function refreshDisk(){
   }
 }
 
+// Weather code to icon and description mapping (Open-Meteo WMO codes)
+function getWeatherIcon(code) {
+  let icon, desc;
+  // WMO Weather interpretation codes
+  if (code === 0) { icon = 'fa-sun'; desc = 'Clear sky'; }
+  else if (code === 1) { icon = 'fa-sun'; desc = 'Mainly clear'; }
+  else if (code === 2) { icon = 'fa-cloud-sun'; desc = 'Partly cloudy'; }
+  else if (code === 3) { icon = 'fa-cloud'; desc = 'Overcast'; }
+  else if (code === 45 || code === 48) { icon = 'fa-smog'; desc = 'Fog'; }
+  else if (code >= 51 && code <= 55) { icon = 'fa-cloud-rain'; desc = 'Drizzle'; }
+  else if (code >= 56 && code <= 57) { icon = 'fa-icicles'; desc = 'Freezing drizzle'; }
+  else if (code >= 61 && code <= 65) { icon = 'fa-cloud-showers-heavy'; desc = 'Rain'; }
+  else if (code >= 66 && code <= 67) { icon = 'fa-icicles'; desc = 'Freezing rain'; }
+  else if (code >= 71 && code <= 77) { icon = 'fa-snowflake'; desc = 'Snow'; }
+  else if (code >= 80 && code <= 82) { icon = 'fa-cloud-showers-heavy'; desc = 'Rain showers'; }
+  else if (code >= 85 && code <= 86) { icon = 'fa-snowflake'; desc = 'Snow showers'; }
+  else if (code === 95) { icon = 'fa-bolt'; desc = 'Thunderstorm'; }
+  else if (code >= 96 && code <= 99) { icon = 'fa-cloud-bolt'; desc = 'Thunderstorm with hail'; }
+  else { icon = 'fa-cloud'; desc = 'Unknown'; }
+  return { icon: icon, desc: desc };
+}
+
 async function refreshWeather(){
   try{
     // Get saved location from localStorage
     let weatherUrl = "/api/weather";
+    let locationName = "";
     try {
       const savedLoc = localStorage.getItem('weatherLocation');
       if (savedLoc) {
         const loc = JSON.parse(savedLoc);
         weatherUrl += "?lat=" + loc.latitude + "&lon=" + loc.longitude;
+        locationName = loc.name || "";
       }
     } catch (e) {}
+
+    // Update location display
+    document.getElementById("weatherLocation").textContent = locationName ? "• " + locationName : "";
 
     const res = await fetch(weatherUrl, {cache:"no-store"});
     const j = await res.json();
 
-    document.getElementById("weather").textContent = j.summary || "—";
-    const forecastContainer = document.getElementById("weatherForecast");
-    if (j.forecast && j.forecast.length > 0) {
-      forecastContainer.innerHTML = "";
-      j.forecast.forEach((day) => {
-        const kv = document.createElement("div");
-        kv.className = "kv";
-        const k = document.createElement("div");
-        k.className = "k";
-        k.textContent = day.split(":")[0];
-        const v = document.createElement("div");
-        v.className = "v";
-        v.textContent = day.split(":")[1] || day;
-        kv.appendChild(k);
-        kv.appendChild(v);
-        forecastContainer.appendChild(kv);
-      });
+    // Now - current weather
+    if (j.current) {
+      const nowWeather = getWeatherIcon(j.current.weatherCode);
+      const nowIconEl = document.getElementById("weatherNowIcon");
+      nowIconEl.innerHTML = '<i class="fas ' + nowWeather.icon + '" title="' + nowWeather.desc + '"></i>';
+      nowIconEl.setAttribute('title', nowWeather.desc);
+      document.getElementById("weatherNowData").innerHTML =
+        '<i class="fas fa-thermometer-half" title="Temperature"></i> ' + j.current.temperature.toFixed(0) + j.current.tempUnit +
+        ' <i class="fas fa-tint" title="Humidity"></i> ' + j.current.humidity.toFixed(0) + '%' +
+        ' <i class="fas fa-wind" title="Wind"></i> ' + j.current.windSpeed.toFixed(0) + j.current.windUnit;
     } else {
-      forecastContainer.innerHTML = "";
+      document.getElementById("weatherNowIcon").innerHTML = "—";
+      document.getElementById("weatherNowIcon").removeAttribute('title');
+      document.getElementById("weatherNowData").textContent = j.summary || "—";
     }
+
+    // Today
+    if (j.today) {
+      const todayWeather = getWeatherIcon(j.today.weatherCode);
+      const todayIconEl = document.getElementById("weatherTodayIcon");
+      todayIconEl.innerHTML = '<i class="fas ' + todayWeather.icon + '" title="' + todayWeather.desc + '"></i>';
+      todayIconEl.setAttribute('title', todayWeather.desc);
+      document.getElementById("weatherTodayData").innerHTML =
+        '<i class="fas fa-temperature-high" title="High"></i> ' + j.today.tempMax.toFixed(0) + '°' +
+        ' <i class="fas fa-temperature-low" title="Low"></i> ' + j.today.tempMin.toFixed(0) + '°';
+    } else {
+      document.getElementById("weatherTodayIcon").innerHTML = "—";
+      document.getElementById("weatherTodayIcon").removeAttribute('title');
+      document.getElementById("weatherTodayData").textContent = "—";
+    }
+
+    // Tomorrow
+    if (j.tomorrow) {
+      const tomorrowWeather = getWeatherIcon(j.tomorrow.weatherCode);
+      const tomorrowIconEl = document.getElementById("weatherTomorrowIcon");
+      tomorrowIconEl.innerHTML = '<i class="fas ' + tomorrowWeather.icon + '" title="' + tomorrowWeather.desc + '"></i>';
+      tomorrowIconEl.setAttribute('title', tomorrowWeather.desc);
+      document.getElementById("weatherTomorrowData").innerHTML =
+        '<i class="fas fa-temperature-high" title="High"></i> ' + j.tomorrow.tempMax.toFixed(0) + '°' +
+        ' <i class="fas fa-temperature-low" title="Low"></i> ' + j.tomorrow.tempMin.toFixed(0) + '°';
+    } else {
+      document.getElementById("weatherTomorrowIcon").innerHTML = "—";
+      document.getElementById("weatherTomorrowIcon").removeAttribute('title');
+      document.getElementById("weatherTomorrowData").textContent = "—";
+    }
+
     document.getElementById("weatherErr").textContent = j.error || "";
 
     startTimer("weather");

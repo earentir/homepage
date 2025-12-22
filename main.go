@@ -103,10 +103,29 @@ type PublicIPInfo struct {
 }
 
 type WeatherInfo struct {
-	Enabled  bool     `json:"enabled"`
-	Summary  string   `json:"summary,omitempty"`
-	Forecast []string `json:"forecast,omitempty"`
-	Error    string   `json:"error,omitempty"`
+	Enabled  bool            `json:"enabled"`
+	Summary  string          `json:"summary,omitempty"`
+	Forecast []string        `json:"forecast,omitempty"`
+	Current  *WeatherCurrent `json:"current,omitempty"`
+	Today    *WeatherDay     `json:"today,omitempty"`
+	Tomorrow *WeatherDay     `json:"tomorrow,omitempty"`
+	Error    string          `json:"error,omitempty"`
+}
+
+type WeatherCurrent struct {
+	Temperature float64 `json:"temperature"`
+	TempUnit    string  `json:"tempUnit"`
+	Humidity    float64 `json:"humidity"`
+	WindSpeed   float64 `json:"windSpeed"`
+	WindUnit    string  `json:"windUnit"`
+	WeatherCode int     `json:"weatherCode"`
+}
+
+type WeatherDay struct {
+	TempMax     float64 `json:"tempMax"`
+	TempMin     float64 `json:"tempMin"`
+	TempUnit    string  `json:"tempUnit"`
+	WeatherCode int     `json:"weatherCode"`
 }
 
 type GitHubInfo struct {
@@ -761,6 +780,9 @@ func main() {
 			} else {
 				resp.Summary = wd.Summary
 				resp.Forecast = wd.Forecast
+				resp.Current = wd.Current
+				resp.Today = wd.Today
+				resp.Tomorrow = wd.Tomorrow
 			}
 		} else {
 			resp.Summary = "Set your location in Preferences to enable weather."
@@ -1177,12 +1199,15 @@ func publicIP(ctx context.Context, timeout time.Duration) (string, error) {
 type WeatherData struct {
 	Summary  string
 	Forecast []string
+	Current  *WeatherCurrent
+	Today    *WeatherDay
+	Tomorrow *WeatherDay
 }
 
 func openMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error) {
 	// Current weather via Open-Meteo. No key required.
 	// Docs: https://open-meteo.com/
-	u := "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&current=temperature_2m,relative_humidity_2m,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=3"
+	u := "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=3"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	res, err := http.DefaultClient.Do(req)
@@ -1198,6 +1223,7 @@ func openMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error)
 			Temperature float64 `json:"temperature_2m"`
 			Humidity    float64 `json:"relative_humidity_2m"`
 			WindSpeed   float64 `json:"wind_speed_10m"`
+			WeatherCode int     `json:"weather_code"`
 		} `json:"current"`
 		CurrentUnits struct {
 			Temperature string `json:"temperature_2m"`
@@ -1210,6 +1236,9 @@ func openMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error)
 			TemperatureMin []float64 `json:"temperature_2m_min"`
 			WeatherCode    []int     `json:"weather_code"`
 		} `json:"daily"`
+		DailyUnits struct {
+			TemperatureMax string `json:"temperature_2m_max"`
+		} `json:"daily_units"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&raw); err != nil {
 		return WeatherData{}, err
@@ -1236,7 +1265,47 @@ func openMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error)
 		}
 	}
 
-	return WeatherData{Summary: summary, Forecast: forecast}, nil
+	// Build structured current weather
+	current := &WeatherCurrent{
+		Temperature: raw.Current.Temperature,
+		TempUnit:    raw.CurrentUnits.Temperature,
+		Humidity:    raw.Current.Humidity,
+		WindSpeed:   raw.Current.WindSpeed,
+		WindUnit:    raw.CurrentUnits.WindSpeed,
+		WeatherCode: raw.Current.WeatherCode,
+	}
+
+	// Build structured today/tomorrow
+	tempUnit := raw.DailyUnits.TemperatureMax
+	if tempUnit == "" {
+		tempUnit = "°C"
+	}
+
+	var today, tomorrow *WeatherDay
+	if len(raw.Daily.TemperatureMax) > 0 && len(raw.Daily.TemperatureMin) > 0 && len(raw.Daily.WeatherCode) > 0 {
+		today = &WeatherDay{
+			TempMax:     raw.Daily.TemperatureMax[0],
+			TempMin:     raw.Daily.TemperatureMin[0],
+			TempUnit:    tempUnit,
+			WeatherCode: raw.Daily.WeatherCode[0],
+		}
+	}
+	if len(raw.Daily.TemperatureMax) > 1 && len(raw.Daily.TemperatureMin) > 1 && len(raw.Daily.WeatherCode) > 1 {
+		tomorrow = &WeatherDay{
+			TempMax:     raw.Daily.TemperatureMax[1],
+			TempMin:     raw.Daily.TemperatureMin[1],
+			TempUnit:    tempUnit,
+			WeatherCode: raw.Daily.WeatherCode[1],
+		}
+	}
+
+	return WeatherData{
+		Summary:  summary,
+		Forecast: forecast,
+		Current:  current,
+		Today:    today,
+		Tomorrow: tomorrow,
+	}, nil
 }
 
 // GeoLocation represents a geocoded location result

@@ -32,14 +32,14 @@
 - [x] Add disk caching for GitHub data
 - [x] Show rate limit availability time in UI
 - [ ] Add GitHub token support for higher rate limits
-- [ ] Show commit activity
-- [ ] Show PR status
-- [ ] Add repository statistics
+- [x] Show commit activity
+- [x] Show PR status
+- [x] Add repository statistics
 
 ## Weather Enhancements
 - [x] Add location picker UI
 - [ ] Add weather API key support
-- [ ] add icons for weather conditions
+- [x] add icons for weather conditions
 - [ ] add weather alerts
 - [ ] add weather historical data
 - [ ] Add hourly forecast
