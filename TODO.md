@@ -62,6 +62,8 @@
 - [ ] Add email/webhook notifications for downtime
 - [x] Add health check endpoints
 - [ ] Add alert history
+- [x] Add SSL certificate expiration monitoring
+- [ ] Add snmp support
 
 ## Data Persistence
 - [x] Add settings storage (localStorage or database)
