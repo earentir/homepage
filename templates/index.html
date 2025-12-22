@@ -111,9 +111,9 @@
 
       <div class="card span-6" data-module="links" draggable="true">
         <h3><i class="fas fa-link"></i> Quick Links<div class="header-icons"><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-        <div class="kv"><div class="k">Router</div><div class="v"><a class="btn" href="http://192.168.1.1" target="_blank" rel="noreferrer"><i class="fas fa-network-wired"></i> Open</a></div></div>
-        <div class="kv"><div class="k">Proxmox / NAS</div><div class="v"><span class="small">Edit these in HTML</span></div></div>
-        <div class="kv"><div class="k">Docs</div><div class="v"><span class="small">Add internal wiki links</span></div></div>
+        <div id="quicklinksContainer">
+          <div class="small" style="color:var(--muted);">Add links in Preferences → Quicklinks</div>
+        </div>
       </div>
 
       <div class="card span-6" data-module="utilities" draggable="true">
@@ -153,6 +153,7 @@
       <div class="modal-tabs">
         <button class="modal-tab active" data-tab="general"><i class="fas fa-sliders-h"></i> General</button>
         <button class="modal-tab" data-tab="modules"><i class="fas fa-th-large"></i> Modules</button>
+        <button class="modal-tab" data-tab="quicklinks"><i class="fas fa-link"></i> Quicklinks</button>
         <button class="modal-tab" data-tab="about"><i class="fas fa-info-circle"></i> About</button>
       </div>
       <div class="modal-content">
@@ -218,6 +219,66 @@
           <div class="pref-section">
             <h3>GitHub Modules <button class="btn-small" id="addGitHubBtn"><i class="fas fa-plus"></i> Add</button></h3>
             <div class="module-list" id="githubModuleList"></div>
+          </div>
+        </div>
+        <div class="tab-content" id="tab-quicklinks">
+          <div class="pref-section">
+            <h3>Layout</h3>
+            <div class="layout-buttons">
+              <button class="layout-btn" data-cols="1" title="1 link per row"><i class="fas fa-bars"></i></button>
+              <button class="layout-btn" data-cols="2" title="2 links per row"><i class="fas fa-th-large"></i></button>
+              <button class="layout-btn" data-cols="3" title="3 links per row"><i class="fas fa-th"></i></button>
+            </div>
+          </div>
+          <div class="pref-section">
+            <h3>Quick Links <button class="btn-small" id="addQuicklinkBtn"><i class="fas fa-plus"></i> Add</button></h3>
+            <div class="module-list" id="quicklinksList"></div>
+          </div>
+          <div class="pref-section">
+            <h3>Add / Edit Link</h3>
+            <div id="quicklinkForm" style="display:none;">
+              <div class="pref-row">
+                <label>Title</label>
+                <input type="text" id="ql-title" placeholder="e.g., Router">
+              </div>
+              <div class="pref-row">
+                <label>URL</label>
+                <input type="text" id="ql-url" placeholder="e.g., http://192.168.1.1">
+              </div>
+              <div class="pref-row">
+                <label>Icon</label>
+                <div class="icon-selector">
+                  <select id="ql-icon">
+                    <option value="">Use favicon</option>
+                    <option value="fa-network-wired">Network</option>
+                    <option value="fa-server">Server</option>
+                    <option value="fa-hdd">Storage</option>
+                    <option value="fa-database">Database</option>
+                    <option value="fa-cloud">Cloud</option>
+                    <option value="fa-home">Home</option>
+                    <option value="fa-cog">Settings</option>
+                    <option value="fa-chart-line">Charts</option>
+                    <option value="fa-shield-alt">Security</option>
+                    <option value="fa-video">Video</option>
+                    <option value="fa-music">Music</option>
+                    <option value="fa-book">Docs</option>
+                    <option value="fa-code">Code</option>
+                    <option value="fa-terminal">Terminal</option>
+                    <option value="fa-download">Downloads</option>
+                    <option value="fa-envelope">Mail</option>
+                    <option value="fa-calendar">Calendar</option>
+                    <option value="fa-globe">Web</option>
+                    <option value="fa-wifi">WiFi</option>
+                    <option value="fa-lock">Lock</option>
+                  </select>
+                  <button class="btn-small" id="ql-clear-icon" title="Clear icon selection"><i class="fas fa-times"></i></button>
+                </div>
+              </div>
+              <div class="pref-row" style="justify-content:flex-end; gap:10px;">
+                <button class="btn-small" id="ql-cancel">Cancel</button>
+                <button class="btn-small" id="ql-save" style="background:var(--accent); color:var(--bg);"><i class="fas fa-check"></i> Save</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="tab-content" id="tab-about">
@@ -292,9 +353,28 @@ function goSearch(){
 document.getElementById('goBtn').onclick = goSearch;
 q.addEventListener('keydown', (e) => { if(e.key === "Enter") goSearch(); });
 
+// Check if any modal is open
+function isModalOpen() {
+  const modals = document.querySelectorAll('.modal-overlay');
+  for (const modal of modals) {
+    if (modal.classList.contains('active') ||
+        (modal.style.display && modal.style.display !== 'none')) {
+      return true;
+    }
+  }
+  return false;
+}
+
 document.addEventListener('keydown', (e) => {
+  // Don't capture keys when modal is open
+  if (isModalOpen()) return;
+
+  // Don't capture when typing in an input/textarea
+  const tag = document.activeElement.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
   if (e.key === "/") { e.preventDefault(); q.focus(); }
-  if (e.key.toLowerCase() === "e" && document.activeElement !== q) {
+  if (e.key.toLowerCase() === "e") {
     engineMenu.style.display = "block";
   }
 });
@@ -1711,7 +1791,326 @@ applyModuleVisibility();
   const origOpenHandler = openBtn.onclick;
   openBtn.addEventListener('click', () => {
     renderGitHubModuleList();
+    renderQuicklinksList();
   });
+})();
+
+// Quicklinks management
+(function() {
+  // Default quicklinks
+  const defaultQuicklinks = [
+    { id: 'ql-1', title: 'Router', url: 'http://192.168.1.1', icon: 'fa-network-wired' }
+  ];
+
+  // Load quicklinks from localStorage
+  let quicklinks = [];
+  try {
+    const saved = localStorage.getItem('quicklinks');
+    if (saved) {
+      quicklinks = JSON.parse(saved);
+    } else {
+      quicklinks = defaultQuicklinks;
+    }
+  } catch (e) {
+    quicklinks = defaultQuicklinks;
+  }
+
+  // Load layout preference
+  let quicklinksLayout = 1;
+  try {
+    const savedLayout = localStorage.getItem('quicklinksLayout');
+    if (savedLayout) {
+      quicklinksLayout = parseInt(savedLayout) || 1;
+    }
+  } catch (e) {}
+
+  function saveQuicklinks() {
+    try {
+      localStorage.setItem('quicklinks', JSON.stringify(quicklinks));
+    } catch (e) {}
+  }
+
+  function saveLayout(cols) {
+    quicklinksLayout = cols;
+    try {
+      localStorage.setItem('quicklinksLayout', cols.toString());
+    } catch (e) {}
+  }
+
+  // Update layout button states
+  function updateLayoutButtons() {
+    const buttons = document.querySelectorAll('.layout-btn');
+    buttons.forEach(btn => {
+      const cols = parseInt(btn.dataset.cols);
+      btn.classList.toggle('active', cols === quicklinksLayout);
+    });
+  }
+
+// Favicon cache in localStorage
+  function getFaviconCache() {
+    try {
+      const cache = localStorage.getItem('faviconCache');
+      return cache ? JSON.parse(cache) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveFaviconCache(cache) {
+    try {
+      localStorage.setItem('faviconCache', JSON.stringify(cache));
+    } catch (e) {}
+  }
+
+  async function fetchAndCacheFavicon(url) {
+    const cache = getFaviconCache();
+
+    // Check if already cached (cache for 7 days)
+    const cacheKey = new URL(url).origin;
+    if (cache[cacheKey] && cache[cacheKey].expires > Date.now()) {
+      return cache[cacheKey].data;
+    }
+
+    try {
+      const res = await fetch('/api/favicon?url=' + encodeURIComponent(url));
+      const data = await res.json();
+
+      if (data.favicon) {
+        // Cache for 7 days
+        cache[cacheKey] = {
+          data: data.favicon,
+          expires: Date.now() + (7 * 24 * 60 * 60 * 1000)
+        };
+        saveFaviconCache(cache);
+        return data.favicon;
+      }
+    } catch (e) {
+      console.error('Error fetching favicon:', e);
+    }
+
+    return null;
+  }
+
+  // Render quicklinks in the card
+  window.renderQuicklinks = function() {
+    const container = document.getElementById('quicklinksContainer');
+    if (!container) return;
+
+    if (quicklinks.length === 0) {
+      container.innerHTML = '<div class="small" style="color:var(--muted);">Add links in Preferences → Quicklinks</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'quicklinks-grid cols-' + quicklinksLayout;
+
+    quicklinks.forEach(link => {
+      const item = document.createElement('div');
+      item.className = 'ql-item';
+
+      const a = document.createElement('a');
+      a.href = link.url;
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+
+      if (link.icon) {
+        a.innerHTML = '<span class="ql-icon"><i class="fas ' + link.icon + '"></i></span><span class="ql-title">' + link.title + '</span>';
+      } else {
+        // Check favicon cache first
+        const cache = getFaviconCache();
+        try {
+          const cacheKey = new URL(link.url).origin;
+          if (cache[cacheKey] && cache[cacheKey].expires > Date.now()) {
+            a.innerHTML = '<span class="ql-icon"><img src="' + cache[cacheKey].data + '" width="14" height="14"></span><span class="ql-title">' + link.title + '</span>';
+          } else {
+            // Show loading placeholder, then fetch
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'ql-icon';
+            iconSpan.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'ql-title';
+            titleSpan.textContent = link.title;
+            a.appendChild(iconSpan);
+            a.appendChild(titleSpan);
+
+            // Fetch favicon in background
+            fetchAndCacheFavicon(link.url).then(favicon => {
+              if (favicon) {
+                iconSpan.innerHTML = '<img src="' + favicon + '" width="14" height="14">';
+              } else {
+                iconSpan.innerHTML = '<i class="fas fa-link"></i>';
+              }
+            });
+          }
+        } catch (e) {
+          a.innerHTML = '<span class="ql-icon"><i class="fas fa-link"></i></span><span class="ql-title">' + link.title + '</span>';
+        }
+      }
+
+      item.appendChild(a);
+      grid.appendChild(item);
+    });
+
+    container.appendChild(grid);
+  };
+
+  // Layout button handlers
+  document.querySelectorAll('.layout-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cols = parseInt(btn.dataset.cols);
+      saveLayout(cols);
+      updateLayoutButtons();
+      renderQuicklinks();
+    });
+  });
+
+  // Initialize layout buttons on modal open
+  const prefsModal = document.getElementById('prefsModal');
+  const observer = new MutationObserver(() => {
+    if (prefsModal.classList.contains('active')) {
+      updateLayoutButtons();
+    }
+  });
+  observer.observe(prefsModal, { attributes: true, attributeFilter: ['class'] });
+
+  // Render quicklinks list in preferences
+  window.renderQuicklinksList = function() {
+    const list = document.getElementById('quicklinksList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (quicklinks.length === 0) {
+      list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No quicklinks yet. Click "Add" to create one.</div>';
+      return;
+    }
+
+    quicklinks.forEach((link, index) => {
+      const item = document.createElement('div');
+      item.className = 'module-item';
+      item.innerHTML = `
+        <div class="module-icon"><i class="fas ${link.icon || 'fa-link'}"></i></div>
+        <div class="module-info">
+          <div class="module-name">${link.title}</div>
+          <div class="module-desc">${link.url}</div>
+        </div>
+        <div class="module-controls">
+          <button class="btn-small edit-ql-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
+          <button class="btn-small delete-ql-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
+        </div>
+      `;
+      list.appendChild(item);
+
+      // Edit button
+      item.querySelector('.edit-ql-btn').addEventListener('click', () => {
+        editQuicklink(index);
+      });
+
+      // Delete button
+      item.querySelector('.delete-ql-btn').addEventListener('click', () => {
+        if (confirm('Delete quicklink "' + link.title + '"?')) {
+          quicklinks.splice(index, 1);
+          saveQuicklinks();
+          renderQuicklinksList();
+          renderQuicklinks();
+        }
+      });
+    });
+  };
+
+  // Form elements
+  const form = document.getElementById('quicklinkForm');
+  const titleInput = document.getElementById('ql-title');
+  const urlInput = document.getElementById('ql-url');
+  const iconSelect = document.getElementById('ql-icon');
+  const clearIconBtn = document.getElementById('ql-clear-icon');
+  const cancelBtn = document.getElementById('ql-cancel');
+  const saveBtn = document.getElementById('ql-save');
+  const addBtn = document.getElementById('addQuicklinkBtn');
+
+  let editingIndex = -1;
+
+  function showForm() {
+    form.style.display = 'block';
+  }
+
+  function hideForm() {
+    form.style.display = 'none';
+    titleInput.value = '';
+    urlInput.value = '';
+    iconSelect.value = '';
+    editingIndex = -1;
+  }
+
+  function editQuicklink(index) {
+    editingIndex = index;
+    const link = quicklinks[index];
+    titleInput.value = link.title;
+    urlInput.value = link.url;
+    iconSelect.value = link.icon || '';
+    showForm();
+  }
+
+  addBtn.addEventListener('click', () => {
+    editingIndex = -1;
+    titleInput.value = '';
+    urlInput.value = '';
+    iconSelect.value = '';
+    showForm();
+  });
+
+  clearIconBtn.addEventListener('click', () => {
+    iconSelect.value = '';
+  });
+
+  cancelBtn.addEventListener('click', hideForm);
+
+  saveBtn.addEventListener('click', () => {
+    const title = titleInput.value.trim();
+    const url = urlInput.value.trim();
+    const icon = iconSelect.value;
+
+    if (!title) {
+      alert('Please enter a title');
+      return;
+    }
+    if (!url) {
+      alert('Please enter a URL');
+      return;
+    }
+
+    // Validate URL
+    try {
+      new URL(url);
+    } catch (e) {
+      alert('Please enter a valid URL (include http:// or https://)');
+      return;
+    }
+
+    if (editingIndex >= 0) {
+      quicklinks[editingIndex] = {
+        id: quicklinks[editingIndex].id,
+        title: title,
+        url: url,
+        icon: icon || ''
+      };
+    } else {
+      quicklinks.push({
+        id: 'ql-' + Date.now(),
+        title: title,
+        url: url,
+        icon: icon || ''
+      });
+    }
+
+    saveQuicklinks();
+    renderQuicklinksList();
+    renderQuicklinks();
+    hideForm();
+  });
+
+  // Initial render
+  renderQuicklinks();
 })();
 
 // Set up intervals - each module refreshes independently
@@ -2146,6 +2545,105 @@ setInterval(refreshIP, timers.ip.interval);
 .location-display {
   color: var(--muted);
   font-size: 13px;
+}
+.icon-selector {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.icon-selector select {
+  flex: 1;
+  min-width: 150px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--txt);
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.icon-selector select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Layout buttons */
+.layout-buttons {
+  display: flex;
+  gap: 8px;
+}
+.layout-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.layout-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.layout-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+/* Quicklinks grid layouts */
+.quicklinks-grid {
+  display: grid;
+  gap: 8px;
+}
+.quicklinks-grid.cols-1 {
+  grid-template-columns: 1fr;
+}
+.quicklinks-grid.cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+.quicklinks-grid.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.quicklinks-grid .ql-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel2);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s;
+}
+.quicklinks-grid .ql-item:hover {
+  border-color: var(--accent);
+}
+.quicklinks-grid .ql-item a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--txt);
+  text-decoration: none;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+}
+.quicklinks-grid .ql-item a:hover {
+  color: var(--accent);
+}
+.quicklinks-grid .ql-item .ql-icon {
+  color: var(--accent);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.quicklinks-grid .ql-item .ql-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Module List */

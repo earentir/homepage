@@ -53,10 +53,11 @@
 - [ ] Add keyboard shortcuts display
 
 ## Quick Links Enhancements
-- [ ] Make links editable via UI
+- [x] Make links editable via UI
 - [ ] Add link categories
-- [ ] Add icons for links
+- [x] Add icons for links
 - [ ] Add most-used links tracking
+- [x] Add favicon caching
 
 ## Monitoring & Alerts
 - [ ] Add service status monitoring

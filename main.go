@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -12,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -943,6 +946,47 @@ func main() {
 		writeJSON(w, resp)
 	})
 
+	// Favicon fetcher - fetches favicon from a URL and returns as base64
+	mux.HandleFunc("/api/favicon", func(w http.ResponseWriter, r *http.Request) {
+		targetURL := r.URL.Query().Get("url")
+		log.Printf("[favicon] Request for URL: %s", targetURL)
+
+		if targetURL == "" {
+			log.Printf("[favicon] Error: Missing 'url' parameter")
+			writeJSON(w, map[string]string{"error": "Missing 'url' parameter"})
+			return
+		}
+
+		// Parse the URL to get the origin
+		parsed, err := url.Parse(targetURL)
+		if err != nil {
+			log.Printf("[favicon] Error parsing URL: %v", err)
+			writeJSON(w, map[string]string{"error": "Invalid URL"})
+			return
+		}
+		origin := parsed.Scheme + "://" + parsed.Host
+		log.Printf("[favicon] Origin: %s", origin)
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		// Try to fetch favicon from common locations
+		faviconData, contentType, err := fetchFavicon(ctx, origin)
+		if err != nil {
+			log.Printf("[favicon] Error fetching favicon: %v", err)
+			writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+
+		log.Printf("[favicon] Success! Got %d bytes, type: %s", len(faviconData), contentType)
+
+		// Return as base64 data URL
+		base64Data := base64.StdEncoding.EncodeToString(faviconData)
+		dataURL := "data:" + contentType + ";base64," + base64Data
+
+		writeJSON(w, map[string]string{"favicon": dataURL})
+	})
+
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -1359,6 +1403,158 @@ func geocodeCity(ctx context.Context, query string) ([]GeoLocation, error) {
 		})
 	}
 	return results, nil
+}
+
+// fetchFavicon tries to fetch a favicon from a site
+func fetchFavicon(ctx context.Context, origin string) ([]byte, string, error) {
+	log.Printf("[favicon] fetchFavicon called for origin: %s", origin)
+
+	// Skip TLS verification for LAN sites with self-signed/expired certs
+	tlsConfig := &tls.Config{InsecureSkipVerify: true}
+	transport := &http.Transport{TLSClientConfig: tlsConfig}
+
+	client := &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return errors.New("too many redirects")
+			}
+			return nil
+		},
+	}
+
+	// Common favicon locations to try
+	faviconPaths := []string{
+		"/favicon.ico",
+		"/favicon.png",
+		"/apple-touch-icon.png",
+		"/apple-touch-icon-precomposed.png",
+	}
+
+	// First, try to parse the HTML to find the favicon link
+	log.Printf("[favicon] Fetching HTML from %s", origin)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, origin, nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; lan-index/1.0)")
+	res, err := client.Do(req)
+	if err != nil {
+		log.Printf("[favicon] Error fetching HTML: %v", err)
+	} else if res.StatusCode >= 200 && res.StatusCode < 300 {
+		defer res.Body.Close()
+		log.Printf("[favicon] Got HTML response, status: %d", res.StatusCode)
+		body, err := io.ReadAll(io.LimitReader(res.Body, 100*1024)) // Limit to 100KB
+		if err == nil {
+			log.Printf("[favicon] Read %d bytes of HTML", len(body))
+			// Look for favicon in HTML
+			faviconURL := extractFaviconFromHTML(string(body), origin)
+			if faviconURL != "" {
+				log.Printf("[favicon] Found favicon URL in HTML: %s", faviconURL)
+				data, contentType, err := downloadFavicon(ctx, client, faviconURL)
+				if err == nil {
+					log.Printf("[favicon] Successfully downloaded favicon from HTML link")
+					return data, contentType, nil
+				}
+				log.Printf("[favicon] Failed to download from HTML link: %v", err)
+			} else {
+				log.Printf("[favicon] No favicon URL found in HTML")
+			}
+		} else {
+			log.Printf("[favicon] Error reading HTML body: %v", err)
+		}
+	} else if res != nil {
+		log.Printf("[favicon] HTML response status: %d", res.StatusCode)
+		res.Body.Close()
+	}
+
+	// Try common favicon paths
+	log.Printf("[favicon] Trying common favicon paths...")
+	for _, path := range faviconPaths {
+		faviconURL := origin + path
+		log.Printf("[favicon] Trying: %s", faviconURL)
+		data, contentType, err := downloadFavicon(ctx, client, faviconURL)
+		if err == nil {
+			log.Printf("[favicon] Success with %s", path)
+			return data, contentType, nil
+		}
+		log.Printf("[favicon] Failed %s: %v", path, err)
+	}
+
+	log.Printf("[favicon] All attempts failed for %s", origin)
+	return nil, "", errors.New("favicon not found")
+}
+
+func extractFaviconFromHTML(html, origin string) string {
+	// Look for <link rel="icon" or <link rel="shortcut icon"
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']`),
+		regexp.MustCompile(`<link[^>]+href=["']([^"']+)["'][^>]+rel=["'](?:shortcut )?icon["']`),
+		regexp.MustCompile(`<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']`),
+	}
+
+	for _, re := range patterns {
+		matches := re.FindStringSubmatch(html)
+		if len(matches) > 1 {
+			href := matches[1]
+			// Resolve relative URLs
+			if strings.HasPrefix(href, "//") {
+				return "https:" + href
+			} else if strings.HasPrefix(href, "/") {
+				return origin + href
+			} else if strings.HasPrefix(href, "http") {
+				return href
+			} else {
+				return origin + "/" + href
+			}
+		}
+	}
+	return ""
+}
+
+func downloadFavicon(ctx context.Context, client *http.Client, faviconURL string) ([]byte, string, error) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, faviconURL, nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; lan-index/1.0)")
+
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, "", errors.New("favicon not found: " + res.Status)
+	}
+
+	// Check content type
+	contentType := res.Header.Get("Content-Type")
+	if contentType == "" {
+		// Guess from URL
+		if strings.HasSuffix(faviconURL, ".ico") {
+			contentType = "image/x-icon"
+		} else if strings.HasSuffix(faviconURL, ".png") {
+			contentType = "image/png"
+		} else if strings.HasSuffix(faviconURL, ".svg") {
+			contentType = "image/svg+xml"
+		} else {
+			contentType = "image/x-icon"
+		}
+	}
+
+	// Only accept image types
+	if !strings.HasPrefix(contentType, "image/") {
+		return nil, "", errors.New("not an image: " + contentType)
+	}
+
+	// Read favicon data (limit to 100KB)
+	data, err := io.ReadAll(io.LimitReader(res.Body, 100*1024))
+	if err != nil {
+		return nil, "", err
+	}
+
+	if len(data) == 0 {
+		return nil, "", errors.New("empty favicon")
+	}
+
+	return data, contentType, nil
 }
 
 func formatRateLimitReset(resetHeader string) string {
