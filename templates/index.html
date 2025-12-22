@@ -179,6 +179,13 @@
             </div>
           </div>
           <div class="pref-section">
+            <h3>Graphs</h3>
+            <div class="pref-row">
+              <label>Show full bar height</label>
+              <input type="checkbox" id="pref-full-bars" title="Show the unused portion of bars in a dimmed color">
+            </div>
+          </div>
+          <div class="pref-section">
             <h3>Data</h3>
             <div class="pref-row">
               <label>Clear cached data</label>
@@ -347,6 +354,30 @@ function formatBytes(bytes) {
 // History for bar graphs
 const minBarWidth = 4; // Minimum width of each bar in pixels
 const barGap = 2; // Gap between bars in pixels
+const graphMaxHeight = 26; // Max height of bars in pixels
+
+// Full bars preference (show unused portion in dim color)
+let showFullBars = false;
+try {
+  showFullBars = localStorage.getItem('showFullBars') === 'true';
+} catch (e) {}
+
+function saveFullBarsPreference() {
+  try {
+    localStorage.setItem('showFullBars', showFullBars.toString());
+  } catch (e) {}
+}
+
+function applyFullBarsClass() {
+  const graphs = document.querySelectorAll('.cpu-graph, .usage-graph');
+  graphs.forEach(g => {
+    if (showFullBars) {
+      g.classList.add('full-bars');
+    } else {
+      g.classList.remove('full-bars');
+    }
+  });
+}
 
 // Load CPU history from localStorage
 let cpuHistory = [];
@@ -416,10 +447,18 @@ function renderCpuGraph() {
     graph.appendChild(bar);
   }
 
-  // Update bar heights
+  // Update bar heights and styling
   for (let i = 0; i < cpuHistory.length; i++) {
-    const height = Math.max(2, (cpuHistory[i] / 100) * 26);
-    graph.children[i].style.height = height + "px";
+    const pct = cpuHistory[i] / 100;
+    const bar = graph.children[i];
+    if (showFullBars) {
+      bar.style.height = graphMaxHeight + "px";
+      bar.style.setProperty('--fill-pct', (pct * 100) + '%');
+    } else {
+      const height = Math.max(2, pct * graphMaxHeight);
+      bar.style.height = height + "px";
+      bar.style.removeProperty('--fill-pct');
+    }
   }
 }
 
@@ -453,10 +492,18 @@ function updateCpuGraph(usage) {
     graph.removeChild(graph.firstChild);
   }
 
-  // Update bar heights (max height is 100% = 26px inside the container)
+  // Update bar heights and styling
   for (let i = 0; i < cpuHistory.length; i++) {
-    const height = Math.max(2, (cpuHistory[i] / 100) * 26);
-    graph.children[i].style.height = height + "px";
+    const pct = cpuHistory[i] / 100;
+    const bar = graph.children[i];
+    if (showFullBars) {
+      bar.style.height = graphMaxHeight + "px";
+      bar.style.setProperty('--fill-pct', (pct * 100) + '%');
+    } else {
+      const height = Math.max(2, pct * graphMaxHeight);
+      bar.style.height = height + "px";
+      bar.style.removeProperty('--fill-pct');
+    }
   }
 }
 
@@ -471,10 +518,18 @@ function renderRamGraph() {
     graph.appendChild(bar);
   }
 
-  // Update bar heights
+  // Update bar heights and styling
   for (let i = 0; i < ramHistory.length; i++) {
-    const height = Math.max(2, (ramHistory[i] / 100) * 26);
-    graph.children[i].style.height = height + "px";
+    const pct = ramHistory[i] / 100;
+    const bar = graph.children[i];
+    if (showFullBars) {
+      bar.style.height = graphMaxHeight + "px";
+      bar.style.setProperty('--fill-pct', (pct * 100) + '%');
+    } else {
+      const height = Math.max(2, pct * graphMaxHeight);
+      bar.style.height = height + "px";
+      bar.style.removeProperty('--fill-pct');
+    }
   }
 }
 
@@ -508,10 +563,18 @@ function updateRamGraph(usage) {
     graph.removeChild(graph.firstChild);
   }
 
-  // Update bar heights (max height is 100% = 26px inside the container)
+  // Update bar heights and styling
   for (let i = 0; i < ramHistory.length; i++) {
-    const height = Math.max(2, (ramHistory[i] / 100) * 26);
-    graph.children[i].style.height = height + "px";
+    const pct = ramHistory[i] / 100;
+    const bar = graph.children[i];
+    if (showFullBars) {
+      bar.style.height = graphMaxHeight + "px";
+      bar.style.setProperty('--fill-pct', (pct * 100) + '%');
+    } else {
+      const height = Math.max(2, pct * graphMaxHeight);
+      bar.style.height = height + "px";
+      bar.style.removeProperty('--fill-pct');
+    }
   }
 }
 
@@ -526,10 +589,18 @@ function renderDiskGraph() {
     graph.appendChild(bar);
   }
 
-  // Update bar heights
+  // Update bar heights and styling
   for (let i = 0; i < diskHistory.length; i++) {
-    const height = Math.max(2, (diskHistory[i] / 100) * 26);
-    graph.children[i].style.height = height + "px";
+    const pct = diskHistory[i] / 100;
+    const bar = graph.children[i];
+    if (showFullBars) {
+      bar.style.height = graphMaxHeight + "px";
+      bar.style.setProperty('--fill-pct', (pct * 100) + '%');
+    } else {
+      const height = Math.max(2, pct * graphMaxHeight);
+      bar.style.height = height + "px";
+      bar.style.removeProperty('--fill-pct');
+    }
   }
 }
 
@@ -563,10 +634,18 @@ function updateDiskGraph(usage) {
     graph.removeChild(graph.firstChild);
   }
 
-  // Update bar heights (max height is 100% = 26px inside the container)
+  // Update bar heights and styling
   for (let i = 0; i < diskHistory.length; i++) {
-    const height = Math.max(2, (diskHistory[i] / 100) * 26);
-    graph.children[i].style.height = height + "px";
+    const pct = diskHistory[i] / 100;
+    const bar = graph.children[i];
+    if (showFullBars) {
+      bar.style.height = graphMaxHeight + "px";
+      bar.style.setProperty('--fill-pct', (pct * 100) + '%');
+    } else {
+      const height = Math.max(2, pct * graphMaxHeight);
+      bar.style.height = height + "px";
+      bar.style.removeProperty('--fill-pct');
+    }
   }
 }
 
@@ -689,23 +768,42 @@ async function refreshWeather(){
 }
 
 
-function renderGitHubRepos(moduleId, data) {
-    const container = document.getElementById("repos-" + moduleId);
-    const countEl = document.getElementById("repoCount-" + moduleId);
-    const errEl = document.getElementById("repoErr-" + moduleId);
+function renderGitHubContent(moduleId, displayType, data) {
+    const container = document.getElementById("content-" + moduleId);
+    const countEl = document.getElementById("count-" + moduleId);
+    const errEl = document.getElementById("err-" + moduleId);
 
     if (!container) return;
 
     if (data.error) {
       container.innerHTML = "";
       if (errEl) errEl.textContent = data.error;
-      if (countEl) countEl.textContent = "—";
+      if (countEl) countEl.textContent = "Error";
       return;
     }
 
+    container.innerHTML = "";
+    if (errEl) errEl.textContent = "";
+
+    // Handle different display types
+    if (displayType === 'repos') {
+      renderReposList(container, countEl, data);
+    } else if (displayType === 'prs') {
+      renderPRsList(container, countEl, data);
+    } else if (displayType === 'commits') {
+      renderCommitsList(container, countEl, data);
+    } else if (displayType === 'issues') {
+      renderIssuesList(container, countEl, data);
+    } else if (displayType === 'stats') {
+      renderStats(container, countEl, data);
+    } else {
+      renderReposList(container, countEl, data);
+    }
+}
+
+function renderReposList(container, countEl, data) {
     if (data.repos && data.repos.length > 0) {
-      if (countEl) countEl.textContent = data.total || data.repos.length;
-      container.innerHTML = "";
+      if (countEl) countEl.textContent = (data.total || data.repos.length) + " repositories";
       data.repos.forEach((repo) => {
         const item = document.createElement("div");
         item.className = "repo-item";
@@ -744,23 +842,104 @@ function renderGitHubRepos(moduleId, data) {
         item.appendChild(meta);
         container.appendChild(item);
       });
-      if (errEl) errEl.textContent = "";
     } else {
       container.innerHTML = '<div class="small">No repositories found.</div>';
-      if (countEl) countEl.textContent = "0";
-      if (errEl) errEl.textContent = "";
+      if (countEl) countEl.textContent = "0 repositories";
+    }
+}
+
+function renderPRsList(container, countEl, data) {
+    if (data.items && data.items.length > 0) {
+      if (countEl) countEl.textContent = (data.total || data.items.length) + " pull requests";
+      data.items.forEach((pr) => {
+        const item = document.createElement("div");
+        item.className = "repo-item";
+        item.innerHTML = `
+          <div class="repo-name"><a href="${pr.url}" target="_blank" rel="noreferrer"><i class="fas fa-code-branch"></i> ${pr.title}</a></div>
+          <div class="repo-meta">
+            <span><i class="fas fa-user"></i> ${pr.user || 'Unknown'}</span>
+            <span><i class="fas fa-clock"></i> ${pr.created || ''}</span>
+            <span class="badge-${pr.state || 'open'}">${pr.state || 'open'}</span>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    } else {
+      container.innerHTML = '<div class="small">No pull requests found.</div>';
+      if (countEl) countEl.textContent = "0 pull requests";
+    }
+}
+
+function renderCommitsList(container, countEl, data) {
+    if (data.items && data.items.length > 0) {
+      if (countEl) countEl.textContent = (data.items.length) + " recent commits";
+      data.items.forEach((commit) => {
+        const item = document.createElement("div");
+        item.className = "repo-item";
+        item.innerHTML = `
+          <div class="repo-name"><a href="${commit.url}" target="_blank" rel="noreferrer"><i class="fas fa-code-commit"></i> ${commit.message}</a></div>
+          <div class="repo-meta">
+            <span><i class="fas fa-user"></i> ${commit.author || 'Unknown'}</span>
+            <span><i class="fas fa-clock"></i> ${commit.date || ''}</span>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    } else {
+      container.innerHTML = '<div class="small">No commits found.</div>';
+      if (countEl) countEl.textContent = "0 commits";
+    }
+}
+
+function renderIssuesList(container, countEl, data) {
+    if (data.items && data.items.length > 0) {
+      if (countEl) countEl.textContent = (data.total || data.items.length) + " issues";
+      data.items.forEach((issue) => {
+        const item = document.createElement("div");
+        item.className = "repo-item";
+        item.innerHTML = `
+          <div class="repo-name"><a href="${issue.url}" target="_blank" rel="noreferrer"><i class="fas fa-exclamation-circle"></i> ${issue.title}</a></div>
+          <div class="repo-meta">
+            <span><i class="fas fa-user"></i> ${issue.user || 'Unknown'}</span>
+            <span><i class="fas fa-clock"></i> ${issue.created || ''}</span>
+            <span class="badge-${issue.state || 'open'}">${issue.state || 'open'}</span>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    } else {
+      container.innerHTML = '<div class="small">No issues found.</div>';
+      if (countEl) countEl.textContent = "0 issues";
+    }
+}
+
+function renderStats(container, countEl, data) {
+    if (data.stats) {
+      if (countEl) countEl.textContent = "Repository stats";
+      container.innerHTML = `
+        <div class="kv"><div class="k">Stars</div><div class="v">${data.stats.stars || 0}</div></div>
+        <div class="kv"><div class="k">Forks</div><div class="v">${data.stats.forks || 0}</div></div>
+        <div class="kv"><div class="k">Watchers</div><div class="v">${data.stats.watchers || 0}</div></div>
+        <div class="kv"><div class="k">Open Issues</div><div class="v">${data.stats.openIssues || 0}</div></div>
+        <div class="kv"><div class="k">Language</div><div class="v">${data.stats.language || 'N/A'}</div></div>
+      `;
+    } else {
+      container.innerHTML = '<div class="small">No stats available.</div>';
+      if (countEl) countEl.textContent = "No stats";
     }
 }
 
 async function refreshGitHubModule(mod) {
   try {
-    const res = await fetch("/api/github/repos?name=" + encodeURIComponent(mod.name) + "&type=" + mod.type, {cache:"no-store"});
+    const displayType = mod.displayType || 'repos';
+    const accountType = mod.accountType || mod.type || 'user';
+    const res = await fetch("/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType, {cache:"no-store"});
     const data = await res.json();
-    renderGitHubRepos(mod.id, data);
+    renderGitHubContent(mod.id, displayType, data);
   } catch(err) {
     console.error("Error refreshing GitHub module " + mod.id + ":", err);
-    const errEl = document.getElementById("repoErr-" + mod.id);
-    if (errEl) errEl.textContent = "Error loading repos";
+    const errEl = document.getElementById("err-" + mod.id);
+    if (errEl) errEl.textContent = "Error loading data";
   }
 }
 
@@ -876,10 +1055,20 @@ const moduleConfig = {
 };
 
 // GitHub modules configuration (stored separately, can have multiple)
+// displayType: repos, prs, commits, stats, issues
+// accountType: user, org, repo (for repo-specific views)
 const defaultGitHubModules = [
-  { id: 'github-1', type: 'user', name: 'Earentir', url: 'https://github.com/Earentir', enabled: true },
-  { id: 'github-2', type: 'org', name: 'network-plane', url: 'https://github.com/network-plane', enabled: true }
+  { id: 'github-1', accountType: 'user', displayType: 'repos', name: 'Earentir', url: 'https://github.com/Earentir', enabled: true },
+  { id: 'github-2', accountType: 'org', displayType: 'repos', name: 'network-plane', url: 'https://github.com/network-plane', enabled: true }
 ];
+
+const githubDisplayTypes = {
+  repos: { name: 'Repositories', icon: 'fa-folder', desc: 'Show recent repositories' },
+  prs: { name: 'Pull Requests', icon: 'fa-code-branch', desc: 'Show open pull requests' },
+  commits: { name: 'Commits', icon: 'fa-code-commit', desc: 'Show recent commits' },
+  stats: { name: 'Stats', icon: 'fa-chart-bar', desc: 'Show repository statistics' },
+  issues: { name: 'Issues', icon: 'fa-exclamation-circle', desc: 'Show open issues' }
+};
 
 let githubModules = [];
 try {
@@ -905,6 +1094,11 @@ function renderGitHubModules() {
   githubModules.forEach((mod, index) => {
     if (!mod.enabled) return;
 
+    // Handle legacy modules without displayType
+    const displayType = mod.displayType || 'repos';
+    const accountType = mod.accountType || mod.type || 'user';
+    const typeInfo = githubDisplayTypes[displayType] || githubDisplayTypes.repos;
+
     const card = document.createElement('div');
     card.className = 'card span-6';
     card.setAttribute('data-module', mod.id);
@@ -913,13 +1107,15 @@ function renderGitHubModules() {
     const hasTimer = index === 0; // Only first GitHub module has the timer
     const timerHtml = hasTimer ? '<div class="timer-circle" id="githubTimer" title="Double-click to refresh"></div>' : '';
 
+    const titleSuffix = displayType !== 'repos' ? ' - ' + typeInfo.name : '';
+
     card.innerHTML = `
-      <h3><i class="fab fa-github"></i> GitHub - ${mod.name}<div class="header-icons"><a href="${mod.url}" target="_blank" rel="noreferrer"><i class="fas fa-external-link-alt"></i></a>${timerHtml}<i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-      <div class="small" style="margin-bottom:8px; color:var(--muted);">Total: <span id="repoCount-${mod.id}">—</span> repositories</div>
-      <div id="repos-${mod.id}">
-        <div class="small">Loading repositories...</div>
+      <h3><i class="fab fa-github"></i> ${mod.name}${titleSuffix}<div class="header-icons"><a href="${mod.url}" target="_blank" rel="noreferrer"><i class="fas fa-external-link-alt"></i></a>${timerHtml}<i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+      <div class="small" style="margin-bottom:8px; color:var(--muted);"><i class="fas ${typeInfo.icon}"></i> <span id="count-${mod.id}">—</span></div>
+      <div id="content-${mod.id}">
+        <div class="small">Loading...</div>
       </div>
-      <div class="small" id="repoErr-${mod.id}"></div>
+      <div class="small" id="err-${mod.id}"></div>
     `;
 
     container.appendChild(card);
@@ -931,6 +1127,7 @@ renderGitHubModules();
 
 // Initial refresh
 refresh();
+applyFullBarsClass(); // Apply full bars styling before rendering
 renderCpuGraph(); // Render saved CPU history
 renderRamGraph(); // Render saved RAM history
 renderDiskGraph(); // Render saved Disk history
@@ -1093,6 +1290,19 @@ applyModuleVisibility();
   document.getElementById('resetOrderBtn').addEventListener('click', () => {
     localStorage.removeItem('moduleOrder');
     location.reload();
+  });
+
+  // Full bars preference
+  const fullBarsCheckbox = document.getElementById('pref-full-bars');
+  fullBarsCheckbox.checked = showFullBars;
+  fullBarsCheckbox.addEventListener('change', () => {
+    showFullBars = fullBarsCheckbox.checked;
+    saveFullBarsPreference();
+    applyFullBarsClass();
+    // Re-render all graphs with new styling
+    renderCpuGraph();
+    renderRamGraph();
+    renderDiskGraph();
   });
 
   // Weather location
@@ -1262,13 +1472,18 @@ applyModuleVisibility();
     list.innerHTML = '';
 
     githubModules.forEach((mod, index) => {
+      const accountType = mod.accountType || mod.type || 'user';
+      const displayType = mod.displayType || 'repos';
+      const displayInfo = githubDisplayTypes[displayType] || githubDisplayTypes.repos;
+      const accountLabel = accountType === 'org' ? 'Organization' : (accountType === 'repo' ? 'Repository' : 'User');
+
       const item = document.createElement('div');
       item.className = 'module-item' + (mod.enabled ? '' : ' disabled');
       item.innerHTML = `
         <div class="module-icon"><i class="fab fa-github"></i></div>
         <div class="module-info">
           <div class="module-name">${mod.name}</div>
-          <div class="module-desc">${mod.type === 'org' ? 'Organization' : 'User'} • ${mod.url}</div>
+          <div class="module-desc">${accountLabel} • ${displayInfo.name}</div>
         </div>
         <div class="module-controls">
           <button class="btn-small edit-github-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
@@ -1323,13 +1538,24 @@ applyModuleVisibility();
           <div class="pref-section">
             <div class="pref-row">
               <label>GitHub URL</label>
-              <input type="text" id="github-edit-url" placeholder="https://github.com/username" value="${mod.url}">
+              <input type="text" id="github-edit-url" placeholder="https://github.com/username or https://github.com/user/repo" value="${mod.url}">
             </div>
             <div class="pref-row">
-              <label>Type</label>
-              <select id="github-edit-type">
-                <option value="user" ${mod.type === 'user' ? 'selected' : ''}>User</option>
-                <option value="org" ${mod.type === 'org' ? 'selected' : ''}>Organization</option>
+              <label>Account Type</label>
+              <select id="github-edit-account-type">
+                <option value="user" ${(mod.accountType || mod.type) === 'user' ? 'selected' : ''}>User</option>
+                <option value="org" ${(mod.accountType || mod.type) === 'org' ? 'selected' : ''}>Organization</option>
+                <option value="repo" ${(mod.accountType || mod.type) === 'repo' ? 'selected' : ''}>Repository</option>
+              </select>
+            </div>
+            <div class="pref-row">
+              <label>Display</label>
+              <select id="github-edit-display-type">
+                <option value="repos" ${(mod.displayType || 'repos') === 'repos' ? 'selected' : ''}>Repositories</option>
+                <option value="prs" ${mod.displayType === 'prs' ? 'selected' : ''}>Pull Requests</option>
+                <option value="commits" ${mod.displayType === 'commits' ? 'selected' : ''}>Commits</option>
+                <option value="issues" ${mod.displayType === 'issues' ? 'selected' : ''}>Issues</option>
+                <option value="stats" ${mod.displayType === 'stats' ? 'selected' : ''}>Stats</option>
               </select>
             </div>
           </div>
@@ -1343,7 +1569,8 @@ applyModuleVisibility();
     document.body.appendChild(dialog);
 
     const urlInput = dialog.querySelector('#github-edit-url');
-    const typeSelect = dialog.querySelector('#github-edit-type');
+    const accountTypeSelect = dialog.querySelector('#github-edit-account-type');
+    const displayTypeSelect = dialog.querySelector('#github-edit-display-type');
     const closeBtn = dialog.querySelector('.github-dialog-close');
     const cancelBtn = dialog.querySelector('.github-dialog-cancel');
     const saveBtn = dialog.querySelector('.github-dialog-save');
@@ -1356,33 +1583,49 @@ applyModuleVisibility();
 
     saveBtn.addEventListener('click', () => {
       const url = urlInput.value.trim();
+      const accountType = accountTypeSelect.value;
+      const displayType = displayTypeSelect.value;
+
       if (!url) {
         alert('Please enter a GitHub URL');
         return;
       }
 
-      // Extract name from URL
-      const match = url.match(/github\.com\/([^\/]+)/);
-      if (!match) {
-        alert('Invalid GitHub URL. Please use format: https://github.com/username');
-        return;
+      // Extract name from URL based on account type
+      let name;
+      if (accountType === 'repo') {
+        // For repos: https://github.com/user/repo
+        const match = url.match(/github\.com\/([^\/]+\/[^\/]+)/);
+        if (!match) {
+          alert('Invalid GitHub repository URL. Please use format: https://github.com/user/repo');
+          return;
+        }
+        name = match[1];
+      } else {
+        // For users/orgs: https://github.com/username
+        const match = url.match(/github\.com\/([^\/]+)/);
+        if (!match) {
+          alert('Invalid GitHub URL. Please use format: https://github.com/username');
+          return;
+        }
+        name = match[1];
       }
-
-      const name = match[1];
-      const type = typeSelect.value;
 
       if (isNew) {
         githubModules.push({
           id: 'github-' + Date.now(),
-          type: type,
+          accountType: accountType,
+          displayType: displayType,
           name: name,
-          url: 'https://github.com/' + name,
+          url: url,
           enabled: true
         });
       } else {
         githubModules[index].name = name;
-        githubModules[index].type = type;
-        githubModules[index].url = 'https://github.com/' + name;
+        githubModules[index].accountType = accountType;
+        githubModules[index].displayType = displayType;
+        githubModules[index].url = url;
+        delete githubModules[index].type; // Remove legacy field
       }
 
       saveGitHubModules();
@@ -1635,6 +1878,26 @@ setInterval(refreshIP, timers.ip.interval);
 .cpu-graph .bar:last-child,
 .usage-graph .bar:last-child {
   opacity: 1;
+}
+/* Full bars mode - show unused portion in dim color */
+.full-bars .bar {
+  --fill-pct: 0%;
+  background: linear-gradient(
+    to top,
+    var(--accent) 0%,
+    var(--accent) var(--fill-pct),
+    rgba(255,255,255,0.08) var(--fill-pct),
+    rgba(255,255,255,0.08) 100%
+  );
+}
+.full-bars .bar:last-child {
+  background: linear-gradient(
+    to top,
+    var(--accent) 0%,
+    var(--accent) var(--fill-pct),
+    rgba(255,255,255,0.12) var(--fill-pct),
+    rgba(255,255,255,0.12) 100%
+  );
 }
 
 /* Preferences Modal */

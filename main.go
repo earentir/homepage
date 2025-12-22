@@ -825,6 +825,81 @@ func main() {
 		writeJSON(w, repos)
 	})
 
+	// Fetch pull requests for a user/org/repo
+	mux.HandleFunc("/api/github/prs", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		name := r.URL.Query().Get("name")
+		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
+
+		if name == "" {
+			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
+			return
+		}
+
+		prs, err := fetchGitHubPRs(ctx, name, accountType)
+		if err != nil {
+			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
+			return
+		}
+		writeJSON(w, prs)
+	})
+
+	// Fetch commits for a user/org/repo
+	mux.HandleFunc("/api/github/commits", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		name := r.URL.Query().Get("name")
+		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
+
+		if name == "" {
+			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
+			return
+		}
+
+		commits, err := fetchGitHubCommits(ctx, name, accountType)
+		if err != nil {
+			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
+			return
+		}
+		writeJSON(w, commits)
+	})
+
+	// Fetch issues for a user/org/repo
+	mux.HandleFunc("/api/github/issues", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		name := r.URL.Query().Get("name")
+		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
+
+		if name == "" {
+			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
+			return
+		}
+
+		issues, err := fetchGitHubIssues(ctx, name, accountType)
+		if err != nil {
+			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
+			return
+		}
+		writeJSON(w, issues)
+	})
+
+	// Fetch stats for a repo
+	mux.HandleFunc("/api/github/stats", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		name := r.URL.Query().Get("name")
+
+		if name == "" {
+			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
+			return
+		}
+
+		stats, err := fetchGitHubStats(ctx, name)
+		if err != nil {
+			writeJSON(w, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, stats)
+	})
+
 	mux.HandleFunc("/api/ip", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		resp := struct {
@@ -1620,6 +1695,447 @@ func fetchGitHubReposForName(ctx context.Context, name, repoType string) (GitHub
 		}
 		res2.Body.Close()
 	}
+
+	return resp, nil
+}
+
+// GitHubPRItem represents a pull request
+type GitHubPRItem struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	User    string `json:"user"`
+	State   string `json:"state"`
+	Created string `json:"created"`
+	Repo    string `json:"repo"`
+}
+
+// GitHubPRsResponse is the response for the /api/github/prs endpoint
+type GitHubPRsResponse struct {
+	Items []GitHubPRItem `json:"items"`
+	Total int            `json:"total"`
+	Error string         `json:"error,omitempty"`
+}
+
+func fetchGitHubPRs(ctx context.Context, name, accountType string) (GitHubPRsResponse, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var resp GitHubPRsResponse
+
+	var searchQuery string
+	if accountType == "repo" {
+		// For a specific repo: name is "user/repo"
+		searchQuery = "repo:" + name + " is:pr is:open"
+	} else if accountType == "org" {
+		searchQuery = "org:" + name + " is:pr is:open"
+	} else {
+		searchQuery = "author:" + name + " is:pr is:open"
+	}
+
+	apiURL := "https://api.github.com/search/issues?q=" + url.QueryEscape(searchQuery) + "&sort=updated&per_page=10"
+
+	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
+	req.Header.Set("User-Agent", "lan-index/1.0")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		resp.Error = "Failed to fetch PRs: " + err.Error()
+		return resp, nil
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == 403 {
+		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
+		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
+		return resp, nil
+	}
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		resp.Error = "HTTP error: " + res.Status
+		return resp, nil
+	}
+
+	var searchResult struct {
+		TotalCount int `json:"total_count"`
+		Items      []struct {
+			Title     string `json:"title"`
+			HTMLURL   string `json:"html_url"`
+			State     string `json:"state"`
+			CreatedAt string `json:"created_at"`
+			User      struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			Repository struct {
+				FullName string `json:"full_name"`
+			} `json:"repository"`
+			RepositoryURL string `json:"repository_url"`
+		} `json:"items"`
+	}
+
+	if err := json.NewDecoder(res.Body).Decode(&searchResult); err != nil {
+		resp.Error = "Failed to decode PRs: " + err.Error()
+		return resp, nil
+	}
+
+	for _, item := range searchResult.Items {
+		created := ""
+		if t, err := time.Parse(time.RFC3339, item.CreatedAt); err == nil {
+			created = t.Format("2006-01-02")
+		}
+		repoName := item.Repository.FullName
+		if repoName == "" && item.RepositoryURL != "" {
+			// Extract from URL like https://api.github.com/repos/user/repo
+			parts := strings.Split(item.RepositoryURL, "/")
+			if len(parts) >= 2 {
+				repoName = parts[len(parts)-2] + "/" + parts[len(parts)-1]
+			}
+		}
+		resp.Items = append(resp.Items, GitHubPRItem{
+			Title:   item.Title,
+			URL:     item.HTMLURL,
+			User:    item.User.Login,
+			State:   item.State,
+			Created: created,
+			Repo:    repoName,
+		})
+	}
+	resp.Total = searchResult.TotalCount
+
+	return resp, nil
+}
+
+// GitHubCommitItem represents a commit
+type GitHubCommitItem struct {
+	Message string `json:"message"`
+	URL     string `json:"url"`
+	Author  string `json:"author"`
+	Date    string `json:"date"`
+	Sha     string `json:"sha"`
+	Repo    string `json:"repo"`
+}
+
+// GitHubCommitsResponse is the response for the /api/github/commits endpoint
+type GitHubCommitsResponse struct {
+	Items []GitHubCommitItem `json:"items"`
+	Total int                `json:"total"`
+	Error string             `json:"error,omitempty"`
+}
+
+func fetchGitHubCommits(ctx context.Context, name, accountType string) (GitHubCommitsResponse, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var resp GitHubCommitsResponse
+
+	var apiURL string
+	if accountType == "repo" {
+		// For a specific repo: name is "user/repo"
+		apiURL = "https://api.github.com/repos/" + name + "/commits?per_page=10"
+	} else {
+		// For user/org, we need to search commits
+		var searchQuery string
+		if accountType == "org" {
+			searchQuery = "org:" + name
+		} else {
+			searchQuery = "author:" + name
+		}
+		apiURL = "https://api.github.com/search/commits?q=" + url.QueryEscape(searchQuery) + "&sort=author-date&order=desc&per_page=10"
+	}
+
+	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
+	req.Header.Set("User-Agent", "lan-index/1.0")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if accountType != "repo" {
+		// Search commits requires special accept header
+		req.Header.Set("Accept", "application/vnd.github.cloak-preview+json")
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		resp.Error = "Failed to fetch commits: " + err.Error()
+		return resp, nil
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == 403 {
+		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
+		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
+		return resp, nil
+	}
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		resp.Error = "HTTP error: " + res.Status
+		return resp, nil
+	}
+
+	if accountType == "repo" {
+		// Direct commits endpoint
+		var commits []struct {
+			Sha     string `json:"sha"`
+			HTMLURL string `json:"html_url"`
+			Commit  struct {
+				Message string `json:"message"`
+				Author  struct {
+					Name string `json:"name"`
+					Date string `json:"date"`
+				} `json:"author"`
+			} `json:"commit"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&commits); err != nil {
+			resp.Error = "Failed to decode commits: " + err.Error()
+			return resp, nil
+		}
+
+		for _, c := range commits {
+			date := ""
+			if t, err := time.Parse(time.RFC3339, c.Commit.Author.Date); err == nil {
+				date = t.Format("2006-01-02")
+			}
+			// Truncate message to first line
+			msg := c.Commit.Message
+			if idx := strings.Index(msg, "\n"); idx > 0 {
+				msg = msg[:idx]
+			}
+			if len(msg) > 60 {
+				msg = msg[:57] + "..."
+			}
+			resp.Items = append(resp.Items, GitHubCommitItem{
+				Message: msg,
+				URL:     c.HTMLURL,
+				Author:  c.Commit.Author.Name,
+				Date:    date,
+				Sha:     c.Sha[:7],
+				Repo:    name,
+			})
+		}
+		resp.Total = len(commits)
+	} else {
+		// Search commits endpoint
+		var searchResult struct {
+			TotalCount int `json:"total_count"`
+			Items      []struct {
+				Sha        string `json:"sha"`
+				HTMLURL    string `json:"html_url"`
+				Repository struct {
+					FullName string `json:"full_name"`
+				} `json:"repository"`
+				Commit struct {
+					Message string `json:"message"`
+					Author  struct {
+						Name string `json:"name"`
+						Date string `json:"date"`
+					} `json:"author"`
+				} `json:"commit"`
+			} `json:"items"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&searchResult); err != nil {
+			resp.Error = "Failed to decode commits: " + err.Error()
+			return resp, nil
+		}
+
+		for _, c := range searchResult.Items {
+			date := ""
+			if t, err := time.Parse(time.RFC3339, c.Commit.Author.Date); err == nil {
+				date = t.Format("2006-01-02")
+			}
+			msg := c.Commit.Message
+			if idx := strings.Index(msg, "\n"); idx > 0 {
+				msg = msg[:idx]
+			}
+			if len(msg) > 60 {
+				msg = msg[:57] + "..."
+			}
+			resp.Items = append(resp.Items, GitHubCommitItem{
+				Message: msg,
+				URL:     c.HTMLURL,
+				Author:  c.Commit.Author.Name,
+				Date:    date,
+				Sha:     c.Sha[:7],
+				Repo:    c.Repository.FullName,
+			})
+		}
+		resp.Total = searchResult.TotalCount
+	}
+
+	return resp, nil
+}
+
+// GitHubIssueItem represents an issue
+type GitHubIssueItem struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	User    string `json:"user"`
+	State   string `json:"state"`
+	Created string `json:"created"`
+	Repo    string `json:"repo"`
+}
+
+// GitHubIssuesResponse is the response for the /api/github/issues endpoint
+type GitHubIssuesResponse struct {
+	Items []GitHubIssueItem `json:"items"`
+	Total int               `json:"total"`
+	Error string            `json:"error,omitempty"`
+}
+
+func fetchGitHubIssues(ctx context.Context, name, accountType string) (GitHubIssuesResponse, error) {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var resp GitHubIssuesResponse
+
+	var searchQuery string
+	if accountType == "repo" {
+		// For a specific repo: name is "user/repo"
+		searchQuery = "repo:" + name + " is:issue is:open"
+	} else if accountType == "org" {
+		searchQuery = "org:" + name + " is:issue is:open"
+	} else {
+		searchQuery = "author:" + name + " is:issue is:open"
+	}
+
+	apiURL := "https://api.github.com/search/issues?q=" + url.QueryEscape(searchQuery) + "&sort=updated&per_page=10"
+
+	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
+	req.Header.Set("User-Agent", "lan-index/1.0")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		resp.Error = "Failed to fetch issues: " + err.Error()
+		return resp, nil
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == 403 {
+		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
+		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
+		return resp, nil
+	}
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		resp.Error = "HTTP error: " + res.Status
+		return resp, nil
+	}
+
+	var searchResult struct {
+		TotalCount int `json:"total_count"`
+		Items      []struct {
+			Title     string `json:"title"`
+			HTMLURL   string `json:"html_url"`
+			State     string `json:"state"`
+			CreatedAt string `json:"created_at"`
+			User      struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			Repository struct {
+				FullName string `json:"full_name"`
+			} `json:"repository"`
+			RepositoryURL string `json:"repository_url"`
+		} `json:"items"`
+	}
+
+	if err := json.NewDecoder(res.Body).Decode(&searchResult); err != nil {
+		resp.Error = "Failed to decode issues: " + err.Error()
+		return resp, nil
+	}
+
+	for _, item := range searchResult.Items {
+		created := ""
+		if t, err := time.Parse(time.RFC3339, item.CreatedAt); err == nil {
+			created = t.Format("2006-01-02")
+		}
+		repoName := item.Repository.FullName
+		if repoName == "" && item.RepositoryURL != "" {
+			parts := strings.Split(item.RepositoryURL, "/")
+			if len(parts) >= 2 {
+				repoName = parts[len(parts)-2] + "/" + parts[len(parts)-1]
+			}
+		}
+		resp.Items = append(resp.Items, GitHubIssueItem{
+			Title:   item.Title,
+			URL:     item.HTMLURL,
+			User:    item.User.Login,
+			State:   item.State,
+			Created: created,
+			Repo:    repoName,
+		})
+	}
+	resp.Total = searchResult.TotalCount
+
+	return resp, nil
+}
+
+// GitHubStatsResponse is the response for the /api/github/stats endpoint
+type GitHubStatsResponse struct {
+	Stats struct {
+		Stars      int    `json:"stars"`
+		Forks      int    `json:"forks"`
+		Watchers   int    `json:"watchers"`
+		OpenIssues int    `json:"openIssues"`
+		Language   string `json:"language"`
+		Size       int    `json:"size"`
+		Created    string `json:"created"`
+		Updated    string `json:"updated"`
+	} `json:"stats"`
+	Error string `json:"error,omitempty"`
+}
+
+func fetchGitHubStats(ctx context.Context, name string) (GitHubStatsResponse, error) {
+	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var resp GitHubStatsResponse
+
+	// name should be "user/repo"
+	apiURL := "https://api.github.com/repos/" + name
+
+	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
+	req.Header.Set("User-Agent", "lan-index/1.0")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		resp.Error = "Failed to fetch stats: " + err.Error()
+		return resp, nil
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == 403 {
+		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
+		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
+		return resp, nil
+	}
+	if res.StatusCode == 404 {
+		resp.Error = "Repository not found: " + name
+		return resp, nil
+	}
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		resp.Error = "HTTP error: " + res.Status
+		return resp, nil
+	}
+
+	var repo struct {
+		StargazersCount int       `json:"stargazers_count"`
+		ForksCount      int       `json:"forks_count"`
+		WatchersCount   int       `json:"watchers_count"`
+		OpenIssuesCount int       `json:"open_issues_count"`
+		Language        string    `json:"language"`
+		Size            int       `json:"size"`
+		CreatedAt       time.Time `json:"created_at"`
+		UpdatedAt       time.Time `json:"updated_at"`
+	}
+
+	if err := json.NewDecoder(res.Body).Decode(&repo); err != nil {
+		resp.Error = "Failed to decode stats: " + err.Error()
+		return resp, nil
+	}
+
+	resp.Stats.Stars = repo.StargazersCount
+	resp.Stats.Forks = repo.ForksCount
+	resp.Stats.Watchers = repo.WatchersCount
+	resp.Stats.OpenIssues = repo.OpenIssuesCount
+	resp.Stats.Language = repo.Language
+	resp.Stats.Size = repo.Size
+	resp.Stats.Created = repo.CreatedAt.Format("2006-01-02")
+	resp.Stats.Updated = repo.UpdatedAt.Format("2006-01-02")
 
 	return resp, nil
 }
