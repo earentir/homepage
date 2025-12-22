@@ -833,6 +833,7 @@ func main() {
 		ctx := r.Context()
 		name := r.URL.Query().Get("name")
 		repoType := r.URL.Query().Get("type") // "user" or "org"
+		token := r.URL.Query().Get("token")   // optional GitHub API token
 
 		if name == "" {
 			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
@@ -842,7 +843,7 @@ func main() {
 			repoType = "user" // default to user
 		}
 
-		repos, err := fetchGitHubReposForName(ctx, name, repoType)
+		repos, err := fetchGitHubReposForName(ctx, name, repoType, token)
 		if err != nil {
 			writeJSON(w, map[string]any{"error": err.Error(), "repos": []any{}, "total": 0})
 			return
@@ -855,13 +856,14 @@ func main() {
 		ctx := r.Context()
 		name := r.URL.Query().Get("name")
 		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
+		token := r.URL.Query().Get("token")      // optional GitHub API token
 
 		if name == "" {
 			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 			return
 		}
 
-		prs, err := fetchGitHubPRs(ctx, name, accountType)
+		prs, err := fetchGitHubPRs(ctx, name, accountType, token)
 		if err != nil {
 			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
 			return
@@ -874,13 +876,14 @@ func main() {
 		ctx := r.Context()
 		name := r.URL.Query().Get("name")
 		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
+		token := r.URL.Query().Get("token")      // optional GitHub API token
 
 		if name == "" {
 			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 			return
 		}
 
-		commits, err := fetchGitHubCommits(ctx, name, accountType)
+		commits, err := fetchGitHubCommits(ctx, name, accountType, token)
 		if err != nil {
 			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
 			return
@@ -893,13 +896,14 @@ func main() {
 		ctx := r.Context()
 		name := r.URL.Query().Get("name")
 		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
+		token := r.URL.Query().Get("token")      // optional GitHub API token
 
 		if name == "" {
 			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 			return
 		}
 
-		issues, err := fetchGitHubIssues(ctx, name, accountType)
+		issues, err := fetchGitHubIssues(ctx, name, accountType, token)
 		if err != nil {
 			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
 			return
@@ -911,13 +915,14 @@ func main() {
 	mux.HandleFunc("/api/github/stats", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		name := r.URL.Query().Get("name")
+		token := r.URL.Query().Get("token") // optional GitHub API token
 
 		if name == "" {
 			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 			return
 		}
 
-		stats, err := fetchGitHubStats(ctx, name)
+		stats, err := fetchGitHubStats(ctx, name, token)
 		if err != nil {
 			writeJSON(w, map[string]any{"error": err.Error()})
 			return
@@ -2088,7 +2093,7 @@ type GitHubReposResponse struct {
 	Error      string       `json:"error,omitempty"`
 }
 
-func fetchGitHubReposForName(ctx context.Context, name, repoType string) (GitHubReposResponse, error) {
+func fetchGitHubReposForName(ctx context.Context, name, repoType, token string) (GitHubReposResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -2109,6 +2114,9 @@ func fetchGitHubReposForName(ctx context.Context, name, repoType string) (GitHub
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, reposURL, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		resp.Error = "Failed to fetch repos: " + err.Error()
@@ -2161,6 +2169,9 @@ func fetchGitHubReposForName(ctx context.Context, name, repoType string) (GitHub
 	req2, _ := http.NewRequestWithContext(cctx, http.MethodGet, profileURL, nil)
 	req2.Header.Set("User-Agent", "lan-index/1.0")
 	req2.Header.Set("Accept", "application/vnd.github.v3+json")
+	if token != "" {
+		req2.Header.Set("Authorization", "Bearer "+token)
+	}
 	res2, err := http.DefaultClient.Do(req2)
 	if err == nil && res2.StatusCode >= 200 && res2.StatusCode <= 299 {
 		var profile struct {
@@ -2192,7 +2203,7 @@ type GitHubPRsResponse struct {
 	Error string         `json:"error,omitempty"`
 }
 
-func fetchGitHubPRs(ctx context.Context, name, accountType string) (GitHubPRsResponse, error) {
+func fetchGitHubPRs(ctx context.Context, name, accountType, token string) (GitHubPRsResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -2213,6 +2224,9 @@ func fetchGitHubPRs(ctx context.Context, name, accountType string) (GitHubPRsRes
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -2297,7 +2311,7 @@ type GitHubCommitsResponse struct {
 	Error string             `json:"error,omitempty"`
 }
 
-func fetchGitHubCommits(ctx context.Context, name, accountType string) (GitHubCommitsResponse, error) {
+func fetchGitHubCommits(ctx context.Context, name, accountType, token string) (GitHubCommitsResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -2324,6 +2338,9 @@ func fetchGitHubCommits(ctx context.Context, name, accountType string) (GitHubCo
 	if accountType != "repo" {
 		// Search commits requires special accept header
 		req.Header.Set("Accept", "application/vnd.github.cloak-preview+json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	res, err := http.DefaultClient.Do(req)
@@ -2452,7 +2469,7 @@ type GitHubIssuesResponse struct {
 	Error string            `json:"error,omitempty"`
 }
 
-func fetchGitHubIssues(ctx context.Context, name, accountType string) (GitHubIssuesResponse, error) {
+func fetchGitHubIssues(ctx context.Context, name, accountType, token string) (GitHubIssuesResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -2473,6 +2490,9 @@ func fetchGitHubIssues(ctx context.Context, name, accountType string) (GitHubIss
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -2554,7 +2574,7 @@ type GitHubStatsResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
-func fetchGitHubStats(ctx context.Context, name string) (GitHubStatsResponse, error) {
+func fetchGitHubStats(ctx context.Context, name, token string) (GitHubStatsResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -2566,6 +2586,9 @@ func fetchGitHubStats(ctx context.Context, name string) (GitHubStatsResponse, er
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

@@ -31,7 +31,7 @@
 ## GitHub Enhancements
 - [x] Add disk caching for GitHub data
 - [x] Show rate limit availability time in UI
-- [ ] Add GitHub token support for higher rate limits
+- [x] Add GitHub token support for higher rate limits
 - [x] Show commit activity
 - [x] Show PR status
 - [x] Add repository statistics
