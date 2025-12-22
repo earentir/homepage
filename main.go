@@ -995,9 +995,11 @@ func main() {
 		defer cancel()
 
 		var result struct {
-			Success bool   `json:"success"`
-			Latency int64  `json:"latency,omitempty"`
-			Error   string `json:"error,omitempty"`
+			Success   bool   `json:"success"`
+			Latency   int64  `json:"latency,omitempty"`
+			Error     string `json:"error,omitempty"`
+			SSLExpiry string `json:"sslExpiry,omitempty"`
+			SSLError  string `json:"sslError,omitempty"`
 		}
 
 		switch monType {
@@ -1008,12 +1010,21 @@ func main() {
 				writeJSON(w, result)
 				return
 			}
-			latency, err := checkHTTP(ctx, targetURL)
+			httpResult, err := checkHTTP(ctx, targetURL)
 			if err != nil {
 				result.Error = err.Error()
+				if httpResult != nil {
+					result.Latency = httpResult.Latency
+				}
 			} else {
 				result.Success = true
-				result.Latency = latency
+				result.Latency = httpResult.Latency
+				if httpResult.SSLExpiry != nil {
+					result.SSLExpiry = httpResult.SSLExpiry.Format(time.RFC3339)
+				}
+				if httpResult.SSLError != "" {
+					result.SSLError = httpResult.SSLError
+				}
 			}
 
 		case "port":
@@ -1577,8 +1588,23 @@ func extractFaviconFromHTML(html, origin string) string {
 	return ""
 }
 
-// checkHTTP performs an HTTP check and returns latency in ms
-func checkHTTP(ctx context.Context, targetURL string) (int64, error) {
+// HTTPCheckResult contains the result of an HTTP check
+type HTTPCheckResult struct {
+	Latency   int64
+	SSLExpiry *time.Time
+	SSLError  string
+}
+
+// checkHTTP performs an HTTP check and returns latency in ms and SSL info
+func checkHTTP(ctx context.Context, targetURL string) (*HTTPCheckResult, error) {
+	result := &HTTPCheckResult{}
+
+	// Parse URL to check if HTTPS
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return nil, err
+	}
+
 	// Skip TLS verification for LAN sites
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
@@ -1596,23 +1622,59 @@ func checkHTTP(ctx context.Context, targetURL string) (int64, error) {
 	start := time.Now()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; lan-index-monitor/1.0)")
 
 	res, err := client.Do(req)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer res.Body.Close()
 
-	latency := time.Since(start).Milliseconds()
+	result.Latency = time.Since(start).Milliseconds()
 
 	if res.StatusCode >= 400 {
-		return latency, errors.New("HTTP " + res.Status)
+		return result, errors.New("HTTP " + res.Status)
 	}
 
-	return latency, nil
+	// Check SSL certificate if HTTPS
+	if parsedURL.Scheme == "https" {
+		sslExpiry, sslErr := checkSSLCert(ctx, parsedURL.Host)
+		if sslErr != nil {
+			result.SSLError = sslErr.Error()
+		} else {
+			result.SSLExpiry = sslExpiry
+		}
+	}
+
+	return result, nil
+}
+
+// checkSSLCert checks the SSL certificate expiration for a host
+func checkSSLCert(ctx context.Context, host string) (*time.Time, error) {
+	// Add default port if not specified
+	if !strings.Contains(host, ":") {
+		host = host + ":443"
+	}
+
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	conn, err := tls.DialWithDialer(dialer, "tcp", host, &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	certs := conn.ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return nil, errors.New("no certificates found")
+	}
+
+	// Get the leaf certificate expiry
+	expiry := certs[0].NotAfter
+	return &expiry, nil
 }
 
 // checkPort performs a TCP port check and returns latency in ms

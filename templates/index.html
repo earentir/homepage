@@ -2204,7 +2204,7 @@ applyModuleVisibility();
     } catch (e) {}
   }
 
-  // Render monitors in the card
+// Render monitors in the card
   window.renderMonitors = function() {
     const container = document.getElementById('monitoringContainer');
     if (!container) return;
@@ -2222,7 +2222,10 @@ applyModuleVisibility();
 
       const k = document.createElement('div');
       k.className = 'k';
-      k.innerHTML = '<span class="monitor-status" id="mon-status-' + index + '"><i class="fas fa-circle" style="color:var(--muted);"></i></span> ' + mon.name;
+      // Status icon, SSL icon (for HTTPS), then name
+      const isHttps = mon.type === 'http' && mon.url && mon.url.startsWith('https://');
+      const sslIconHtml = isHttps ? '<span class="ssl-status" id="mon-ssl-' + index + '" style="margin-left:4px;"></span>' : '';
+      k.innerHTML = '<span class="monitor-status" id="mon-status-' + index + '"><i class="fas fa-circle" style="color:var(--muted);"></i></span>' + sslIconHtml + ' ' + mon.name;
 
       const v = document.createElement('div');
       v.className = 'v mono';
@@ -2235,10 +2238,11 @@ applyModuleVisibility();
     });
   };
 
-  // Check a single monitor
+// Check a single monitor
   async function checkMonitor(mon, index) {
     const statusEl = document.getElementById('mon-status-' + index);
     const resultEl = document.getElementById('mon-result-' + index);
+    const sslEl = document.getElementById('mon-ssl-' + index);
 
     if (!statusEl || !resultEl) return;
 
@@ -2266,10 +2270,38 @@ applyModuleVisibility();
         resultEl.textContent = data.error || 'Failed';
         resultEl.style.color = '#bf616a';
       }
+
+      // Update SSL icon for HTTPS
+      if (sslEl) {
+        if (data.sslExpiry) {
+          const expiry = new Date(data.sslExpiry);
+          const now = new Date();
+          const daysUntilExpiry = Math.floor((expiry - now) / (1000 * 60 * 60 * 24));
+          const expiryStr = expiry.toLocaleDateString() + ' (' + (daysUntilExpiry >= 0 ? daysUntilExpiry + ' days' : 'expired') + ')';
+
+          let sslColor, sslIcon;
+          if (daysUntilExpiry < 0) {
+            sslColor = '#bf616a'; // Red - expired
+            sslIcon = 'fa-lock-open';
+          } else if (daysUntilExpiry < 15) {
+            sslColor = '#ebcb8b'; // Yellow - expiring soon
+            sslIcon = 'fa-lock';
+          } else {
+            sslColor = '#a3be8c'; // Green - valid
+            sslIcon = 'fa-lock';
+          }
+          sslEl.innerHTML = '<i class="fas ' + sslIcon + '" style="color:' + sslColor + ';" title="SSL expires: ' + expiryStr + '"></i>';
+        } else if (data.sslError) {
+          sslEl.innerHTML = '<i class="fas fa-lock-open" style="color:#bf616a;" title="SSL error: ' + data.sslError + '"></i>';
+        } else {
+          sslEl.innerHTML = '';
+        }
+      }
     } catch (e) {
       statusEl.innerHTML = '<i class="fas fa-exclamation-circle" style="color:#ebcb8b;"></i>';
       resultEl.textContent = 'Error';
       resultEl.style.color = '#ebcb8b';
+      if (sslEl) sslEl.innerHTML = '';
     }
   }
 
