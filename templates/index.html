@@ -3207,7 +3207,7 @@ setInterval(refreshIP, timers.ip.interval);
         const moduleId = row.modules[col];
         if (!moduleId) {
           colEl.classList.add('empty-column');
-          colEl.innerHTML = '<div class="empty-column-hint">Drop module here</div>';
+          colEl.innerHTML = '<div class="empty-column-hint" style="display: none;">Drop module here</div>';
         } else {
           // Find and move module card
           const card = cardsMap.get(moduleId);
@@ -3217,7 +3217,7 @@ setInterval(refreshIP, timers.ip.interval);
           } else {
             // Card not found, mark as empty
             colEl.classList.add('empty-column');
-            colEl.innerHTML = '<div class="empty-column-hint">Drop module here</div>';
+            colEl.innerHTML = '<div class="empty-column-hint" style="display: none;">Drop module here</div>';
           }
         }
         
@@ -3253,6 +3253,22 @@ setInterval(refreshIP, timers.ip.interval);
     }
   }
 
+  // Get module name by ID
+  function getModuleName(moduleId) {
+    // Check regular modules
+    if (moduleConfig[moduleId]) {
+      return moduleConfig[moduleId].name;
+    }
+    // Check GitHub modules
+    if (moduleId && moduleId.startsWith('github-')) {
+      const githubModule = githubModules.find(m => m.id === moduleId);
+      if (githubModule) {
+        return githubModule.name;
+      }
+    }
+    return moduleId || 'Empty';
+  }
+
   // Render layout editor
   function renderLayoutEditor() {
     const editor = document.getElementById('layoutEditor');
@@ -3261,11 +3277,19 @@ setInterval(refreshIP, timers.ip.interval);
     editor.innerHTML = '';
 
     layoutConfig.rows.forEach((row, rowIndex) => {
+      // Get module names for this row
+      const moduleNames = row.modules
+        .filter(m => m !== null)
+        .map(m => getModuleName(m));
+      const modulesText = moduleNames.length > 0 
+        ? ': ' + moduleNames.join(', ')
+        : ' (empty)';
+
       const rowEditor = document.createElement('div');
       rowEditor.className = 'layout-row-editor';
       rowEditor.innerHTML = `
         <div class="layout-row-controls">
-          <span>Row ${rowIndex + 1}</span>
+          <span>Row ${rowIndex + 1}${modulesText}</span>
           <select class="row-cols-select" data-row="${rowIndex}">
             <option value="1" ${row.cols === 1 ? 'selected' : ''}>1 Column</option>
             <option value="2" ${row.cols === 2 ? 'selected' : ''}>2 Columns</option>
@@ -3442,6 +3466,10 @@ setInterval(refreshIP, timers.ip.interval);
         this.style.opacity = '0.5';
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/html', this.innerHTML);
+        
+        // Show empty column hints when dragging starts
+        const emptyColumns = grid.querySelectorAll('.layout-column.empty-column');
+        emptyColumns.forEach(col => col.classList.add('dragging-active'));
       });
 
       card.addEventListener('dragend', function(e) {
@@ -3450,7 +3478,10 @@ setInterval(refreshIP, timers.ip.interval);
         const allCards = Array.from(grid.querySelectorAll('.card[data-module]'));
         const allColumns = Array.from(grid.querySelectorAll('.layout-column'));
         allCards.forEach(c => c.classList.remove('drag-over'));
-        allColumns.forEach(c => c.classList.remove('drag-over'));
+        allColumns.forEach(c => {
+          c.classList.remove('drag-over');
+          c.classList.remove('dragging-active');
+        });
         draggedElement = null;
       });
 
@@ -3868,15 +3899,21 @@ setInterval(refreshIP, timers.ip.interval);
   position: relative;
 }
 .layout-column.empty-column {
-  border: 2px dashed var(--border);
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--panel2);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  min-height: 100px;
 }
-.layout-column.empty-column:hover {
+.layout-column.empty-column.dragging-active {
+  border: 2px dashed var(--border);
+  background: var(--panel2);
+}
+.layout-column.empty-column.dragging-active:hover,
+.layout-column.empty-column.drag-over {
   border-color: var(--accent);
   background: var(--panel);
 }
@@ -3888,6 +3925,9 @@ setInterval(refreshIP, timers.ip.interval);
   color: var(--muted);
   font-size: 13px;
   pointer-events: none;
+}
+.layout-column.empty-column.dragging-active .empty-column-hint {
+  display: block !important;
 }
 .layout-column:not(.empty-column) .card {
   width: 100%;
