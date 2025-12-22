@@ -573,7 +573,7 @@ function escapeHtml(text) {
 }
 
 // History for bar graphs
-const minBarWidth = 4; // Minimum width of each bar in pixels
+const minBarWidth = 6; // Minimum width of each bar in pixels
 const barGap = 2; // Gap between bars in pixels
 const graphMaxHeight = 26; // Max height of bars in pixels
 
@@ -655,6 +655,38 @@ function saveDiskHistory() {
   } catch (e) {
     // Ignore storage errors
   }
+}
+
+// Trim history arrays to fit within minBarWidth constraint
+// Returns true if graphs were ready and trimming was attempted, false if graphs weren't ready
+function trimHistoryArrays() {
+  // Get graph container width (use CPU graph as reference, they should all be similar)
+  const graph = document.getElementById("cpuGraph");
+  if (!graph) return false; // Graphs not yet available
+
+  const containerWidth = graph.clientWidth - 6; // Subtract padding
+  if (containerWidth <= 0) return false; // Graph not yet laid out
+
+  // Calculate maximum number of bars that can fit
+  // Solve: containerWidth = (maxBars * minBarWidth) + (barGap * (maxBars - 1))
+  // Rearranged: maxBars = (containerWidth + barGap) / (minBarWidth + barGap)
+  const maxBars = Math.floor((containerWidth + barGap) / (minBarWidth + barGap));
+  if (maxBars <= 0) return true; // Can't fit any bars, but graphs are ready
+
+  // Trim each history array to keep only the most recent values
+  if (cpuHistory.length > maxBars) {
+    cpuHistory = cpuHistory.slice(-maxBars);
+    saveCpuHistory();
+  }
+  if (ramHistory.length > maxBars) {
+    ramHistory = ramHistory.slice(-maxBars);
+    saveRamHistory();
+  }
+  if (diskHistory.length > maxBars) {
+    diskHistory = diskHistory.slice(-maxBars);
+    saveDiskHistory();
+  }
+  return true; // Graphs were ready, trimming attempted
 }
 
 function renderCpuGraph() {
@@ -1408,9 +1440,18 @@ renderGitHubModules();
 // Initial refresh
 refresh();
 applyFullBarsClass(); // Apply full bars styling before rendering
-renderCpuGraph(); // Render saved CPU history
-renderRamGraph(); // Render saved RAM history
-renderDiskGraph(); // Render saved Disk history
+// Trim history arrays to fit current minBarWidth (wait for graphs to be rendered)
+function initGraphs() {
+  const graphsReady = trimHistoryArrays();
+  renderCpuGraph(); // Render saved CPU history
+  renderRamGraph(); // Render saved RAM history
+  renderDiskGraph(); // Render saved Disk history
+  // If graphs weren't ready, try again after a short delay
+  if (!graphsReady && (cpuHistory.length > 0 || ramHistory.length > 0 || diskHistory.length > 0)) {
+    setTimeout(initGraphs, 100);
+  }
+}
+setTimeout(initGraphs, 0);
 refreshCPU();
 refreshRAM();
 refreshDisk();
