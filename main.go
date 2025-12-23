@@ -1,3 +1,4 @@
+// Package main provides a homepage dashboard server with system metrics, weather, GitHub integration, and customizable themes.
 package main
 
 import (
@@ -36,6 +37,7 @@ import (
 //go:embed templates
 var templatesFS embed.FS
 
+// ThemeMetadata represents metadata parsed from CSS template files.
 type ThemeMetadata struct {
 	Template string // "nordic", "modern", "minimal"
 	Scheme   string // "default", "blue-dark", "light", etc.
@@ -44,12 +46,14 @@ type ThemeMetadata struct {
 	Border   bool
 }
 
+// TemplateInfo contains information about a CSS template and its color schemes.
 type TemplateInfo struct {
 	Name    string
 	BaseCSS string                // Base template CSS (without :root)
 	Schemes map[string]SchemeInfo // scheme name -> scheme info
 }
 
+// SchemeInfo contains information about a color scheme within a template.
 type SchemeInfo struct {
 	Name    string
 	Accent  string
@@ -64,6 +68,7 @@ var (
 	indexTemplate *template.Template
 )
 
+// Config holds the application configuration.
 type Config struct {
 	ListenAddr      string
 	Title           string
@@ -71,6 +76,7 @@ type Config struct {
 	Weather         WeatherConfig
 }
 
+// WeatherConfig holds weather service configuration.
 type WeatherConfig struct {
 	Enabled bool
 	// Optional fixed coordinates. If empty, UI can show "set coords" hint.
@@ -78,6 +84,7 @@ type WeatherConfig struct {
 	Lon string
 }
 
+// APIRoot represents the root API response structure.
 type APIRoot struct {
 	Server  ServerInfo    `json:"server"`
 	Network NetworkInfo   `json:"network"`
@@ -87,6 +94,7 @@ type APIRoot struct {
 	System  SystemMetrics `json:"system"`
 }
 
+// ServerInfo contains server system information.
 type ServerInfo struct {
 	Hostname  string `json:"hostname"`
 	OS        string `json:"os"`
@@ -96,21 +104,25 @@ type ServerInfo struct {
 	Time      string `json:"time"`
 }
 
+// NetworkInfo contains network interface information.
 type NetworkInfo struct {
 	HostIPs []HostIPInfo `json:"hostIps"`
 }
 
+// HostIPInfo contains information about a host IP address.
 type HostIPInfo struct {
 	IP  string `json:"ip"`
 	PTR string `json:"ptr,omitempty"`
 }
 
+// PublicIPInfo contains information about the public IP address.
 type PublicIPInfo struct {
 	IP    string `json:"ip"`
 	PTR   string `json:"ptr,omitempty"`
 	Error string `json:"error,omitempty"`
 }
 
+// WeatherInfo contains weather data and forecast information.
 type WeatherInfo struct {
 	Enabled  bool            `json:"enabled"`
 	Summary  string          `json:"summary,omitempty"`
@@ -121,6 +133,7 @@ type WeatherInfo struct {
 	Error    string          `json:"error,omitempty"`
 }
 
+// WeatherCurrent contains current weather conditions.
 type WeatherCurrent struct {
 	Temperature float64 `json:"temperature"`
 	TempUnit    string  `json:"tempUnit"`
@@ -130,6 +143,7 @@ type WeatherCurrent struct {
 	WeatherCode int     `json:"weatherCode"`
 }
 
+// WeatherDay contains weather forecast for a single day.
 type WeatherDay struct {
 	TempMax     float64 `json:"tempMax"`
 	TempMin     float64 `json:"tempMin"`
@@ -137,22 +151,26 @@ type WeatherDay struct {
 	WeatherCode int     `json:"weatherCode"`
 }
 
+// GitHubInfo contains GitHub repository information.
 type GitHubInfo struct {
 	UserRepos GitHubUserRepos `json:"userRepos,omitempty"`
 	OrgRepos  GitHubOrgRepos  `json:"orgRepos,omitempty"`
 }
 
+// SystemMetrics contains system resource usage metrics.
 type SystemMetrics struct {
 	CPU  CPUInfo  `json:"cpu"`
 	RAM  RAMInfo  `json:"ram"`
 	Disk DiskInfo `json:"disk"`
 }
 
+// CPUInfo contains CPU usage information.
 type CPUInfo struct {
 	Usage float64 `json:"usage"`
 	Error string  `json:"error,omitempty"`
 }
 
+// RAMInfo contains RAM/memory usage information.
 type RAMInfo struct {
 	Total     uint64  `json:"total"`
 	Used      uint64  `json:"used"`
@@ -161,6 +179,7 @@ type RAMInfo struct {
 	Error     string  `json:"error,omitempty"`
 }
 
+// DiskInfo contains disk storage usage information.
 type DiskInfo struct {
 	Total   uint64  `json:"total"`
 	Used    uint64  `json:"used"`
@@ -169,6 +188,7 @@ type DiskInfo struct {
 	Error   string  `json:"error,omitempty"`
 }
 
+// CPUDetailsInfo contains detailed CPU information.
 type CPUDetailsInfo struct {
 	Name          string         `json:"name"`
 	PhysicalCores int            `json:"physicalCores"`
@@ -180,6 +200,7 @@ type CPUDetailsInfo struct {
 	Error         string         `json:"error,omitempty"`
 }
 
+// CPUCacheInfo contains CPU cache information.
 type CPUCacheInfo struct {
 	Level    int     `json:"level"`
 	Type     string  `json:"type"`
@@ -187,6 +208,7 @@ type CPUCacheInfo struct {
 	SpeedMHz float64 `json:"speedMHz,omitempty"`
 }
 
+// GitHubUserRepos contains GitHub user repository information.
 type GitHubUserRepos struct {
 	Repos      []GitHubRepo `json:"repos,omitempty"`
 	Total      int          `json:"total,omitempty"`
@@ -194,6 +216,7 @@ type GitHubUserRepos struct {
 	Error      string       `json:"error,omitempty"`
 }
 
+// GitHubOrgRepos contains GitHub organization repository information.
 type GitHubOrgRepos struct {
 	Repos      []GitHubRepo `json:"repos,omitempty"`
 	Total      int          `json:"total,omitempty"`
@@ -201,6 +224,7 @@ type GitHubOrgRepos struct {
 	Error      string       `json:"error,omitempty"`
 }
 
+// GitHubRepo contains information about a GitHub repository.
 type GitHubRepo struct {
 	Name        string `json:"name"`
 	FullName    string `json:"fullName"`
@@ -211,6 +235,7 @@ type GitHubRepo struct {
 	Updated     string `json:"updated"`
 }
 
+// GitHubCache provides thread-safe caching for GitHub repository data.
 type GitHubCache struct {
 	mu        sync.RWMutex
 	userRepos GitHubUserRepos
@@ -1121,7 +1146,7 @@ func main() {
 		})
 	})
 
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte("ok")); err != nil {
 			log.Printf("Error writing healthz response: %v", err)
@@ -1372,6 +1397,7 @@ func publicIP(ctx context.Context, timeout time.Duration) (string, error) {
 	return "", lastErr
 }
 
+// WeatherData contains parsed weather data from external APIs.
 type WeatherData struct {
 	Summary  string
 	Forecast []string
@@ -1559,7 +1585,7 @@ func fetchFavicon(ctx context.Context, origin string) ([]byte, string, error) {
 	client := &http.Client{
 		Timeout:   5 * time.Second,
 		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
 			if len(via) >= 3 {
 				return errors.New("too many redirects")
 			}
@@ -1650,13 +1676,14 @@ func extractFaviconFromHTML(html, origin string) string {
 			// Resolve relative URLs
 			if strings.HasPrefix(href, "//") {
 				return "https:" + href
-			} else if strings.HasPrefix(href, "/") {
-				return origin + href
-			} else if strings.HasPrefix(href, "http") {
-				return href
-			} else {
-				return origin + "/" + href
 			}
+			if strings.HasPrefix(href, "/") {
+				return origin + href
+			}
+			if strings.HasPrefix(href, "http") {
+				return href
+			}
+			return origin + "/" + href
 		}
 	}
 	return ""
@@ -1685,7 +1712,7 @@ func checkHTTP(ctx context.Context, targetURL string) (*HTTPCheckResult, error) 
 	client := &http.Client{
 		Timeout:   10 * time.Second,
 		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return errors.New("too many redirects")
 			}
