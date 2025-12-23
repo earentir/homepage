@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"html/template"
@@ -1203,6 +1204,31 @@ func main() {
 		writeJSON(w, map[string]any{
 			"success": true,
 			"value":   result,
+		})
+	})
+
+	mux.HandleFunc("/api/rss", func(w http.ResponseWriter, r *http.Request) {
+		feedURL := r.URL.Query().Get("url")
+		if feedURL == "" {
+			writeJSON(w, map[string]any{
+				"error": "Missing required parameter: url",
+			})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		items, err := fetchRSSFeed(ctx, feedURL)
+		if err != nil {
+			writeJSON(w, map[string]any{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		writeJSON(w, map[string]any{
+			"items": items,
 		})
 	})
 
@@ -3217,4 +3243,147 @@ func envBool(k string, def bool) bool {
 	default:
 		return def
 	}
+}
+
+// RSSFeedItem represents a single RSS feed item
+type RSSFeedItem struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Link        string `json:"link"`
+	PubDate     string `json:"pubDate"` // ISO 8601 format
+}
+
+// RSSFeed represents an RSS feed structure
+type RSSFeed struct {
+	XMLName xml.Name   `xml:"rss"`
+	Channel RSSChannel `xml:"channel"`
+}
+
+// RSSChannel represents the channel element in RSS
+type RSSChannel struct {
+	Title       string    `xml:"title"`
+	Description string    `xml:"description"`
+	Link        string    `xml:"link"`
+	Items       []RSSItem `xml:"item"`
+}
+
+// RSSItem represents a single item in an RSS feed
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Description string `xml:"description"`
+	Link        string `xml:"link"`
+	PubDate     string `xml:"pubDate"`
+}
+
+// fetchRSSFeed fetches and parses an RSS feed, returning the last 5 items
+func fetchRSSFeed(ctx context.Context, feedURL string) ([]RSSFeedItem, error) {
+	// Validate URL
+	parsedURL, err := url.Parse(feedURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %v", err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("URL must be http or https")
+	}
+
+	// Create HTTP client
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	// Fetch RSS feed
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("User-Agent", "lan-index/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch feed: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Error closing RSS response body: %v", closeErr)
+		}
+	}()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
+	}
+
+	// Parse XML
+	var feed RSSFeed
+	decoder := xml.NewDecoder(resp.Body)
+	if err := decoder.Decode(&feed); err != nil {
+		return nil, fmt.Errorf("failed to parse RSS: %v", err)
+	}
+
+	// Convert to RSSFeedItem format and limit to 5 items
+	items := make([]RSSFeedItem, 0, 5)
+	for i, item := range feed.Channel.Items {
+		if i >= 5 {
+			break
+		}
+
+		// Parse and format date to ISO 8601
+		pubDate := ""
+		if item.PubDate != "" {
+			// Try common RSS date formats
+			formats := []string{
+				time.RFC1123Z,
+				time.RFC1123,
+				time.RFC822Z,
+				time.RFC822,
+				time.RFC3339,
+			}
+			for _, format := range formats {
+				if t, err := time.Parse(format, item.PubDate); err == nil {
+					pubDate = t.Format(time.RFC3339)
+					break
+				}
+			}
+			// If no format matched, try parsing as RFC3339 directly
+			if pubDate == "" {
+				if t, err := time.Parse(time.RFC3339, item.PubDate); err == nil {
+					pubDate = t.Format(time.RFC3339)
+				}
+			}
+		}
+
+		// Clean description (remove HTML tags, limit to 2 lines)
+		description := cleanHTML(item.Description)
+		lines := strings.Split(description, "\n")
+		if len(lines) > 2 {
+			description = strings.Join(lines[:2], "\n")
+		}
+
+		items = append(items, RSSFeedItem{
+			Title:       strings.TrimSpace(item.Title),
+			Description: strings.TrimSpace(description),
+			Link:        strings.TrimSpace(item.Link),
+			PubDate:     pubDate,
+		})
+	}
+
+	return items, nil
+}
+
+// cleanHTML removes HTML tags from a string
+func cleanHTML(html string) string {
+	// Simple regex to remove HTML tags
+	re := regexp.MustCompile(`<[^>]*>`)
+	cleaned := re.ReplaceAllString(html, "")
+	// Decode common HTML entities
+	cleaned = strings.ReplaceAll(cleaned, "&lt;", "<")
+	cleaned = strings.ReplaceAll(cleaned, "&gt;", ">")
+	cleaned = strings.ReplaceAll(cleaned, "&amp;", "&")
+	cleaned = strings.ReplaceAll(cleaned, "&quot;", "\"")
+	cleaned = strings.ReplaceAll(cleaned, "&apos;", "'")
+	cleaned = strings.ReplaceAll(cleaned, "&#39;", "'")
+	cleaned = strings.ReplaceAll(cleaned, "&nbsp;", " ")
+	return cleaned
 }

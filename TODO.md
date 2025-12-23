@@ -82,7 +82,7 @@
 - [ ] Add asset caching
 
 ## Integrations
-- [ ] Add RSS feed reader
+- [x] Add RSS feed reader
 - [ ] Add calendar integration
 - [ ] Add note-taking widget
 - [ ] Add bookmark manager
