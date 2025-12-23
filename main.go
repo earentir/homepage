@@ -38,6 +38,9 @@ import (
 //go:embed templates
 var templatesFS embed.FS
 
+//go:embed static
+var staticFS embed.FS
+
 // ThemeMetadata represents metadata parsed from CSS template files.
 type ThemeMetadata struct {
 	Template string // "nordic", "modern", "minimal"
@@ -1231,6 +1234,13 @@ func main() {
 			"items": items,
 		})
 	})
+
+	// Serve static files (JS, CSS, etc.)
+	staticContent, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		log.Fatalf("Failed to create static file sub-filesystem: %v", err)
+	}
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
