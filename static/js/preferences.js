@@ -79,6 +79,9 @@ function initPreferencesModal() {
   // General settings
   initGeneralSettings();
 
+  // Weather settings
+  initWeatherSettings();
+
   // Search settings
   initSearchSettings();
 }
@@ -193,69 +196,6 @@ function initGeneralSettings() {
     });
   }
 
-  // Weather location search
-  const weatherLocationInput = document.getElementById('pref-weather-location');
-  const searchLocationBtn = document.getElementById('searchLocationBtn');
-  const locationResultsRow = document.getElementById('locationResultsRow');
-  const locationResults = document.getElementById('pref-location-results');
-  const setLocationBtn = document.getElementById('setLocationBtn');
-  const currentLocationDisplay = document.getElementById('currentLocationDisplay');
-
-  // Show current location
-  const savedLocation = localStorage.getItem('weatherLocation');
-  if (savedLocation && currentLocationDisplay) {
-    try {
-      const loc = JSON.parse(savedLocation);
-      currentLocationDisplay.textContent = loc.name || 'Set';
-    } catch (e) {
-      currentLocationDisplay.textContent = 'Not set';
-    }
-  }
-
-  if (searchLocationBtn && weatherLocationInput && locationResults) {
-    searchLocationBtn.addEventListener('click', async () => {
-      const query = weatherLocationInput.value.trim();
-      if (!query) return;
-
-      try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
-
-        if (data.results && data.results.length > 0) {
-          locationResults.innerHTML = '';
-          data.results.slice(0, 5).forEach(result => {
-            const option = document.createElement('option');
-            option.value = JSON.stringify({
-              name: result.name + ', ' + result.country,
-              latitude: result.latitude,
-              longitude: result.longitude
-            });
-            option.textContent = `${result.name}, ${result.admin1 || ''}, ${result.country}`;
-            locationResults.appendChild(option);
-          });
-          if (locationResultsRow) locationResultsRow.style.display = 'flex';
-        }
-      } catch (e) {
-        console.error('Error searching location:', e);
-      }
-    });
-  }
-
-  if (setLocationBtn && locationResults && currentLocationDisplay) {
-    setLocationBtn.addEventListener('click', () => {
-      const selected = locationResults.value;
-      if (selected) {
-        localStorage.setItem('weatherLocation', selected);
-        try {
-          const loc = JSON.parse(selected);
-          currentLocationDisplay.textContent = loc.name;
-        } catch (e) {}
-        if (locationResultsRow) locationResultsRow.style.display = 'none';
-        if (window.refreshWeather) window.refreshWeather();
-      }
-    });
-  }
-
   // GitHub token
   const githubTokenInput = document.getElementById('pref-github-token');
   const toggleGithubToken = document.getElementById('toggleGithubToken');
@@ -352,6 +292,102 @@ function renderModuleList() {
       }
     });
   });
+}
+
+function initWeatherSettings() {
+  // Weather location search
+  const weatherLocationInput = document.getElementById('pref-weather-location');
+  const searchLocationBtn = document.getElementById('searchLocationBtn');
+  const locationResultsRow = document.getElementById('locationResultsRow');
+  const locationResults = document.getElementById('pref-location-results');
+  const setLocationBtn = document.getElementById('setLocationBtn');
+  const currentLocationDisplay = document.getElementById('currentLocationDisplay');
+
+  // Show current location
+  const savedLocation = localStorage.getItem('weatherLocation');
+  if (savedLocation && currentLocationDisplay) {
+    try {
+      const loc = JSON.parse(savedLocation);
+      currentLocationDisplay.textContent = loc.name || 'Not set';
+    } catch (e) {
+      currentLocationDisplay.textContent = 'Not set';
+    }
+  }
+
+  if (searchLocationBtn && weatherLocationInput && locationResults) {
+    searchLocationBtn.addEventListener('click', async () => {
+      const query = weatherLocationInput.value.trim();
+      if (!query) return;
+
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+
+        if (data.results && data.results.length > 0) {
+          locationResults.innerHTML = '';
+          data.results.slice(0, 5).forEach(result => {
+            const option = document.createElement('option');
+            option.value = JSON.stringify({
+              name: result.name + ', ' + result.country,
+              latitude: result.latitude,
+              longitude: result.longitude
+            });
+            option.textContent = `${result.name}, ${result.admin1 || ''}, ${result.country}`;
+            locationResults.appendChild(option);
+          });
+          if (locationResultsRow) locationResultsRow.style.display = 'flex';
+        }
+      } catch (e) {
+        console.error('Error searching location:', e);
+      }
+    });
+  }
+
+  if (setLocationBtn && locationResults && currentLocationDisplay) {
+    setLocationBtn.addEventListener('click', () => {
+      const selected = locationResults.value;
+      if (selected) {
+        localStorage.setItem('weatherLocation', selected);
+        try {
+          const loc = JSON.parse(selected);
+          currentLocationDisplay.textContent = loc.name;
+        } catch (e) {}
+        if (locationResultsRow) locationResultsRow.style.display = 'none';
+        if (window.refreshWeather) window.refreshWeather();
+      }
+    });
+  }
+
+  // Weather provider
+  const weatherProviderSelect = document.getElementById('pref-weather-provider');
+  if (weatherProviderSelect) {
+    const savedProvider = localStorage.getItem('weatherProvider') || 'openmeteo';
+    weatherProviderSelect.value = savedProvider;
+    weatherProviderSelect.addEventListener('change', () => {
+      localStorage.setItem('weatherProvider', weatherProviderSelect.value);
+      // Note: Provider change requires server restart with env var, this is just for UI reference
+    });
+  }
+
+  // Weather API key
+  const weatherApiKeyInput = document.getElementById('pref-weather-api-key');
+  const toggleWeatherApiKey = document.getElementById('toggleWeatherApiKey');
+
+  if (weatherApiKeyInput) {
+    weatherApiKeyInput.value = localStorage.getItem('weatherApiKey') || '';
+    weatherApiKeyInput.addEventListener('change', () => {
+      localStorage.setItem('weatherApiKey', weatherApiKeyInput.value.trim());
+      // Note: API key change requires server restart with env var, this is just for UI reference
+    });
+  }
+
+  if (toggleWeatherApiKey && weatherApiKeyInput) {
+    toggleWeatherApiKey.addEventListener('click', () => {
+      const isPassword = weatherApiKeyInput.type === 'password';
+      weatherApiKeyInput.type = isPassword ? 'text' : 'password';
+      toggleWeatherApiKey.querySelector('i').className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+    });
+  }
 }
 
 function initSearchSettings() {

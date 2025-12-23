@@ -86,17 +86,41 @@
         <div class="weather-row" id="weatherNow">
           <span class="weather-label">Now</span>
           <span class="weather-icon" id="weatherNowIcon">—</span>
-          <span class="weather-data" id="weatherNowData">—</span>
+          <span class="weather-data" id="weatherNowData" style="display:flex; flex-direction:column; gap:4px;">—</span>
         </div>
         <div class="weather-row" id="weatherToday">
           <span class="weather-label">Today</span>
           <span class="weather-icon" id="weatherTodayIcon">—</span>
           <span class="weather-data" id="weatherTodayData">—</span>
         </div>
+        <div id="weatherTodayDetails" style="display:none;">
+          <div class="weather-row">
+            <span class="weather-label"></span>
+            <span class="weather-icon"></span>
+            <span class="weather-data" id="weatherTodayDetailsData1"></span>
+          </div>
+          <div class="weather-row">
+            <span class="weather-label"></span>
+            <span class="weather-icon"></span>
+            <span class="weather-data" id="weatherTodayDetailsData2"></span>
+          </div>
+        </div>
         <div class="weather-row" id="weatherTomorrow">
           <span class="weather-label">Tomorrow</span>
           <span class="weather-icon" id="weatherTomorrowIcon">—</span>
           <span class="weather-data" id="weatherTomorrowData">—</span>
+        </div>
+        <div id="weatherTomorrowDetails" style="display:none;">
+          <div class="weather-row">
+            <span class="weather-label"></span>
+            <span class="weather-icon"></span>
+            <span class="weather-data" id="weatherTomorrowDetailsData1"></span>
+          </div>
+          <div class="weather-row">
+            <span class="weather-label"></span>
+            <span class="weather-icon"></span>
+            <span class="weather-data" id="weatherTomorrowDetailsData2"></span>
+          </div>
         </div>
         <div class="small" id="weatherErr"></div>
       </div>
@@ -260,6 +284,7 @@
         <button class="modal-tab" data-tab="calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
         <button class="modal-tab" data-tab="todo"><i class="fas fa-tasks"></i> Todo</button>
         <button class="modal-tab" data-tab="search"><i class="fas fa-search"></i> Search</button>
+        <button class="modal-tab" data-tab="weather"><i class="fas fa-cloud-sun"></i> Weather</button>
         <button class="modal-tab" data-tab="about"><i class="fas fa-info-circle"></i> About</button>
       </div>
       <div class="modal-content">
@@ -278,27 +303,6 @@
                 <div class="pref-row">
                   <label>Color Scheme</label>
                   <select id="pref-scheme"></select>
-                </div>
-              </div>
-              <div class="pref-section">
-                <h3>Weather</h3>
-                <div class="pref-row">
-                  <label>Location</label>
-                  <div class="location-input">
-                    <input type="text" id="pref-weather-location" placeholder="e.g., Athens, Greece">
-                    <button class="btn-small" id="searchLocationBtn"><i class="fas fa-search"></i></button>
-                  </div>
-                </div>
-                <div class="pref-row" id="locationResultsRow" style="display:none;">
-                  <label>Select</label>
-                  <div class="location-input">
-                    <select id="pref-location-results"></select>
-                    <button class="btn-small" id="setLocationBtn"><i class="fas fa-check"></i> Set</button>
-                  </div>
-                </div>
-                <div class="pref-row" id="currentLocationRow">
-                  <label>Current</label>
-                  <span class="location-display" id="currentLocationDisplay">Not set</span>
                 </div>
               </div>
             </div>
@@ -716,6 +720,57 @@
         </div>
 
         <!-- About Tab -->
+        <!-- Weather Tab -->
+        <div class="tab-content" id="tab-weather">
+          <div class="pref-section">
+            <h3>Location</h3>
+            <div class="pref-row">
+              <label>Search Location</label>
+              <div class="location-input">
+                <input type="text" id="pref-weather-location" placeholder="e.g., Athens, Greece">
+                <button class="btn-small" id="searchLocationBtn"><i class="fas fa-search"></i></button>
+              </div>
+            </div>
+            <div class="pref-row" id="locationResultsRow" style="display:none;">
+              <label>Select</label>
+              <div class="location-input">
+                <select id="pref-location-results"></select>
+                <button class="btn-small" id="setLocationBtn"><i class="fas fa-check"></i> Set</button>
+              </div>
+            </div>
+            <div class="pref-row" id="currentLocationRow">
+              <label>Current Location</label>
+              <span class="location-display" id="currentLocationDisplay">Not set</span>
+            </div>
+          </div>
+          <div class="pref-section">
+            <h3>API Settings</h3>
+            <div class="pref-row">
+              <label>Provider</label>
+              <select id="pref-weather-provider">
+                <option value="openmeteo">Open-Meteo (Free, no key)</option>
+                <option value="openweathermap">OpenWeatherMap (Requires key)</option>
+                <option value="weatherapi">WeatherAPI.com (Requires key)</option>
+              </select>
+            </div>
+            <div class="pref-row">
+              <label>API Key</label>
+              <div class="location-input">
+                <input type="password" id="pref-weather-api-key" placeholder="Enter API key if required">
+                <button class="btn-small" id="toggleWeatherApiKey" title="Show/Hide"><i class="fas fa-eye"></i></button>
+              </div>
+            </div>
+            <div class="pref-row">
+              <label></label>
+              <div class="small" style="color:var(--muted);">
+                <p>• Open-Meteo: Free, no API key required (default)</p>
+                <p>• OpenWeatherMap: Get key at <a href="https://openweathermap.org/api" target="_blank">openweathermap.org/api</a></p>
+                <p>• WeatherAPI.com: Get key at <a href="https://www.weatherapi.com/" target="_blank">weatherapi.com</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="tab-content" id="tab-about">
           <div class="pref-section about-section">
             <div class="about-logo"><i class="fas fa-home fa-3x"></i></div>
