@@ -609,13 +609,13 @@ func main() {
 			return
 		}
 
-		// Get template and scheme from cookies or defaults
+		// Theme CSS is loaded dynamically by client from /api/theme based on localStorage
+		// Server provides an empty placeholder and the list of templates/schemes for the UI
 		defaultTemplate := "nordic"
 		defaultScheme := "default"
 		if len(templatesList) > 0 {
 			defaultTemplate = templatesList[0]
 			if templateInfo, exists := templatesMap[defaultTemplate]; exists {
-				// Get first available scheme
 				for schemeName := range templateInfo.Schemes {
 					defaultScheme = schemeName
 					break
@@ -626,37 +626,8 @@ func main() {
 		templateName := defaultTemplate
 		schemeName := defaultScheme
 
-		if cookie, err := r.Cookie("template"); err == nil {
-			if _, exists := templatesMap[cookie.Value]; exists {
-				templateName = cookie.Value
-			}
-		}
-		if cookie, err := r.Cookie("scheme"); err == nil {
-			if templateInfo, exists := templatesMap[templateName]; exists {
-				if _, schemeExists := templateInfo.Schemes[cookie.Value]; schemeExists {
-					schemeName = cookie.Value
-				}
-			}
-		}
-
-		// Get CSS for selected template + scheme
-		var themeCSS string
-		if templateInfo, exists := templatesMap[templateName]; exists {
-			if scheme, schemeExists := templateInfo.Schemes[schemeName]; schemeExists {
-				// Combine base template CSS + scheme CSS
-				themeCSS = scheme.CSS + "\n" + templateInfo.BaseCSS
-			} else {
-				// Fallback to default scheme
-				if defaultScheme, hasDefault := templateInfo.Schemes["default"]; hasDefault {
-					themeCSS = defaultScheme.CSS + "\n" + templateInfo.BaseCSS
-					schemeName = "default"
-				} else {
-					themeCSS = "/* No schemes available */"
-				}
-			}
-		} else {
-			themeCSS = "/* No templates available */"
-		}
+		// Placeholder CSS - actual theme is fetched by client
+		themeCSS := "/* Theme CSS loaded dynamically from /api/theme */"
 
 		// Build template and scheme menu HTML
 		var templateMenuHTML strings.Builder
@@ -736,6 +707,40 @@ func main() {
 			"Year":             time.Now().Year(),
 			"AppVersion":       appversion,
 		})
+	})
+
+	// Theme CSS API - returns CSS for a given template+scheme
+	mux.HandleFunc("/api/theme", func(w http.ResponseWriter, r *http.Request) {
+		templateName := "nordic"
+		schemeName := "default"
+
+		// Note: template/scheme come from client localStorage, passed via query params
+		// This is fine for API calls - we just don't want them in the main page URL
+		if qTemplate := r.URL.Query().Get("template"); qTemplate != "" {
+			if _, exists := templatesMap[qTemplate]; exists {
+				templateName = qTemplate
+			}
+		}
+		if qScheme := r.URL.Query().Get("scheme"); qScheme != "" {
+			if templateInfo, exists := templatesMap[templateName]; exists {
+				if _, schemeExists := templateInfo.Schemes[qScheme]; schemeExists {
+					schemeName = qScheme
+				}
+			}
+		}
+
+		var themeCSS string
+		if templateInfo, exists := templatesMap[templateName]; exists {
+			if scheme, schemeExists := templateInfo.Schemes[schemeName]; schemeExists {
+				themeCSS = scheme.CSS + "\n" + templateInfo.BaseCSS
+			} else if defaultScheme, hasDefault := templateInfo.Schemes["default"]; hasDefault {
+				themeCSS = defaultScheme.CSS + "\n" + templateInfo.BaseCSS
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		_, _ = w.Write([]byte(themeCSS))
 	})
 
 	mux.HandleFunc("/api/summary", func(w http.ResponseWriter, r *http.Request) {

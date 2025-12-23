@@ -12,6 +12,8 @@ function initPreferencesModal() {
   // Open modal
   openBtn.addEventListener('click', () => {
     modal.classList.add('active');
+    // Populate scheme dropdown (needs to happen after schemeMenu is in DOM)
+    populateSchemeDropdown();
     // Render lists when modal opens
     if (window.renderGitHubModuleList) window.renderGitHubModuleList();
     if (window.renderQuicklinksList) window.renderQuicklinksList();
@@ -73,46 +75,67 @@ function initThemeSelection() {
   const templateSelect = document.getElementById('pref-template');
   const schemeSelect = document.getElementById('pref-scheme');
 
-  // Set current values
+  // Set current values from localStorage
   const currentTemplate = localStorage.getItem('template') || document.documentElement.getAttribute('data-template') || 'nordic';
   const currentScheme = localStorage.getItem('scheme') || document.documentElement.getAttribute('data-scheme') || 'default';
 
   if (templateSelect) {
     templateSelect.value = currentTemplate;
     templateSelect.addEventListener('change', (e) => {
-      const template = e.target.value;
-      localStorage.setItem('template', template);
-      // Reload page with new template
-      const url = new URL(window.location.href);
-      url.searchParams.set('template', template);
-      window.location.href = url.toString();
+      localStorage.setItem('template', e.target.value);
+      // Clear scheme when template changes (schemes are template-specific)
+      localStorage.removeItem('scheme');
+      location.reload();
     });
   }
 
-  // Populate scheme dropdown from hidden menu
   if (schemeSelect) {
-    const schemeMenu = document.getElementById('schemeMenu');
-    if (schemeMenu) {
-      const buttons = schemeMenu.querySelectorAll('button');
+    schemeSelect.addEventListener('change', (e) => {
+      localStorage.setItem('scheme', e.target.value);
+      location.reload();
+    });
+  }
+}
+
+// Populate scheme dropdown and set template value - called when modal opens
+function populateSchemeDropdown() {
+  const templateSelect = document.getElementById('pref-template');
+  const schemeSelect = document.getElementById('pref-scheme');
+  const currentTemplate = localStorage.getItem('template') || document.documentElement.getAttribute('data-template') || 'nordic';
+  const currentScheme = localStorage.getItem('scheme') || document.documentElement.getAttribute('data-scheme') || 'default';
+
+  // Set template value
+  if (templateSelect) {
+    templateSelect.value = currentTemplate;
+  }
+
+  if (!schemeSelect) return;
+
+  // Always repopulate in case template changed
+  const schemeMenu = document.getElementById('schemeMenu');
+  if (schemeMenu) {
+    const buttons = schemeMenu.querySelectorAll('button');
+    if (buttons.length > 0) {
       schemeSelect.innerHTML = '';
       buttons.forEach(btn => {
         const option = document.createElement('option');
         option.value = btn.dataset.scheme;
-        option.textContent = btn.textContent;
+        option.textContent = btn.textContent.trim();
         if (btn.dataset.scheme === currentScheme) {
           option.selected = true;
         }
         schemeSelect.appendChild(option);
       });
     }
+  }
 
-    schemeSelect.addEventListener('change', (e) => {
-      const scheme = e.target.value;
-      localStorage.setItem('scheme', scheme);
-      const url = new URL(window.location.href);
-      url.searchParams.set('scheme', scheme);
-      window.location.href = url.toString();
-    });
+  // If still empty, show a message
+  if (schemeSelect.options.length === 0) {
+    const option = document.createElement('option');
+    option.value = 'default';
+    option.textContent = 'Default';
+    option.selected = true;
+    schemeSelect.appendChild(option);
   }
 }
 
@@ -120,15 +143,22 @@ function initGeneralSettings() {
   // Min bar width
   const minBarWidthInput = document.getElementById('pref-min-bar-width');
   if (minBarWidthInput) {
+    // Load saved value or use current window value
     const saved = localStorage.getItem('minBarWidth');
     if (saved) {
       minBarWidthInput.value = parseInt(saved) || 10;
+    } else if (window.minBarWidth) {
+      minBarWidthInput.value = window.minBarWidth;
     }
+
     minBarWidthInput.addEventListener('change', () => {
       const val = Math.max(2, Math.min(50, parseInt(minBarWidthInput.value) || 10));
       minBarWidthInput.value = val;
-      localStorage.setItem('minBarWidth', val);
+      // Update the variable in graphs.js
+      if (window.setMinBarWidth) window.setMinBarWidth(val);
+      // Save to localStorage
       if (window.saveMinBarWidth) window.saveMinBarWidth();
+      // Trim history and re-render graphs
       if (window.trimHistoryArrays) window.trimHistoryArrays();
       if (window.renderCpuGraph) window.renderCpuGraph();
       if (window.renderRamGraph) window.renderRamGraph();
@@ -142,8 +172,11 @@ function initGeneralSettings() {
     const saved = localStorage.getItem('showFullBars');
     fullBarsCheckbox.checked = saved === 'true';
     fullBarsCheckbox.addEventListener('change', () => {
-      localStorage.setItem('showFullBars', fullBarsCheckbox.checked);
+      // Update the variable in graphs.js
+      if (window.setShowFullBars) window.setShowFullBars(fullBarsCheckbox.checked);
+      // Save to localStorage
       if (window.saveFullBarsPreference) window.saveFullBarsPreference();
+      // Apply the class
       if (window.applyFullBarsClass) window.applyFullBarsClass();
     });
   }

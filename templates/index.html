@@ -11,14 +11,25 @@
 </head>
 <body>
 <script>
-// Theme management - must run before DOM to prevent flash
+// Theme management - fetch CSS based on localStorage
 (function() {
-  const savedTemplate = localStorage.getItem('template') || '{{.CurrentTemplate}}' || 'nordic';
-  const savedScheme = localStorage.getItem('scheme') || '{{.CurrentScheme}}' || 'default';
+  const savedTemplate = localStorage.getItem('template') || 'nordic';
+  const savedScheme = localStorage.getItem('scheme') || 'default';
+
   document.documentElement.setAttribute('data-template', savedTemplate);
   document.documentElement.setAttribute('data-scheme', savedScheme);
+
+  // Fetch theme CSS from API
+  fetch('/api/theme?template=' + encodeURIComponent(savedTemplate) + '&scheme=' + encodeURIComponent(savedScheme))
+    .then(function(res) { return res.text(); })
+    .then(function(css) {
+      var style = document.getElementById('theme-css');
+      if (style) style.textContent = css;
+    })
+    .catch(function(err) { console.error('Failed to load theme:', err); });
+
   window.addEventListener('DOMContentLoaded', function() {
-    const hiddenMenus = document.createElement('div');
+    var hiddenMenus = document.createElement('div');
     hiddenMenus.style.display = 'none';
     hiddenMenus.innerHTML = '<div id="schemeMenu">{{.SchemeMenuHTML}}</div>';
     document.body.appendChild(hiddenMenus);
