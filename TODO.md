@@ -90,6 +90,17 @@
 - [ ] Add Google Analytics metrics for users sites
 - [ ] Add Proxmox metrics for proxmox clusters
 
+## SMBIOS
+- [ ] Add RAM information
+- [ ] Add CPU information
+- [ ] Add Disk information
+- [ ] Add Network information
+- [ ] Add BIOS information
+- [ ] Add Chassis information
+- [ ] Add Product information
+- [ ] Add Serial number information
+- [ ] Add UUID information
+
 ## Accessibility
 - [ ] Improve keyboard navigation
 - [ ] Add screen reader support
