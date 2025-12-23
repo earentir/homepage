@@ -70,33 +70,33 @@ async function refreshCPUInfo() {
       console.error('CPU Info: Title element not found');
       return;
     }
-    
+
     // Remove existing vendor icon/text if any
     const existingVendor = titleEl.querySelector('.vendor-icon, .vendor-text');
     if (existingVendor) existingVendor.remove();
-    
+
     // Find the header-icons div
     const headerIcons = titleEl.querySelector('.header-icons');
     if (!headerIcons) {
       console.error('CPU Info: Header icons element not found');
       return;
     }
-    
+
     if (!j.vendor) {
       console.error('CPU Info: No vendor in response', j);
       return;
     }
-    
+
     const vendorLower = j.vendor.toLowerCase();
     let vendorIcon = null;
     let iconClass = 'fab';
-    
+
     // Check for vendor brand icons (Font Awesome Brands)
     // Note: Only Apple has a brand icon in Font Awesome, others will show as text
     if (vendorLower.includes('apple')) {
       vendorIcon = 'fa-apple';
     }
-    
+
     if (vendorIcon) {
       // Show vendor logo icon (only for Apple)
       const iconEl = document.createElement('i');
@@ -158,7 +158,7 @@ async function refreshCPUInfo() {
       let l1Data = null;
       let l1Instruction = null;
       const otherCaches = [];
-      
+
       // Separate L1 caches
       j.cache.forEach((c) => {
         if (c.level === 1) {
@@ -175,7 +175,7 @@ async function refreshCPUInfo() {
           otherCaches.push(c);
         }
       });
-      
+
       // L1 cache - single line with Data and Instruction
       if (l1Data || l1Instruction) {
         const l1Parts = [];
@@ -191,7 +191,7 @@ async function refreshCPUInfo() {
           cacheHtml += `<div class="kv" style="border-top:1px solid var(--border); padding-top:12px;"><div class="k">L1</div><div class="v mono">${l1Parts.join(', ')}</div></div>`;
         }
       }
-      
+
       // L2 and L3 caches
       otherCaches.forEach((c) => {
         const sizeStr = c.sizeKB >= 1024 ? (c.sizeKB / 1024).toFixed(1) + ' MB' : c.sizeKB + ' KB';
@@ -199,7 +199,7 @@ async function refreshCPUInfo() {
         const valueStr = c.type ? `${c.type}: ${sizeStr}` : sizeStr;
         cacheHtml += `<div class="kv"><div class="k">${label}</div><div class="v mono">${valueStr}</div></div>`;
       });
-      
+
       html += cacheHtml;
     }
 
@@ -245,7 +245,7 @@ async function refreshRAMInfo() {
         if (module.type) parts.push(module.type);
         if (module.manufacturer) parts.push(module.manufacturer);
         if (module.partNumber) parts.push(module.partNumber);
-        
+
         const moduleText = parts.length > 0 ? parts.join(' • ') : 'Unknown module';
         html += `<div style="margin-bottom:${idx < j.modules.length - 1 ? '6px' : '0'}; word-break:break-word;">${moduleText}</div>`;
       });
@@ -262,9 +262,50 @@ async function refreshRAMInfo() {
   }
 }
 
+async function refreshFirmwareInfo() {
+  try {
+    const res = await fetch("/api/firmware", {cache:"no-store"});
+    const j = await res.json();
+
+    const el = document.getElementById("firmwareContent");
+    if (!el) return;
+
+    if (j.error) {
+      el.innerHTML = `<div class="small" style="color:var(--muted);">${j.error}</div>`;
+      return;
+    }
+
+    let html = '';
+
+    // Vendor
+    if (j.vendor) {
+      html += `<div class="kv"><div class="k">Vendor</div><div class="v mono">${j.vendor}</div></div>`;
+    }
+
+    // Version
+    if (j.version) {
+      html += `<div class="kv"><div class="k">Version</div><div class="v mono">${j.version}</div></div>`;
+    }
+
+    // Release Date
+    if (j.releaseDate) {
+      html += `<div class="kv"><div class="k">Release Date</div><div class="v mono">${j.releaseDate}</div></div>`;
+    }
+
+    el.innerHTML = html || '<div class="muted">No firmware info available</div>';
+  } catch(err) {
+    console.error("Error refreshing Firmware Info:", err);
+    const el = document.getElementById("firmwareContent");
+    if (el) {
+      el.innerHTML = '<div class="small" style="color:var(--muted);">Error loading firmware info</div>';
+    }
+  }
+}
+
 // Export to window
 window.refreshCPU = refreshCPU;
 window.refreshRAM = refreshRAM;
 window.refreshDisk = refreshDisk;
 window.refreshCPUInfo = refreshCPUInfo;
 window.refreshRAMInfo = refreshRAMInfo;
+window.refreshFirmwareInfo = refreshFirmwareInfo;

@@ -9,6 +9,7 @@ const moduleConfig = {
   cpuid: { name: 'CPU Info', icon: 'fa-info-circle', desc: 'CPU model and specifications', hasTimer: false, enabled: true },
   ram: { name: 'RAM', icon: 'fa-memory', desc: 'Memory usage with history graph', hasTimer: true, timerKey: 'ram', defaultInterval: 5, enabled: true },
   raminfo: { name: 'RAM Info', icon: 'fa-memory', desc: 'SMBIOS RAM module information', hasTimer: false, enabled: true },
+  firmware: { name: 'Firmware', icon: 'fa-microchip', desc: 'BIOS/Firmware information', hasTimer: false, enabled: true },
   disk: { name: 'Disk', icon: 'fa-hdd', desc: 'Disk usage with history graph', hasTimer: true, timerKey: 'disk', defaultInterval: 15, enabled: true },
   links: { name: 'Quick Links', icon: 'fa-link', desc: 'Quick access links', hasTimer: false, enabled: true },
   monitoring: { name: 'Monitoring', icon: 'fa-heartbeat', desc: 'Service health monitoring', hasTimer: true, timerKey: 'monitoring', defaultInterval: 60, enabled: true },

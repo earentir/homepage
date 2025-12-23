@@ -27,6 +27,7 @@ import (
 
 	"github.com/earentir/cpuid"
 	"github.com/earentir/gosmbios"
+	"github.com/earentir/gosmbios/types/type0"
 	"github.com/earentir/gosmbios/types/type17"
 	"github.com/gosnmp/gosnmp"
 	"github.com/miekg/dns"
@@ -251,6 +252,14 @@ type SMBIOSRAMInfo struct {
 	Manufacturer    string          `json:"manufacturer,omitempty"`
 	Modules         []RAMModuleInfo `json:"modules,omitempty"`
 	Error           string          `json:"error,omitempty"`
+}
+
+// SMBIOSFirmwareInfo contains SMBIOS BIOS/Firmware information.
+type SMBIOSFirmwareInfo struct {
+	Vendor      string `json:"vendor,omitempty"`
+	Version     string `json:"version,omitempty"`
+	ReleaseDate string `json:"releaseDate,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 // GitHubUserRepos contains GitHub user repository information.
@@ -889,6 +898,12 @@ func main() {
 	mux.HandleFunc("/api/raminfo", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		resp := getSMBIOSRAMInfo(ctx)
+		writeJSON(w, resp)
+	})
+
+	mux.HandleFunc("/api/firmware", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		resp := getSMBIOSFirmwareInfo(ctx)
 		writeJSON(w, resp)
 	})
 
@@ -3457,6 +3472,41 @@ func getSMBIOSRAMInfo(_ context.Context) SMBIOSRAMInfo {
 			mfrList = append(mfrList, mfr)
 		}
 		info.Manufacturer = strings.Join(mfrList, ", ")
+	}
+
+	return info
+}
+
+func getSMBIOSFirmwareInfo(_ context.Context) SMBIOSFirmwareInfo {
+	var info SMBIOSFirmwareInfo
+
+	// Read SMBIOS data
+	sm, err := gosmbios.Read()
+	if err != nil {
+		info.Error = "Failed to read SMBIOS: " + err.Error()
+		return info
+	}
+
+	// Get BIOS information (Type 0)
+	biosInfo, err := type0.Get(sm)
+	if err != nil {
+		info.Error = "Failed to get BIOS information: " + err.Error()
+		return info
+	}
+
+	// Extract BIOS vendor
+	if biosInfo.Vendor != "" {
+		info.Vendor = biosInfo.Vendor
+	}
+
+	// Extract BIOS version
+	if biosInfo.Version != "" {
+		info.Version = biosInfo.Version
+	}
+
+	// Extract BIOS release date
+	if biosInfo.ReleaseDate != "" {
+		info.ReleaseDate = biosInfo.ReleaseDate
 	}
 
 	return info
