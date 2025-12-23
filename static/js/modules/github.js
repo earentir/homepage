@@ -47,9 +47,10 @@ function saveGitHubCache(cache) {
   }
 }
 
-function getCachedGitHubData(moduleId) {
+function getCachedGitHubData(moduleId, displayType) {
+  const cacheKey = `${moduleId}-${displayType}`;
   const cache = getGitHubCache();
-  const cached = cache[moduleId];
+  const cached = cache[cacheKey];
   if (cached) {
     const cacheAge = Date.now() - cached.timestamp;
     const timer = window.timers && window.timers.github;
@@ -57,15 +58,16 @@ function getCachedGitHubData(moduleId) {
     if (cacheAge < maxAge) {
       return cached.data;
     }
-    delete cache[moduleId];
+    delete cache[cacheKey];
     saveGitHubCache(cache);
   }
   return null;
 }
 
-function setCachedGitHubData(moduleId, data) {
+function setCachedGitHubData(moduleId, displayType, data) {
+  const cacheKey = `${moduleId}-${displayType}`;
   const cache = getGitHubCache();
-  cache[moduleId] = {
+  cache[cacheKey] = {
     data: data,
     timestamp: Date.now()
   };
@@ -239,19 +241,24 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
     
     // Check if we should use cached data (unless forced refresh)
     if (!forceRefresh) {
-      const cachedData = getCachedGitHubData(mod.id);
-      if (cachedData) {
-        // Check if timer has expired
-        const timer = window.timers && window.timers.github;
-        if (timer) {
-          const elapsed = Date.now() - timer.lastUpdate;
-          if (elapsed < timer.interval) {
-            // Timer hasn't expired, use cached data
-            renderGitHubContent(mod.id, displayType, cachedData);
-            return;
-          }
-        } else {
-          // No timer, use cached data
+      const timer = window.timers && window.timers.github;
+      let shouldUseCache = false;
+
+      if (timer && timer.lastUpdate > 0) {
+        // Timer has been started, check if it has expired
+        const elapsed = Date.now() - timer.lastUpdate;
+        if (elapsed < timer.interval) {
+          // Timer hasn't expired, use cached data if available
+          shouldUseCache = true;
+        }
+      } else {
+        // Timer not started yet, use cached data if available (for initial load)
+        shouldUseCache = true;
+      }
+
+      if (shouldUseCache) {
+        const cachedData = getCachedGitHubData(mod.id, displayType);
+        if (cachedData) {
           renderGitHubContent(mod.id, displayType, cachedData);
           return;
         }
@@ -266,14 +273,13 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
     const data = await res.json();
     
     // Store in cache
-    setCachedGitHubData(mod.id, data);
+    setCachedGitHubData(mod.id, displayType, data);
     renderGitHubContent(mod.id, displayType, data);
   } catch(err) {
     console.error("Error refreshing GitHub module " + mod.id + ":", err);
     // Try to use cached data on error
-    const cachedData = getCachedGitHubData(mod.id);
+    const cachedData = getCachedGitHubData(mod.id, displayType);
     if (cachedData) {
-      const displayType = mod.displayType || 'repos';
       renderGitHubContent(mod.id, displayType, cachedData);
     } else {
       const errEl = document.getElementById("err-" + mod.id);
@@ -337,9 +343,8 @@ function renderGitHubModules() {
     container.appendChild(card);
     
     // Load cached data on initial render
-    const cachedData = getCachedGitHubData(mod.id);
+    const cachedData = getCachedGitHubData(mod.id, displayType);
     if (cachedData) {
-      const displayType = mod.displayType || 'repos';
       renderGitHubContent(mod.id, displayType, cachedData);
     }
   });

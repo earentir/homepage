@@ -229,19 +229,19 @@ type CPUCacheInfo struct {
 
 // RAMModuleInfo contains information about a single RAM module.
 type RAMModuleInfo struct {
+	Size          uint64 `json:"size"` // Size in MB
 	DeviceLocator string `json:"deviceLocator,omitempty"`
 	BankLocator   string `json:"bankLocator,omitempty"`
 	Manufacturer  string `json:"manufacturer,omitempty"`
 	PartNumber    string `json:"partNumber,omitempty"`
 	SerialNumber  string `json:"serialNumber,omitempty"`
-	Size          uint64 `json:"size"` // Size in MB
 	SizeString    string `json:"sizeString"`
-	Speed         uint16 `json:"speed,omitempty"` // Speed in MHz
 	SpeedString   string `json:"speedString,omitempty"`
 	Type          string `json:"type,omitempty"`
 	FormFactor    string `json:"formFactor,omitempty"`
-	Voltage       uint16 `json:"voltage,omitempty"` // Voltage in mV
 	VoltageString string `json:"voltageString,omitempty"`
+	Speed         uint16 `json:"speed,omitempty"` // Speed in MHz
+	Voltage       uint16 `json:"voltage,omitempty"` // Voltage in mV
 }
 
 // SMBIOSRAMInfo contains SMBIOS RAM information.
