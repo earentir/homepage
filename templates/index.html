@@ -227,6 +227,7 @@
         <button class="modal-tab" data-tab="quicklinks"><i class="fas fa-link"></i> Quicklinks</button>
         <button class="modal-tab" data-tab="monitoring"><i class="fas fa-heartbeat"></i> Monitoring</button>
         <button class="modal-tab" data-tab="snmp"><i class="fas fa-network-wired"></i> SNMP</button>
+        <button class="modal-tab" data-tab="config"><i class="fas fa-download"></i> Config</button>
         <button class="modal-tab" data-tab="calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
         <button class="modal-tab" data-tab="todo"><i class="fas fa-tasks"></i> Todo</button>
         <button class="modal-tab" data-tab="search"><i class="fas fa-search"></i> Search</button>
@@ -645,6 +646,42 @@
           </div>
         </div>
 
+        <!-- Config Tab -->
+        <div class="tab-content" id="tab-config">
+          <div class="pref-section">
+            <h3>Local Config</h3>
+            <div class="pref-row">
+              <label>Export</label>
+              <button class="btn-small" id="exportConfigBtn"><i class="fas fa-download"></i> Export Config</button>
+            </div>
+            <div class="pref-row">
+              <label>Import</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="file" id="importConfigFile" accept=".json" style="display:none;">
+                <button class="btn-small" id="importConfigBtn"><i class="fas fa-upload"></i> Import Config</button>
+              </div>
+            </div>
+          </div>
+          <div class="pref-section">
+            <h3>Server Side</h3>
+            <div class="pref-row">
+              <label>Config Name</label>
+              <div style="display:flex; gap:8px; align-items:center; flex:1;">
+                <input type="text" id="configNameInput" placeholder="Enter config name" style="flex:1;">
+                <button class="btn-small" id="uploadConfigBtn"><i class="fas fa-upload"></i> Upload</button>
+              </div>
+            </div>
+            <div class="pref-row" style="align-items:flex-start;">
+              <label>Stored Configs</label>
+              <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+                <div id="serverConfigsList" style="min-height:100px; border:1px solid var(--border); border-radius:6px; padding:8px; background:var(--panel2);">
+                  <div class="small" style="color:var(--muted);">Loading...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- About Tab -->
         <div class="tab-content" id="tab-about">
           <div class="pref-section about-section">
@@ -676,6 +713,7 @@
 <script src="/static/js/modules/snmp.js"></script>
 <script src="/static/js/modules/calendar.js"></script>
 <script src="/static/js/modules/todo.js"></script>
+<script src="/static/js/modules/config.js"></script>
 <script src="/static/js/layout.js"></script>
 <script src="/static/js/preferences.js"></script>
 <script src="/static/js/app.js"></script>

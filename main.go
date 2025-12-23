@@ -1251,6 +1251,140 @@ func main() {
 	}
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
 
+	// Config management endpoints
+	mux.HandleFunc("/api/config/upload", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
+			return
+		}
+
+		// Validate name (alphanumeric, dash, underscore only)
+		if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(name) {
+			writeJSON(w, map[string]string{"error": "Invalid config name (only alphanumeric, dash, underscore allowed)"})
+			return
+		}
+
+		var configData map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&configData); err != nil {
+			writeJSON(w, map[string]string{"error": "Invalid JSON: " + err.Error()})
+			return
+		}
+
+		// Save to configs directory
+		configsDir := "configs"
+		if err := os.MkdirAll(configsDir, 0755); err != nil {
+			log.Printf("Failed to create configs directory: %v", err)
+			writeJSON(w, map[string]string{"error": "Failed to save config"})
+			return
+		}
+
+		configPath := configsDir + "/" + name + ".json"
+		configJSON, err := json.MarshalIndent(configData, "", "  ")
+		if err != nil {
+			writeJSON(w, map[string]string{"error": "Failed to encode config: " + err.Error()})
+			return
+		}
+
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			log.Printf("Failed to write config file: %v", err)
+			writeJSON(w, map[string]string{"error": "Failed to save config"})
+			return
+		}
+
+		writeJSON(w, map[string]string{"success": "Config uploaded successfully"})
+	})
+
+	mux.HandleFunc("/api/config/list", func(w http.ResponseWriter, r *http.Request) {
+		configsDir := "configs"
+		files, err := os.ReadDir(configsDir)
+		if err != nil {
+			// Directory doesn't exist, return empty list
+			writeJSON(w, map[string]any{"configs": []string{}})
+			return
+		}
+
+		var configs []string
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+				name := strings.TrimSuffix(file.Name(), ".json")
+				configs = append(configs, name)
+			}
+		}
+
+		writeJSON(w, map[string]any{"configs": configs})
+	})
+
+	mux.HandleFunc("/api/config/download", func(w http.ResponseWriter, r *http.Request) {
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
+			return
+		}
+
+		// Validate name
+		if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(name) {
+			writeJSON(w, map[string]string{"error": "Invalid config name"})
+			return
+		}
+
+		configPath := "configs/" + name + ".json"
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				writeJSON(w, map[string]string{"error": "Config not found"})
+			} else {
+				writeJSON(w, map[string]string{"error": "Failed to read config"})
+			}
+			return
+		}
+
+		// Validate JSON
+		var configData map[string]any
+		if err := json.Unmarshal(data, &configData); err != nil {
+			writeJSON(w, map[string]string{"error": "Invalid config file: " + err.Error()})
+			return
+		}
+
+		writeJSON(w, configData)
+	})
+
+	mux.HandleFunc("/api/config/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
+			return
+		}
+
+		// Validate name
+		if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(name) {
+			writeJSON(w, map[string]string{"error": "Invalid config name"})
+			return
+		}
+
+		configPath := "configs/" + name + ".json"
+		if err := os.Remove(configPath); err != nil {
+			if os.IsNotExist(err) {
+				writeJSON(w, map[string]string{"error": "Config not found"})
+			} else {
+				writeJSON(w, map[string]string{"error": "Failed to delete config"})
+			}
+			return
+		}
+
+		writeJSON(w, map[string]string{"success": "Config deleted successfully"})
+	})
+
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte("ok")); err != nil {
