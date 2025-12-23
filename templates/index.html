@@ -109,16 +109,28 @@
 
       <div class="card span-4" data-module="ram" draggable="true">
         <h3><i class="fas fa-memory"></i> RAM<div class="header-icons"><div class="timer-circle" id="ramTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-        <div class="kv"><div class="k">Total / Used / Free</div><div class="v mono" id="ramSummary">—</div></div>
-        <div class="kv"><div class="k">Usage</div><div class="v" id="ramPercent">—</div></div>
+        <div class="kv-vertical">
+          <div class="k-small">Total / Used / Free</div>
+          <div class="v mono" id="ramSummary">—</div>
+        </div>
+        <div class="kv-vertical">
+          <div class="k-small">Usage</div>
+          <div class="v" id="ramPercent">—</div>
+        </div>
         <div class="small" id="ramErr"></div>
         <div class="usage-graph" id="ramGraph"></div>
       </div>
 
       <div class="card span-4" data-module="disk" draggable="true">
         <h3><i class="fas fa-hdd"></i> Disk<div class="header-icons"><div class="timer-circle" id="diskTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-        <div class="kv"><div class="k">Total / Used / Free</div><div class="v mono" id="diskSummary">—</div></div>
-        <div class="kv"><div class="k">Usage</div><div class="v" id="diskPercent">—</div></div>
+        <div class="kv-vertical">
+          <div class="k-small">Total / Used / Free</div>
+          <div class="v mono" id="diskSummary">—</div>
+        </div>
+        <div class="kv-vertical">
+          <div class="k-small">Usage</div>
+          <div class="v" id="diskPercent">—</div>
+        </div>
         <div class="small" id="diskErr"></div>
         <div class="usage-graph" id="diskGraph"></div>
       </div>

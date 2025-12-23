@@ -379,6 +379,9 @@ a{color:inherit}
 .kv:first-of-type{border-top:none; padding-top:0}
 .k{color:var(--muted); font-weight:500}
 .v{font-weight:600; color:var(--txt)}
+.kv-vertical{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-top:1px solid var(--border);transition:border-color 0.3s ease;}
+.kv-vertical:first-of-type{border-top:none;padding-top:0}
+.k-small{font-size:0.75em;color:var(--muted);opacity:0.7;}
 .badge{
   display:inline-flex; align-items:center; gap:8px;
   padding:6px 12px;
