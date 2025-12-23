@@ -3936,12 +3936,22 @@ func getSMBIOSSystemInfo(_ context.Context) SMBIOSSystemInfo {
 
 	// UUID
 	if systemInfo.UUID != (type1.UUID{}) {
-		info.UUID = fmt.Sprintf("%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X%02X%02X",
-			systemInfo.UUID[0], systemInfo.UUID[1], systemInfo.UUID[2], systemInfo.UUID[3],
-			systemInfo.UUID[4], systemInfo.UUID[5],
-			systemInfo.UUID[6], systemInfo.UUID[7],
-			systemInfo.UUID[8], systemInfo.UUID[9],
-			systemInfo.UUID[10], systemInfo.UUID[11], systemInfo.UUID[12], systemInfo.UUID[13], systemInfo.UUID[14], systemInfo.UUID[15])
+		uuid := systemInfo.UUID
+		if len(uuid) >= 16 {
+			info.UUID = fmt.Sprintf("%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+				uuid[0], uuid[1], uuid[2], uuid[3],
+				uuid[4], uuid[5],
+				uuid[6], uuid[7],
+				uuid[8], uuid[9],
+				uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15])
+		} else if len(uuid) > 0 {
+			// Handle shorter UUIDs by formatting what we have
+			var parts []string
+			for i := 0; i < len(uuid); i++ {
+				parts = append(parts, fmt.Sprintf("%02X", uuid[i]))
+			}
+			info.UUID = strings.Join(parts, "-")
+		}
 	}
 
 	// Wake Up Type
