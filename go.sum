@@ -2,6 +2,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/earentir/cpuid v1.0.8 h1:iv4pF4d/84ML1OOXREUPtLL3n2VG/q1EHoJZZBCMfhE=
 github.com/earentir/cpuid v1.0.8/go.mod h1:hO9kDTCZXl2fTudvdQ9idf03BSEinE0Y7ym+GfL8EQM=
+github.com/earentir/gosmbios v1.0.3 h1:gR8p/KwLjcK7VHpvDQPhCK6tnyn/HsJwXtvZsdMUQEc=
+github.com/earentir/gosmbios v1.0.3/go.mod h1:C2ALBh/bHJFF9AkIi1Bx9kps3Z6k4Y1BzLReqqeSMtM=
 github.com/go-ole/go-ole v1.2.6 h1:/Fpf6oFPoeFik9ty7siob0G6Ke8QvQEuVcuChpwXzpY=
 github.com/go-ole/go-ole v1.2.6/go.mod h1:pprOEPIfldk/42T2oK7lQ4v4JSDwmV0As9GaiUsvbm0=
 github.com/google/go-cmp v0.5.6/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=

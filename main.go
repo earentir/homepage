@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/earentir/cpuid"
+	"github.com/earentir/gosmbios"
+	"github.com/earentir/gosmbios/types/type17"
 	"github.com/gosnmp/gosnmp"
 	"github.com/miekg/dns"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -224,6 +226,32 @@ type CPUCacheInfo struct {
 	Type     string  `json:"type"`
 	SizeKB   int     `json:"sizeKB"`
 	SpeedMHz float64 `json:"speedMHz,omitempty"`
+}
+
+// RAMModuleInfo contains information about a single RAM module.
+type RAMModuleInfo struct {
+	DeviceLocator string `json:"deviceLocator,omitempty"`
+	BankLocator   string `json:"bankLocator,omitempty"`
+	Manufacturer  string `json:"manufacturer,omitempty"`
+	PartNumber    string `json:"partNumber,omitempty"`
+	SerialNumber  string `json:"serialNumber,omitempty"`
+	Size          uint64 `json:"size"` // Size in MB
+	SizeString    string `json:"sizeString"`
+	Speed         uint16 `json:"speed,omitempty"` // Speed in MHz
+	SpeedString   string `json:"speedString,omitempty"`
+	Type          string `json:"type,omitempty"`
+	FormFactor    string `json:"formFactor,omitempty"`
+	Voltage       uint16 `json:"voltage,omitempty"` // Voltage in mV
+	VoltageString string `json:"voltageString,omitempty"`
+}
+
+// SMBIOSRAMInfo contains SMBIOS RAM information.
+type SMBIOSRAMInfo struct {
+	TotalSize       uint64          `json:"totalSize"` // Total size in MB
+	TotalSizeString string          `json:"totalSizeString"`
+	Manufacturer    string          `json:"manufacturer,omitempty"`
+	Modules         []RAMModuleInfo `json:"modules,omitempty"`
+	Error           string          `json:"error,omitempty"`
 }
 
 // GitHubUserRepos contains GitHub user repository information.
@@ -855,6 +883,12 @@ func main() {
 	mux.HandleFunc("/api/cpuid", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		resp := getCPUDetails(ctx)
+		writeJSON(w, resp)
+	})
+
+	mux.HandleFunc("/api/raminfo", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		resp := getSMBIOSRAMInfo(ctx)
 		writeJSON(w, resp)
 	})
 
@@ -3319,6 +3353,110 @@ func getCPUDetails(_ context.Context) CPUDetailsInfo {
 	if hybridInfo.HybridCPU {
 		info.HybridCPU = true
 		info.CoreType = hybridInfo.CoreTypeName
+	}
+
+	return info
+}
+
+func getSMBIOSRAMInfo(_ context.Context) SMBIOSRAMInfo {
+	var info SMBIOSRAMInfo
+
+	// Read SMBIOS data
+	sm, err := gosmbios.Read()
+	if err != nil {
+		info.Error = "Failed to read SMBIOS: " + err.Error()
+		return info
+	}
+
+	// Get all populated memory devices
+	memoryDevices, err := type17.GetPopulated(sm)
+	if err != nil {
+		info.Error = "Failed to get memory devices: " + err.Error()
+		return info
+	}
+
+	if len(memoryDevices) == 0 {
+		info.Error = "No memory devices found"
+		return info
+	}
+
+	var totalSizeMB uint64
+	var modules []RAMModuleInfo
+	manufacturers := make(map[string]bool)
+
+	for _, dev := range memoryDevices {
+		module := RAMModuleInfo{
+			DeviceLocator: dev.DeviceLocator,
+			BankLocator:   dev.BankLocator,
+			Size:          dev.Size, // Already in MB
+			SizeString:    dev.SizeString(),
+		}
+
+		// Manufacturer
+		if dev.Manufacturer != "" {
+			module.Manufacturer = dev.Manufacturer
+			manufacturers[dev.Manufacturer] = true
+		}
+
+		// Part number
+		if dev.PartNumber != "" {
+			module.PartNumber = dev.PartNumber
+		}
+
+		// Serial number
+		if dev.SerialNumber != "" {
+			module.SerialNumber = dev.SerialNumber
+		}
+
+		// Speed
+		if dev.Speed > 0 {
+			module.Speed = dev.Speed
+			module.SpeedString = fmt.Sprintf("%d MHz", dev.Speed)
+		}
+
+		// Memory type
+		if dev.MemoryType > 0 {
+			module.Type = dev.MemoryType.String()
+		}
+
+		// Form factor
+		if dev.FormFactor > 0 {
+			module.FormFactor = dev.FormFactor.String()
+		}
+
+		// Voltage
+		if dev.ConfiguredVoltage > 0 {
+			module.Voltage = dev.ConfiguredVoltage
+			voltageV := float64(dev.ConfiguredVoltage) / 1000.0
+			module.VoltageString = fmt.Sprintf("%.3f V", voltageV)
+		}
+
+		modules = append(modules, module)
+		totalSizeMB += dev.Size
+	}
+
+	info.Modules = modules
+	info.TotalSize = totalSizeMB
+
+	// Format total size
+	if totalSizeMB >= 1024 {
+		info.TotalSizeString = fmt.Sprintf("%.1f GB", float64(totalSizeMB)/1024.0)
+	} else {
+		info.TotalSizeString = fmt.Sprintf("%d MB", totalSizeMB)
+	}
+
+	// Set manufacturer (use most common if multiple)
+	if len(manufacturers) == 1 {
+		for mfr := range manufacturers {
+			info.Manufacturer = mfr
+		}
+	} else if len(manufacturers) > 1 {
+		// Multiple manufacturers, list them
+		var mfrList []string
+		for mfr := range manufacturers {
+			mfrList = append(mfrList, mfr)
+		}
+		info.Manufacturer = strings.Join(mfrList, ", ")
 	}
 
 	return info

@@ -209,8 +209,62 @@ async function refreshCPUInfo() {
   }
 }
 
+async function refreshRAMInfo() {
+  try {
+    const res = await fetch("/api/raminfo", {cache:"no-store"});
+    const j = await res.json();
+
+    const el = document.getElementById("raminfoContent");
+    if (!el) return;
+
+    if (j.error) {
+      el.innerHTML = `<div class="small" style="color:var(--muted);">${j.error}</div>`;
+      return;
+    }
+
+    let html = '';
+
+    // Total Size
+    if (j.totalSizeString) {
+      html += `<div class="kv"><div class="k">Total Size</div><div class="v mono">${j.totalSizeString}</div></div>`;
+    }
+
+    // Manufacturer
+    if (j.manufacturer) {
+      html += `<div class="kv"><div class="k">Manufacturer</div><div class="v mono">${j.manufacturer}</div></div>`;
+    }
+
+    // Modules
+    if (j.modules && j.modules.length > 0) {
+      html += `<div class="kv" style="border-top:1px solid var(--border); padding-top:12px;"><div class="k">Modules</div><div class="v mono" style="font-size:0.9em;">`;
+      j.modules.forEach((module, idx) => {
+        const parts = [];
+        if (module.deviceLocator) parts.push(module.deviceLocator);
+        if (module.sizeString) parts.push(module.sizeString);
+        if (module.speedString) parts.push(module.speedString);
+        if (module.type) parts.push(module.type);
+        if (module.manufacturer) parts.push(module.manufacturer);
+        if (module.partNumber) parts.push(module.partNumber);
+        
+        const moduleText = parts.length > 0 ? parts.join(' • ') : 'Unknown module';
+        html += `<div style="margin-bottom:${idx < j.modules.length - 1 ? '6px' : '0'}; word-break:break-word;">${moduleText}</div>`;
+      });
+      html += `</div></div>`;
+    }
+
+    el.innerHTML = html || '<div class="muted">No RAM info available</div>';
+  } catch(err) {
+    console.error("Error refreshing RAM Info:", err);
+    const el = document.getElementById("raminfoContent");
+    if (el) {
+      el.innerHTML = '<div class="small" style="color:var(--muted);">Error loading RAM info</div>';
+    }
+  }
+}
+
 // Export to window
 window.refreshCPU = refreshCPU;
 window.refreshRAM = refreshRAM;
 window.refreshDisk = refreshDisk;
 window.refreshCPUInfo = refreshCPUInfo;
+window.refreshRAMInfo = refreshRAMInfo;

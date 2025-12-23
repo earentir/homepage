@@ -109,6 +109,7 @@ function initialLoad() {
   if (window.refreshRAM) window.refreshRAM();
   if (window.refreshDisk) window.refreshDisk();
   if (window.refreshCPUInfo) window.refreshCPUInfo();
+  if (window.refreshRAMInfo) window.refreshRAMInfo();
   if (window.refreshWeather) window.refreshWeather();
   if (window.refreshIP) window.refreshIP();
   if (window.refreshGitHub) window.refreshGitHub();

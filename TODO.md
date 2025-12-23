@@ -91,7 +91,7 @@
 - [ ] Add Proxmox metrics for proxmox clusters
 
 ## SMBIOS
-- [ ] Add RAM information
+- [x] Add RAM information
 - [ ] Add CPU information
 - [ ] Add Disk information
 - [ ] Add Network information
