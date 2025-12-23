@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -560,7 +559,8 @@ func init() {
 			continue
 		}
 
-		path := filepath.Join("templates", filename)
+		// embed.FS ALWAYS uses forward slashes, even when built on Windows
+		path := "templates/" + filename
 		cssContent, err := templatesFS.ReadFile(path)
 		if err != nil {
 			log.Printf("Warning: Failed to read template %s: %v", path, err)
