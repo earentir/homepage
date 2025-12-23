@@ -217,6 +217,13 @@
               <label>Show full bar height</label>
               <input type="checkbox" id="pref-full-bars" title="Show the unused portion of bars in a dimmed color">
             </div>
+            <div class="pref-row">
+              <label>Minimum bar width</label>
+              <div class="location-input">
+                <input type="number" id="pref-min-bar-width" value="10" min="2" max="50" style="width:80px;">
+                <span class="small">pixels</span>
+              </div>
+            </div>
           </div>
           <div class="pref-section">
             <h3>GitHub</h3>
@@ -629,9 +636,26 @@ function escapeHtml(text) {
 }
 
 // History for bar graphs
-const minBarWidth = 10; // Minimum width of each bar in pixels
+let minBarWidth = 10; // Minimum width of each bar in pixels (loaded from preferences)
 const barGap = 2; // Gap between bars in pixels
 const graphMaxHeight = 26; // Max height of bars in pixels
+
+// Load minBarWidth from localStorage
+try {
+  const saved = localStorage.getItem('minBarWidth');
+  if (saved) {
+    const parsed = parseInt(saved);
+    if (parsed >= 2 && parsed <= 50) {
+      minBarWidth = parsed;
+    }
+  }
+} catch (e) {}
+
+function saveMinBarWidth() {
+  try {
+    localStorage.setItem('minBarWidth', minBarWidth.toString());
+  } catch (e) {}
+}
 
 // Full bars preference (show unused portion in dim color)
 let showFullBars = false;
@@ -1832,6 +1856,24 @@ applyModuleVisibility();
 
   // Full bars preference
   const fullBarsCheckbox = document.getElementById('pref-full-bars');
+  const minBarWidthInput = document.getElementById('pref-min-bar-width');
+
+  // Load and set minBarWidth input
+  minBarWidthInput.value = minBarWidth;
+
+  // Save minBarWidth on change
+  minBarWidthInput.addEventListener('change', () => {
+    const newValue = Math.max(2, Math.min(50, parseInt(minBarWidthInput.value) || 10));
+    minBarWidthInput.value = newValue;
+    minBarWidth = newValue;
+    saveMinBarWidth();
+    // Re-trim history arrays with new minBarWidth
+    trimHistoryArrays();
+    // Re-render graphs
+    renderCpuGraph();
+    renderRamGraph();
+    renderDiskGraph();
+  });
   fullBarsCheckbox.checked = showFullBars;
   fullBarsCheckbox.addEventListener('change', () => {
     showFullBars = fullBarsCheckbox.checked;
