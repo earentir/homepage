@@ -29,6 +29,49 @@ function saveGitHubModules() {
   localStorage.setItem('githubModules', JSON.stringify(githubModules));
 }
 
+// GitHub data cache functions
+function getGitHubCache() {
+  try {
+    const cache = localStorage.getItem('githubDataCache');
+    return cache ? JSON.parse(cache) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveGitHubCache(cache) {
+  try {
+    localStorage.setItem('githubDataCache', JSON.stringify(cache));
+  } catch (e) {
+    console.error('Error saving GitHub cache:', e);
+  }
+}
+
+function getCachedGitHubData(moduleId) {
+  const cache = getGitHubCache();
+  const cached = cache[moduleId];
+  if (cached) {
+    const cacheAge = Date.now() - cached.timestamp;
+    const timer = window.timers && window.timers.github;
+    const maxAge = timer ? timer.interval : 900000; // Default 15 minutes
+    if (cacheAge < maxAge) {
+      return cached.data;
+    }
+    delete cache[moduleId];
+    saveGitHubCache(cache);
+  }
+  return null;
+}
+
+function setCachedGitHubData(moduleId, data) {
+  const cache = getGitHubCache();
+  cache[moduleId] = {
+    data: data,
+    timestamp: Date.now()
+  };
+  saveGitHubCache(cache);
+}
+
 function renderGitHubContent(moduleId, displayType, data) {
   const container = document.getElementById("content-" + moduleId);
   const countEl = document.getElementById("count-" + moduleId);
@@ -189,26 +232,59 @@ function renderStats(container, countEl, data) {
   }
 }
 
-async function refreshGitHubModule(mod) {
+async function refreshGitHubModule(mod, forceRefresh = false) {
   try {
     const displayType = mod.displayType || 'repos';
     const accountType = mod.accountType || mod.type || 'user';
+    
+    // Check if we should use cached data (unless forced refresh)
+    if (!forceRefresh) {
+      const cachedData = getCachedGitHubData(mod.id);
+      if (cachedData) {
+        // Check if timer has expired
+        const timer = window.timers && window.timers.github;
+        if (timer) {
+          const elapsed = Date.now() - timer.lastUpdate;
+          if (elapsed < timer.interval) {
+            // Timer hasn't expired, use cached data
+            renderGitHubContent(mod.id, displayType, cachedData);
+            return;
+          }
+        } else {
+          // No timer, use cached data
+          renderGitHubContent(mod.id, displayType, cachedData);
+          return;
+        }
+      }
+    }
+    
+    // Fetch from API (timer expired or forced refresh or no cache)
     const githubToken = localStorage.getItem('githubToken') || '';
     let url = "/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType;
     if (githubToken) url += "&token=" + encodeURIComponent(githubToken);
     const res = await fetch(url, {cache:"no-store"});
     const data = await res.json();
+    
+    // Store in cache
+    setCachedGitHubData(mod.id, data);
     renderGitHubContent(mod.id, displayType, data);
   } catch(err) {
     console.error("Error refreshing GitHub module " + mod.id + ":", err);
-    const errEl = document.getElementById("err-" + mod.id);
-    if (errEl) errEl.textContent = "Error loading data";
+    // Try to use cached data on error
+    const cachedData = getCachedGitHubData(mod.id);
+    if (cachedData) {
+      const displayType = mod.displayType || 'repos';
+      renderGitHubContent(mod.id, displayType, cachedData);
+    } else {
+      const errEl = document.getElementById("err-" + mod.id);
+      if (errEl) errEl.textContent = "Error loading data";
+    }
   }
 }
 
-async function refreshGitHub() {
+async function refreshGitHub(forceRefresh = false) {
   try {
-    const promises = githubModules.filter(m => m.enabled).map(mod => refreshGitHubModule(mod));
+    const promises = githubModules.filter(m => m.enabled).map(mod => refreshGitHubModule(mod, forceRefresh));
     await Promise.all(promises);
     window.startTimer("github");
   } catch(err) {
@@ -259,6 +335,13 @@ function renderGitHubModules() {
     `;
 
     container.appendChild(card);
+    
+    // Load cached data on initial render
+    const cachedData = getCachedGitHubData(mod.id);
+    if (cachedData) {
+      const displayType = mod.displayType || 'repos';
+      renderGitHubContent(mod.id, displayType, cachedData);
+    }
   });
 
   if (window.initDragAndDrop) {
