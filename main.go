@@ -88,6 +88,7 @@ type WeatherConfig struct {
 // APIRoot represents the root API response structure.
 type APIRoot struct {
 	Server  ServerInfo    `json:"server"`
+	Client  ClientInfo    `json:"client"` // Client information (when accessed remotely)
 	Network NetworkInfo   `json:"network"`
 	Public  PublicIPInfo  `json:"public"`
 	Weather WeatherInfo   `json:"weather"`
@@ -103,6 +104,14 @@ type ServerInfo struct {
 	GoVersion string `json:"goVersion"`
 	UptimeSec int64  `json:"uptimeSec"`
 	Time      string `json:"time"`
+	IsLocal   bool   `json:"isLocal"` // true if request is from localhost
+}
+
+// ClientInfo contains client information extracted from the request.
+type ClientInfo struct {
+	IP       string `json:"ip"`       // Client IP from request
+	Hostname string `json:"hostname"` // Resolved hostname (PTR record)
+	IsLocal  bool   `json:"isLocal"`  // true if client is on localhost
 }
 
 // NetworkInfo contains network interface information.
@@ -723,6 +732,21 @@ func main() {
 
 	mux.HandleFunc("/api/summary", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		isLocal := isLocalRequest(r)
+
+		// Get client information from request
+		clientIP := getClientIP(r)
+		clientInfo := ClientInfo{
+			IP:      clientIP,
+			IsLocal: isLocal,
+		}
+
+		// Try to resolve client hostname from IP (only if not localhost)
+		if !isLocal && clientIP != "" {
+			// Use Cloudflare DNS for reverse lookup
+			clientInfo.Hostname = reverseDNS(clientIP, "1.1.1.1")
+		}
+
 		resp := APIRoot{
 			Server: ServerInfo{
 				Hostname:  mustHostname(),
@@ -731,9 +755,25 @@ func main() {
 				GoVersion: runtime.Version(),
 				UptimeSec: getSystemUptime(),
 				Time:      time.Now().Format(time.RFC3339),
+				IsLocal:   isLocal,
 			},
+			Client: clientInfo,
 			Network: NetworkInfo{
-				HostIPs: hostIPs(),
+				// Show server LAN IPs if local, client IP if remote
+				HostIPs: func() []HostIPInfo {
+					if isLocal {
+						return hostIPs()
+					}
+					// For remote clients, show their IP
+					if clientIP != "" {
+						ipInfo := HostIPInfo{IP: clientIP}
+						if clientInfo.Hostname != "" {
+							ipInfo.PTR = clientInfo.Hostname
+						}
+						return []HostIPInfo{ipInfo}
+					}
+					return []HostIPInfo{}
+				}(),
 			},
 			Public: PublicIPInfo{},
 			Weather: WeatherInfo{
@@ -977,12 +1017,30 @@ func main() {
 
 	mux.HandleFunc("/api/ip", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		isLocal := isLocalRequest(r)
+		clientIP := getClientIP(r)
+
+		// Determine which IPs to show
+		var networkIPs []HostIPInfo
+		if isLocal {
+			// Show server's LAN IPs
+			networkIPs = hostIPs()
+		} else if clientIP != "" {
+			// Show client's IP
+			hostname := reverseDNS(clientIP, "1.1.1.1")
+			ipInfo := HostIPInfo{IP: clientIP}
+			if hostname != "" {
+				ipInfo.PTR = hostname
+			}
+			networkIPs = []HostIPInfo{ipInfo}
+		}
+
 		resp := struct {
 			Network NetworkInfo  `json:"network"`
 			Public  PublicIPInfo `json:"public"`
 		}{
 			Network: NetworkInfo{
-				HostIPs: hostIPs(),
+				HostIPs: networkIPs,
 			},
 			Public: PublicIPInfo{},
 		}
@@ -1198,6 +1256,82 @@ func getSystemUptime() int64 {
 		return 0
 	}
 	return int64(uptime)
+}
+
+// isLocalRequest determines if the request is from localhost or a local network interface.
+func isLocalRequest(r *http.Request) bool {
+	// Get the client IP from the request
+	ip := getClientIP(r)
+	if ip == "" {
+		return false
+	}
+
+	// Check if it's localhost
+	if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
+		return true
+	}
+
+	// Parse the IP
+	ipAddr := net.ParseIP(ip)
+	if ipAddr == nil {
+		return false
+	}
+
+	// Check if it's a loopback address
+	if ipAddr.IsLoopback() {
+		return true
+	}
+
+	// Check if it's a link-local address (169.254.x.x)
+	if ipAddr.IsLinkLocalUnicast() {
+		return true
+	}
+
+	// Check if it's in private IP ranges
+	if ipAddr.To4() != nil {
+		// IPv4 private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+		ip4 := ipAddr.To4()
+		if ip4[0] == 10 {
+			return true
+		}
+		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+			return true
+		}
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// getClientIP extracts the client IP address from the request, considering X-Forwarded-For and X-Real-IP headers.
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (for proxies/load balancers)
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		// X-Forwarded-For can contain multiple IPs, take the first one
+		ips := strings.Split(forwarded, ",")
+		if len(ips) > 0 {
+			ip := strings.TrimSpace(ips[0])
+			if ip != "" {
+				return ip
+			}
+		}
+	}
+
+	// Check X-Real-IP header
+	realIP := r.Header.Get("X-Real-IP")
+	if realIP != "" {
+		return strings.TrimSpace(realIP)
+	}
+
+	// Fall back to RemoteAddr
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
 }
 
 func reverseDNS(ip string, dnsServer string) string {

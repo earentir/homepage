@@ -52,18 +52,25 @@
   <div class="main" id="mainContainer">
     <div id="moduleGrid">
       <div class="card span-4" data-module="status" draggable="true">
-        <h3><i class="fas fa-server"></i> Status<div class="header-icons"><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-server"></i> <span id="statusTitle">Status</span><div class="header-icons"><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div class="badge"><span class="pulse"></span><span id="statusText">Online</span></div>
-        <div class="kv"><div class="k">Host</div><div class="v mono" id="host">—</div></div>
-        <div class="kv"><div class="k">Uptime</div><div class="v mono" id="uptime">—</div></div>
-        <div class="kv"><div class="k">Server time</div><div class="v mono" id="time">—</div></div>
+        <div id="serverInfo">
+          <div class="kv"><div class="k">Host</div><div class="v mono" id="host">—</div></div>
+          <div class="kv"><div class="k">Uptime</div><div class="v mono" id="uptime">—</div></div>
+          <div class="kv"><div class="k">Server time</div><div class="v mono" id="time">—</div></div>
+        </div>
+        <div id="clientInfo" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+          <div class="kv"><div class="k">Client IP</div><div class="v mono" id="clientIP">—</div></div>
+          <div class="kv"><div class="k">Client Hostname</div><div class="v mono" id="clientHostname">—</div></div>
+        </div>
       </div>
 
       <div class="card span-4" data-module="network" draggable="true">
         <h3><i class="fas fa-network-wired"></i> Network<div class="header-icons"><div class="timer-circle" id="ipTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-        <div class="kv"><div class="k">LAN IPs</div><div class="v mono"><span id="lanIps">—</span><div class="small ptr" id="lanPtr"></div></div></div>
+        <div class="kv"><div class="k"><span id="lanIpLabel">LAN IPs</span></div><div class="v mono"><span id="lanIps">—</span><div class="small ptr" id="lanPtr"></div></div></div>
         <div class="kv"><div class="k">Public IP</div><div class="v mono"><span id="pubIp">—</span><div class="small ptr" id="pubPtr"></div></div></div>
         <div class="small" id="pubIpErr"></div>
+        <div class="small" id="networkNote" style="margin-top:8px; color:var(--muted);"></div>
       </div>
 
       <div class="card span-4" data-module="weather" draggable="true">
@@ -1455,7 +1462,20 @@ async function refreshIP(){
     const res = await fetch("/api/ip", {cache:"no-store"});
     const j = await res.json();
 
-    // Display LAN IPs with PTR records on second line
+    // Get summary to check if local
+    const summaryRes = await fetch("/api/summary", {cache:"no-store"});
+    const summary = await summaryRes.json();
+    const isLocal = summary.server.isLocal || false;
+
+    // Update label based on whether it's local or remote
+    const lanIpLabel = document.getElementById("lanIpLabel");
+    if (isLocal) {
+      lanIpLabel.textContent = "LAN IPs";
+    } else {
+      lanIpLabel.textContent = "Client IP";
+    }
+
+    // Display IPs with PTR records on second line
     const lanIpsEl = document.getElementById("lanIps");
     const lanPtrEl = document.getElementById("lanPtr");
     if (j.network && j.network.hostIps && j.network.hostIps.length > 0) {
@@ -1485,17 +1505,67 @@ async function refreshIP(){
   }
 }
 
+// Detect client information
+function detectClientInfo(){
+  const ua = navigator.userAgent;
+  let os = "Unknown";
+  let browser = "Unknown";
+
+  // Detect OS
+  if (ua.includes("Win")) os = "Windows";
+  else if (ua.includes("Mac")) os = "macOS";
+  else if (ua.includes("Linux")) os = "Linux";
+  else if (ua.includes("Android")) os = "Android";
+  else if (ua.includes("iOS") || ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+
+  // Detect Browser
+  if (ua.includes("Chrome") && !ua.includes("Edg")) browser = "Chrome";
+  else if (ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+  else if (ua.includes("Edg")) browser = "Edge";
+  else if (ua.includes("Opera") || ua.includes("OPR")) browser = "Opera";
+
+  // Get timezone
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  return { os, browser, timezone };
+}
+
 async function refresh(){
   try{
     const res = await fetch("/api/summary", {cache:"no-store"});
     const j = await res.json();
 
+    const isLocal = j.server.isLocal || false;
+
+    // Update title based on whether it's local or remote
+    const statusTitle = document.getElementById("statusTitle");
+    const serverInfoDiv = document.getElementById("serverInfo");
+    const clientInfoDiv = document.getElementById("clientInfo");
+
+    if (isLocal) {
+      statusTitle.textContent = "Status";
+      serverInfoDiv.style.display = "block";
+      clientInfoDiv.style.display = "none";
+
+      // Show server info
+      document.getElementById("host").textContent = j.server.hostname;
+      document.getElementById("uptime").textContent = fmtUptime(j.server.uptimeSec);
+      document.getElementById("time").textContent = j.server.time;
+    } else {
+      statusTitle.textContent = "Client Status";
+      serverInfoDiv.style.display = "none";
+      clientInfoDiv.style.display = "block";
+
+      // Show client info from API
+      if (j.client) {
+        document.getElementById("clientIP").textContent = j.client.ip || "—";
+        document.getElementById("clientHostname").textContent = j.client.hostname || "—";
+      }
+    }
+
     document.getElementById("subtitle").textContent =
       j.server.os + "/" + j.server.arch + " • " + j.server.goVersion;
-
-    document.getElementById("host").textContent = j.server.hostname;
-    document.getElementById("uptime").textContent = fmtUptime(j.server.uptimeSec);
-    document.getElementById("time").textContent = j.server.time;
 
   } catch(err){
     document.getElementById("statusText").textContent = "Degraded";
