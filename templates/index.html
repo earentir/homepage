@@ -688,6 +688,7 @@ const timers = {
   ip: {interval: 7200000, lastUpdate: 0, timer: null}, // 2 hours
   monitoring: {interval: 60000, lastUpdate: 0, timer: null}, // 60 seconds
   snmp: {interval: 60000, lastUpdate: 0, timer: null}, // 60 seconds
+  rss: {interval: 300000, lastUpdate: 0, timer: null}, // 5 minutes
   general: {interval: 30000, lastUpdate: 0, timer: null} // 30 seconds for other data
 };
 
@@ -2537,11 +2538,13 @@ applyModuleVisibility();
   });
 
   // Render GitHub module list when modal opens
-  const origOpenHandler = openBtn.onclick;
-  openBtn.addEventListener('click', () => {
-    renderGitHubModuleList();
-    renderQuicklinksList();
-  });
+  const prefsBtn = document.getElementById('prefsBtn');
+  if (prefsBtn) {
+    prefsBtn.addEventListener('click', () => {
+      renderGitHubModuleList();
+      renderQuicklinksList();
+    });
+  }
 })();
 
 // RSS modules management
@@ -2865,9 +2868,12 @@ applyModuleVisibility();
   });
 
   // Render RSS module list when modal opens
-  openBtn.addEventListener('click', () => {
-    renderRssModuleList();
-  });
+  const prefsBtn = document.getElementById('prefsBtn');
+  if (prefsBtn) {
+    prefsBtn.addEventListener('click', () => {
+      renderRssModuleList();
+    });
+  }
 
   // Initial render
   renderRssModules();
