@@ -177,77 +177,83 @@
       </div>
       <div class="modal-content">
         <div class="tab-content active" id="tab-general">
-          <div class="pref-section">
-            <h3>Appearance</h3>
-            <div class="pref-row">
-              <label>Theme</label>
-              <select id="pref-template">
-                {{range .TemplatesList}}<option value="{{.}}">{{.}}</option>{{end}}
-              </select>
-            </div>
-            <div class="pref-row">
-              <label>Color Scheme</label>
-              <select id="pref-scheme"></select>
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>Weather</h3>
-            <div class="pref-row">
-              <label>Location</label>
-              <div class="location-input">
-                <input type="text" id="pref-weather-location" placeholder="e.g., Athens, Greece">
-                <button class="btn-small" id="searchLocationBtn"><i class="fas fa-search"></i></button>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div class="pref-section">
+                <h3>Appearance</h3>
+                <div class="pref-row">
+                  <label>Theme</label>
+                  <select id="pref-template">
+                    {{range .TemplatesList}}<option value="{{.}}">{{.}}</option>{{end}}
+                  </select>
+                </div>
+                <div class="pref-row">
+                  <label>Color Scheme</label>
+                  <select id="pref-scheme"></select>
+                </div>
+              </div>
+              <div class="pref-section">
+                <h3>Weather</h3>
+                <div class="pref-row">
+                  <label>Location</label>
+                  <div class="location-input">
+                    <input type="text" id="pref-weather-location" placeholder="e.g., Athens, Greece">
+                    <button class="btn-small" id="searchLocationBtn"><i class="fas fa-search"></i></button>
+                  </div>
+                </div>
+                <div class="pref-row" id="locationResultsRow" style="display:none;">
+                  <label>Select</label>
+                  <div class="location-input">
+                    <select id="pref-location-results"></select>
+                    <button class="btn-small" id="setLocationBtn"><i class="fas fa-check"></i> Set</button>
+                  </div>
+                </div>
+                <div class="pref-row" id="currentLocationRow">
+                  <label>Current</label>
+                  <span class="location-display" id="currentLocationDisplay">Not set</span>
+                </div>
               </div>
             </div>
-            <div class="pref-row" id="locationResultsRow" style="display:none;">
-              <label>Select</label>
-              <div class="location-input">
-                <select id="pref-location-results"></select>
-                <button class="btn-small" id="setLocationBtn"><i class="fas fa-check"></i> Set</button>
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div class="pref-section">
+                <h3>Graphs</h3>
+                <div class="pref-row">
+                  <label>Show full bar height</label>
+                  <input type="checkbox" id="pref-full-bars" title="Show the unused portion of bars in a dimmed color">
+                </div>
+                <div class="pref-row">
+                  <label>Minimum bar width</label>
+                  <div class="location-input">
+                    <input type="number" id="pref-min-bar-width" value="10" min="2" max="50" style="width:80px;">
+                    <span class="small">pixels</span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="pref-row" id="currentLocationRow">
-              <label>Current</label>
-              <span class="location-display" id="currentLocationDisplay">Not set</span>
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>Graphs</h3>
-            <div class="pref-row">
-              <label>Show full bar height</label>
-              <input type="checkbox" id="pref-full-bars" title="Show the unused portion of bars in a dimmed color">
-            </div>
-            <div class="pref-row">
-              <label>Minimum bar width</label>
-              <div class="location-input">
-                <input type="number" id="pref-min-bar-width" value="10" min="2" max="50" style="width:80px;">
-                <span class="small">pixels</span>
+              <div class="pref-section">
+                <h3>GitHub</h3>
+                <div class="pref-row">
+                  <label>API Token</label>
+                  <div class="location-input">
+                    <input type="password" id="pref-github-token" placeholder="ghp_xxxxxxxxxxxx" style="flex:1;">
+                    <button class="btn-small" id="toggleGithubToken" title="Show/hide token"><i class="fas fa-eye"></i></button>
+                  </div>
+                </div>
+                <div class="pref-row">
+                  <label></label>
+                  <span class="small" style="color:var(--muted);">Optional. Increases rate limit from 60 to 5000 requests/hour.<br>Create at: GitHub → Settings → Developer settings → Personal access tokens</span>
+                </div>
               </div>
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>GitHub</h3>
-            <div class="pref-row">
-              <label>API Token</label>
-              <div class="location-input">
-                <input type="password" id="pref-github-token" placeholder="ghp_xxxxxxxxxxxx" style="flex:1;">
-                <button class="btn-small" id="toggleGithubToken" title="Show/hide token"><i class="fas fa-eye"></i></button>
+              <div class="pref-section">
+                <h3>Data</h3>
+                <div class="pref-row">
+                  <label>Clear cached data</label>
+                  <button class="btn-small" id="clearCacheBtn"><i class="fas fa-trash"></i> Clear Cache</button>
+                </div>
+                <div class="pref-row">
+                  <label>Reset module order</label>
+                  <button class="btn-small" id="resetOrderBtn"><i class="fas fa-undo"></i> Reset Order</button>
+                </div>
               </div>
-            </div>
-            <div class="pref-row">
-              <label></label>
-              <span class="small" style="color:var(--muted);">Optional. Increases rate limit from 60 to 5000 requests/hour.<br>Create at: GitHub → Settings → Developer settings → Personal access tokens</span>
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>Data</h3>
-            <div class="pref-row">
-              <label>Clear cached data</label>
-              <button class="btn-small" id="clearCacheBtn"><i class="fas fa-trash"></i> Clear Cache</button>
-            </div>
-            <div class="pref-row">
-              <label>Reset module order</label>
-              <button class="btn-small" id="resetOrderBtn"><i class="fas fa-undo"></i> Reset Order</button>
             </div>
           </div>
         </div>
