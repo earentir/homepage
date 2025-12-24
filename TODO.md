@@ -70,6 +70,7 @@
 ## Customization
 - [x] Add grid layout configuration
 - [ ] Add color scheme customization
+- [ ] Add background image
 
 ## Performance
 - [ ] Add request batching
