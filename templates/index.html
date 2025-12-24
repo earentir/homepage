@@ -1088,9 +1088,13 @@ if ('serviceWorker' in navigator) {
   gap: 6px;
   transition: all 0.2s;
 }
-.btn-small:hover {
+.btn-small:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+}
+.btn-small:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .location-input {
   display: flex;
@@ -1350,6 +1354,20 @@ if ('serviceWorker' in navigator) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.module-item.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+.module-item.drag-over {
+  border-top: 2px solid var(--accent);
+  margin-top: -2px;
+}
+.module-item .drag-handle {
+  cursor: grab;
+}
+.module-item .drag-handle:active {
+  cursor: grabbing;
 }
 .module-item input[type="checkbox"] {
   width: 18px;

@@ -152,6 +152,35 @@ function renderQuicklinks() {
   container.appendChild(grid);
 }
 
+function moveQuicklinkUp(index) {
+  if (index <= 0) return;
+  const temp = quicklinks[index];
+  quicklinks[index] = quicklinks[index - 1];
+  quicklinks[index - 1] = temp;
+  saveQuicklinks();
+  renderQuicklinksList();
+  renderQuicklinks();
+}
+
+function moveQuicklinkDown(index) {
+  if (index >= quicklinks.length - 1) return;
+  const temp = quicklinks[index];
+  quicklinks[index] = quicklinks[index + 1];
+  quicklinks[index + 1] = temp;
+  saveQuicklinks();
+  renderQuicklinksList();
+  renderQuicklinks();
+}
+
+function moveQuicklink(fromIndex, toIndex) {
+  if (fromIndex === toIndex) return;
+  const item = quicklinks.splice(fromIndex, 1)[0];
+  quicklinks.splice(toIndex, 0, item);
+  saveQuicklinks();
+  renderQuicklinksList();
+  renderQuicklinks();
+}
+
 function renderQuicklinksList() {
   const list = document.getElementById('quicklinksList');
   if (!list) return;
@@ -162,21 +191,84 @@ function renderQuicklinksList() {
     return;
   }
 
+  let draggedIndex = null;
+
   quicklinks.forEach((link, index) => {
     const item = document.createElement('div');
     item.className = 'module-item';
+    item.draggable = true;
+    item.dataset.index = index;
+    const canMoveUp = index > 0;
+    const canMoveDown = index < quicklinks.length - 1;
     item.innerHTML = `
+      <div class="module-icon drag-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder">
+        <i class="fas fa-grip-vertical"></i>
+      </div>
       <div class="module-icon"><i class="fas ${link.icon || 'fa-link'}"></i></div>
       <div class="module-info">
         <div class="module-name">${link.title}</div>
         <div class="module-desc">${link.url}</div>
       </div>
       <div class="module-controls">
+        <button class="btn-small move-ql-up-btn" data-index="${index}" ${!canMoveUp ? 'disabled' : ''} title="Move up">
+          <i class="fas fa-arrow-up"></i>
+        </button>
+        <button class="btn-small move-ql-down-btn" data-index="${index}" ${!canMoveDown ? 'disabled' : ''} title="Move down">
+          <i class="fas fa-arrow-down"></i>
+        </button>
         <button class="btn-small edit-ql-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
         <button class="btn-small delete-ql-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
       </div>
     `;
     list.appendChild(item);
+
+    // Drag and drop handlers
+    item.addEventListener('dragstart', (e) => {
+      draggedIndex = index;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', item.innerHTML);
+    });
+
+    item.addEventListener('dragend', (e) => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.module-item').forEach(i => {
+        i.classList.remove('drag-over');
+      });
+      draggedIndex = null;
+    });
+
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (draggedIndex !== null && draggedIndex !== index) {
+        item.classList.add('drag-over');
+      }
+    });
+
+    item.addEventListener('dragleave', (e) => {
+      item.classList.remove('drag-over');
+    });
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      if (draggedIndex !== null && draggedIndex !== index) {
+        moveQuicklink(draggedIndex, index);
+      }
+    });
+
+    if (canMoveUp) {
+      item.querySelector('.move-ql-up-btn').addEventListener('click', () => {
+        moveQuicklinkUp(index);
+      });
+    }
+
+    if (canMoveDown) {
+      item.querySelector('.move-ql-down-btn').addEventListener('click', () => {
+        moveQuicklinkDown(index);
+      });
+    }
 
     item.querySelector('.edit-ql-btn').addEventListener('click', () => {
       editQuicklink(index);

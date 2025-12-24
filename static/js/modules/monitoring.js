@@ -183,6 +183,107 @@ async function refreshMonitoring() {
   window.startTimer('monitoring');
 }
 
+function moveMonitorUp(index) {
+  if (index <= 0) return;
+  const temp = monitors[index];
+  monitors[index] = monitors[index - 1];
+  monitors[index - 1] = temp;
+  
+  // Update monitorDownSince indices
+  const oldDownSince = monitorDownSince[index];
+  const oldDownSincePrev = monitorDownSince[index - 1];
+  if (oldDownSince !== undefined) {
+    monitorDownSince[index - 1] = oldDownSince;
+  } else {
+    delete monitorDownSince[index - 1];
+  }
+  if (oldDownSincePrev !== undefined) {
+    monitorDownSince[index] = oldDownSincePrev;
+  } else {
+    delete monitorDownSince[index];
+  }
+  
+  saveMonitors();
+  renderMonitorsList();
+  renderMonitors();
+  // Refresh to update status displays with new indices
+  setTimeout(refreshMonitoring, 100);
+}
+
+function moveMonitorDown(index) {
+  if (index >= monitors.length - 1) return;
+  const temp = monitors[index];
+  monitors[index] = monitors[index + 1];
+  monitors[index + 1] = temp;
+  
+  // Update monitorDownSince indices
+  const oldDownSince = monitorDownSince[index];
+  const oldDownSinceNext = monitorDownSince[index + 1];
+  if (oldDownSince !== undefined) {
+    monitorDownSince[index + 1] = oldDownSince;
+  } else {
+    delete monitorDownSince[index + 1];
+  }
+  if (oldDownSinceNext !== undefined) {
+    monitorDownSince[index] = oldDownSinceNext;
+  } else {
+    delete monitorDownSince[index];
+  }
+  
+  saveMonitors();
+  renderMonitorsList();
+  renderMonitors();
+  // Refresh to update status displays with new indices
+  setTimeout(refreshMonitoring, 100);
+}
+
+function moveMonitor(fromIndex, toIndex) {
+  if (fromIndex === toIndex) return;
+  
+  const item = monitors.splice(fromIndex, 1)[0];
+  monitors.splice(toIndex, 0, item);
+  
+  // Rebuild monitorDownSince with correct indices after reordering
+  const oldDownSince = { ...monitorDownSince };
+  // Clear all
+  Object.keys(monitorDownSince).forEach(key => {
+    delete monitorDownSince[key];
+  });
+  
+  // Map old indices to new indices based on the move
+  for (let newIndex = 0; newIndex < monitors.length; newIndex++) {
+    let oldIndex;
+    if (newIndex === toIndex) {
+      // This is the moved item
+      oldIndex = fromIndex;
+    } else if (fromIndex < toIndex) {
+      // Moving down: items between fromIndex+1 and toIndex shift up by 1
+      if (newIndex > fromIndex && newIndex <= toIndex) {
+        oldIndex = newIndex - 1;
+      } else {
+        oldIndex = newIndex;
+      }
+    } else {
+      // Moving up: items between toIndex and fromIndex-1 shift down by 1
+      if (newIndex >= toIndex && newIndex < fromIndex) {
+        oldIndex = newIndex + 1;
+      } else {
+        oldIndex = newIndex;
+      }
+    }
+    
+    if (oldDownSince[oldIndex] !== undefined) {
+      monitorDownSince[newIndex] = oldDownSince[oldIndex];
+    }
+  }
+  
+  saveMonitors();
+  renderMonitorsList();
+  renderMonitors();
+  // Refresh to update status displays with new indices
+  setTimeout(refreshMonitoring, 100);
+}
+
 function renderMonitorsList() {
   const list = document.getElementById('monitorsList');
   if (!list) return;
@@ -193,6 +294,8 @@ function renderMonitorsList() {
     return;
   }
 
+  let draggedIndex = null;
+
   monitors.forEach((mon, index) => {
     const typeLabels = { http: 'HTTP', port: 'Port', ping: 'Ping' };
     const typeIcons = { http: 'fa-globe', port: 'fa-plug', ping: 'fa-satellite-dish' };
@@ -202,20 +305,82 @@ function renderMonitorsList() {
     else if (mon.type === 'port') desc = mon.host + ':' + mon.port;
     else if (mon.type === 'ping') desc = mon.host;
 
+    const canMoveUp = index > 0;
+    const canMoveDown = index < monitors.length - 1;
+
     const item = document.createElement('div');
     item.className = 'module-item';
+    item.draggable = true;
+    item.dataset.index = index;
     item.innerHTML = `
+      <div class="module-icon drag-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder">
+        <i class="fas fa-grip-vertical"></i>
+      </div>
       <div class="module-icon"><i class="fas ${typeIcons[mon.type] || 'fa-heartbeat'}"></i></div>
       <div class="module-info">
         <div class="module-name">${mon.name}</div>
         <div class="module-desc">${typeLabels[mon.type] || mon.type} • ${desc}</div>
       </div>
       <div class="module-controls">
+        <button class="btn-small move-mon-up-btn" data-index="${index}" ${!canMoveUp ? 'disabled' : ''} title="Move up">
+          <i class="fas fa-arrow-up"></i>
+        </button>
+        <button class="btn-small move-mon-down-btn" data-index="${index}" ${!canMoveDown ? 'disabled' : ''} title="Move down">
+          <i class="fas fa-arrow-down"></i>
+        </button>
         <button class="btn-small edit-mon-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
         <button class="btn-small delete-mon-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
       </div>
     `;
     list.appendChild(item);
+
+    // Drag and drop handlers
+    item.addEventListener('dragstart', (e) => {
+      draggedIndex = index;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', item.innerHTML);
+    });
+
+    item.addEventListener('dragend', (e) => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.module-item').forEach(i => {
+        i.classList.remove('drag-over');
+      });
+      draggedIndex = null;
+    });
+
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (draggedIndex !== null && draggedIndex !== index) {
+        item.classList.add('drag-over');
+      }
+    });
+
+    item.addEventListener('dragleave', (e) => {
+      item.classList.remove('drag-over');
+    });
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      if (draggedIndex !== null && draggedIndex !== index) {
+        moveMonitor(draggedIndex, index);
+      }
+    });
+
+    if (canMoveUp) {
+      item.querySelector('.move-mon-up-btn').addEventListener('click', () => {
+        moveMonitorUp(index);
+      });
+    }
+
+    if (canMoveDown) {
+      item.querySelector('.move-mon-down-btn').addEventListener('click', () => {
+        moveMonitorDown(index);
+      });
+    }
 
     item.querySelector('.edit-mon-btn').addEventListener('click', () => {
       editMonitor(index);
