@@ -92,9 +92,23 @@ function applyModuleVisibility() {
 function setupIntervals() {
   if (!window.timers) return;
 
-  setInterval(() => window.refresh && window.refresh(), 30000);
-  setInterval(() => window.refreshCPU && window.refreshCPU(), window.timers.cpu.interval);
-  setInterval(() => window.refreshRAM && window.refreshRAM(), window.timers.ram.interval);
+  // Status refresh - only if WebSocket is not connected (fallback)
+  setInterval(() => {
+    // Only poll via HTTP if WebSocket is not connected
+    if (!window.wsIsConnected || !window.wsIsConnected()) {
+      if (window.refresh) window.refresh();
+    }
+  }, 30000);
+  
+  // CPU and RAM - only if WebSocket is not connected (WebSocket handles these in real-time)
+  setInterval(() => {
+    if (!window.wsIsConnected || !window.wsIsConnected()) {
+      if (window.refreshCPU) window.refreshCPU();
+      if (window.refreshRAM) window.refreshRAM();
+    }
+  }, window.timers.cpu.interval);
+  
+  // Other modules continue to use HTTP polling
   setInterval(() => window.refreshAllDisks && window.refreshAllDisks(), window.timers.disk.interval);
   setInterval(() => window.refreshGitHub && window.refreshGitHub(), window.timers.github.interval);
   setInterval(() => window.refreshWeather && window.refreshWeather(), window.timers.weather.interval);
@@ -104,22 +118,37 @@ function setupIntervals() {
 
 // Initial data load
 function initialLoad() {
-  if (window.refresh) window.refresh();
-  if (window.refreshCPU) window.refreshCPU();
-  if (window.refreshRAM) window.refreshRAM();
-  if (window.renderDiskModules) window.renderDiskModules();
-  if (window.refreshCPUInfo) window.refreshCPUInfo();
-  if (window.refreshRAMInfo) window.refreshRAMInfo();
-  if (window.refreshFirmwareInfo) window.refreshFirmwareInfo();
-  if (window.refreshSystemInfo) window.refreshSystemInfo();
-  if (window.refreshBaseboardInfo) window.refreshBaseboardInfo();
-  if (window.refreshWeather) window.refreshWeather();
-  if (window.refreshIP) window.refreshIP();
-  if (window.refreshGitHub) window.refreshGitHub();
+  console.log('[App] initialLoad() called');
+  // Start status check first but don't block on it
+  if (window.refresh) {
+    console.log('[App] Calling window.refresh()');
+    window.refresh().catch(err => {
+      // Status check failed - will be handled by refresh() itself
+      console.log("[App] Initial status check failed, will retry:", err);
+    });
+  } else {
+    console.log('[App] window.refresh() not available');
+  }
+  
+  console.log('[App] Loading other modules');
+  // Load other data - these are independent
+  if (window.refreshCPU) { console.log('[App] Calling refreshCPU'); window.refreshCPU(); }
+  if (window.refreshRAM) { console.log('[App] Calling refreshRAM'); window.refreshRAM(); }
+  if (window.renderDiskModules) { console.log('[App] Calling renderDiskModules'); window.renderDiskModules(); }
+  if (window.refreshCPUInfo) { console.log('[App] Calling refreshCPUInfo'); window.refreshCPUInfo(); }
+  if (window.refreshRAMInfo) { console.log('[App] Calling refreshRAMInfo'); window.refreshRAMInfo(); }
+  if (window.refreshFirmwareInfo) { console.log('[App] Calling refreshFirmwareInfo'); window.refreshFirmwareInfo(); }
+  if (window.refreshSystemInfo) { console.log('[App] Calling refreshSystemInfo'); window.refreshSystemInfo(); }
+  if (window.refreshBaseboardInfo) { console.log('[App] Calling refreshBaseboardInfo'); window.refreshBaseboardInfo(); }
+  if (window.refreshWeather) { console.log('[App] Calling refreshWeather'); window.refreshWeather(); }
+  if (window.refreshIP) { console.log('[App] Calling refreshIP'); window.refreshIP(); }
+  if (window.refreshGitHub) { console.log('[App] Calling refreshGitHub'); window.refreshGitHub(); }
+  console.log('[App] initialLoad() completed');
 }
 
 // Main initialization
 function initApp() {
+  console.log('[App] initApp() called, readyState:', document.readyState);
   loadModulePrefs();
   applyModuleVisibility();
 
@@ -148,14 +177,25 @@ function initApp() {
   setupTimerHandlers();
   setupIntervals();
 
+  // Initialize WebSocket for real-time status detection
+  if (window.initWebSocket) {
+    window.initWebSocket();
+  }
+
   // Initial load
   initialLoad();
 }
 
 // Run when DOM is ready
+console.log('[App] Script loaded, readyState:', document.readyState);
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp);
+  console.log('[App] Waiting for DOMContentLoaded');
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('[App] DOMContentLoaded fired');
+    initApp();
+  });
 } else {
+  console.log('[App] DOM already ready, calling initApp immediately');
   initApp();
 }
 

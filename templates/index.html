@@ -19,14 +19,26 @@
   document.documentElement.setAttribute('data-template', savedTemplate);
   document.documentElement.setAttribute('data-scheme', savedScheme);
 
-  // Fetch theme CSS from API
-  fetch('/api/theme?template=' + encodeURIComponent(savedTemplate) + '&scheme=' + encodeURIComponent(savedScheme))
-    .then(function(res) { return res.text(); })
+  // Fetch theme CSS from API with timeout
+  var themeController = new AbortController();
+  var themeTimeout = setTimeout(function() { themeController.abort(); }, 2000);
+  fetch('/api/theme?template=' + encodeURIComponent(savedTemplate) + '&scheme=' + encodeURIComponent(savedScheme), {
+    signal: themeController.signal
+  })
+    .then(function(res) { 
+      clearTimeout(themeTimeout);
+      return res.text(); 
+    })
     .then(function(css) {
       var style = document.getElementById('theme-css');
       if (style) style.textContent = css;
     })
-    .catch(function(err) { console.error('Failed to load theme:', err); });
+    .catch(function(err) { 
+      clearTimeout(themeTimeout);
+      if (err.name !== 'AbortError') {
+        console.error('Failed to load theme:', err);
+      }
+    });
 
   window.addEventListener('DOMContentLoaded', function() {
     var hiddenMenus = document.createElement('div');
@@ -35,6 +47,31 @@
     document.body.appendChild(hiddenMenus);
   });
 })();
+</script>
+<script>
+// Service Worker Registration - non-blocking
+if ('serviceWorker' in navigator) {
+  // Don't wait for load event - register immediately but don't block
+  setTimeout(function() {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(function(registration) {
+        console.log('[Service Worker] Registration successful:', registration.scope);
+        
+        // Check for updates
+        registration.addEventListener('updatefound', function() {
+          const newWorker = registration.installing;
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[Service Worker] New version available. Reload to update.');
+            }
+          });
+        });
+      })
+      .catch(function(error) {
+        console.error('[Service Worker] Registration failed:', error);
+      });
+  }, 0);
+}
 </script>
 
   <div class="header">
@@ -86,7 +123,7 @@
         <div class="weather-row" id="weatherNow">
           <span class="weather-label">Now</span>
           <span class="weather-icon" id="weatherNowIcon">—</span>
-          <span class="weather-data" id="weatherNowData" style="display:flex; flex-direction:column; gap:4px;">—</span>
+          <span class="weather-data" id="weatherNowData">—</span>
         </div>
         <div class="weather-row" id="weatherToday">
           <span class="weather-label">Today</span>
@@ -792,6 +829,7 @@
 <script src="/static/js/graphs.js"></script>
 <script src="/static/js/modules/system.js"></script>
 <script src="/static/js/modules/weather.js"></script>
+<script src="/static/js/modules/websocket.js"></script>
 <script src="/static/js/modules/network.js"></script>
 <script src="/static/js/modules/search.js"></script>
 <script src="/static/js/modules/github.js"></script>
@@ -1050,9 +1088,13 @@
   gap: 6px;
   transition: all 0.2s;
 }
-.btn-small:hover {
+.btn-small:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+}
+.btn-small:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .location-input {
   display: flex;
@@ -1312,6 +1354,20 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.module-item.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+.module-item.drag-over {
+  border-top: 2px solid var(--accent);
+  margin-top: -2px;
+}
+.module-item .drag-handle {
+  cursor: grab;
+}
+.module-item .drag-handle:active {
+  cursor: grabbing;
 }
 .module-item input[type="checkbox"] {
   width: 18px;

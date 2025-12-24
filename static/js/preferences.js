@@ -359,31 +359,68 @@ function initWeatherSettings() {
     }
   }
 
-  if (searchLocationBtn && weatherLocationInput && locationResults) {
-    searchLocationBtn.addEventListener('click', async () => {
-      const query = weatherLocationInput.value.trim();
-      if (!query) return;
+  // Search function
+  const performSearch = async () => {
+    const query = weatherLocationInput.value.trim();
+    if (!query) return;
 
-      try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
+    // Show loading state
+    searchLocationBtn.disabled = true;
+    const originalHTML = searchLocationBtn.innerHTML;
+    searchLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-        if (data.results && data.results.length > 0) {
-          locationResults.innerHTML = '';
-          data.results.slice(0, 5).forEach(result => {
-            const option = document.createElement('option');
-            option.value = JSON.stringify({
-              name: result.name + ', ' + result.country,
-              latitude: result.latitude,
-              longitude: result.longitude
-            });
-            option.textContent = `${result.name}, ${result.admin1 || ''}, ${result.country}`;
-            locationResults.appendChild(option);
+    try {
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+
+      // Check for error response
+      if (data.error) {
+        alert('Error: ' + data.error);
+        return;
+      }
+
+      // Handle array response (API returns array directly)
+      const results = Array.isArray(data) ? data : (data.results || []);
+      
+      if (results.length > 0) {
+        locationResults.innerHTML = '';
+        // Add a default empty option
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = '-- Select a location --';
+        locationResults.appendChild(emptyOption);
+        
+        results.slice(0, 5).forEach(result => {
+          const option = document.createElement('option');
+          option.value = JSON.stringify({
+            name: result.name + ', ' + result.country,
+            latitude: result.latitude,
+            longitude: result.longitude
           });
-          if (locationResultsRow) locationResultsRow.style.display = 'flex';
-        }
-      } catch (e) {
-        console.error('Error searching location:', e);
+          option.textContent = `${result.name}${result.admin1 ? ', ' + result.admin1 : ''}, ${result.country}`;
+          locationResults.appendChild(option);
+        });
+        if (locationResultsRow) locationResultsRow.style.display = 'flex';
+      } else {
+        alert('No locations found for "' + query + '"');
+      }
+    } catch (e) {
+      console.error('Error searching location:', e);
+      alert('Error searching location: ' + e.message);
+    } finally {
+      searchLocationBtn.disabled = false;
+      searchLocationBtn.innerHTML = originalHTML;
+    }
+  };
+
+  if (searchLocationBtn && weatherLocationInput && locationResults) {
+    searchLocationBtn.addEventListener('click', performSearch);
+    
+    // Allow Enter key to trigger search
+    weatherLocationInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        performSearch();
       }
     });
   }
@@ -391,14 +428,36 @@ function initWeatherSettings() {
   if (setLocationBtn && locationResults && currentLocationDisplay) {
     setLocationBtn.addEventListener('click', () => {
       const selected = locationResults.value;
-      if (selected) {
+      if (!selected || selected === '') {
+        alert('Please select a location from the dropdown');
+        return;
+      }
+      
+      try {
         localStorage.setItem('weatherLocation', selected);
-        try {
-          const loc = JSON.parse(selected);
-          currentLocationDisplay.textContent = loc.name;
-        } catch (e) {}
+        const loc = JSON.parse(selected);
+        currentLocationDisplay.textContent = loc.name;
+        
+        // Hide the results row
         if (locationResultsRow) locationResultsRow.style.display = 'none';
-        if (window.refreshWeather) window.refreshWeather();
+        
+        // Clear the search input
+        if (weatherLocationInput) weatherLocationInput.value = '';
+        
+        // Refresh weather data
+        if (window.refreshWeather) {
+          window.refreshWeather();
+        }
+      } catch (e) {
+        console.error('Error setting location:', e);
+        alert('Error setting location: ' + e.message);
+      }
+    });
+    
+    // Also allow double-click on select option to set it
+    locationResults.addEventListener('dblclick', () => {
+      if (setLocationBtn && locationResults.value) {
+        setLocationBtn.click();
       }
     });
   }

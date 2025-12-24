@@ -2,7 +2,6 @@
 
 ## UI/UX Improvements
 - [x] Add customizable module ordering via drag-and-drop
-- [ ] Add collapsible modules
 - [x] Add theme switcher to footer
 - [x] module editing via UI
 - [ ] Improve mobile responsiveness
@@ -18,6 +17,11 @@
 - [ ] Add service health checks
 - [ ] Add recent logs viewer
 - [x] Add uptime monitoring
+- [ ] Add docker/podman status
+- [ ] Add docker image/update status
+- [ ] Add inoreader support
+- [ ] Add TTRSS
+- [ ] Add module that gets a json and builds a ui
 
 ## IP Address Module
 - [x] Add PTR of public IP addresses
@@ -45,6 +49,20 @@
 ## Search Improvements
 - [x] Add search history
 - [x] Add searching of search history
+- [ ] Add auto complete for history
+- [ ] Add history replay from preferences
+- [ ] Add search in search history
+
+## Calendar & Todo
+- [ ] Sync with ics calendart (read only for now)
+- [ ] Sync with a todo system localy
+
+## WiKi
+- [ ] Add custom simple markdown wiki
+- [ ] Integrate with search
+
+## Quicklinks
+- [ ] Add a favicon or icon only mode
 
 ## Quick Links Enhancements
 - [x] Make links editable via UI
@@ -55,9 +73,10 @@
 - [x] Add service status monitoring
 - [ ] Add email/webhook notifications for downtime
 - [x] Add health check endpoints
-- [ ] Add alert history
+- [ ] Add historical data using status bars with tooltip on each service
 - [x] Add SSL certificate expiration monitoring
 - [x] Add snmp support
+- [ ] Add notifications for monitoring in browser/windows
 
 ## Data Persistence
 - [x] Add settings storage (localStorage or database)
@@ -70,11 +89,12 @@
 ## Customization
 - [x] Add grid layout configuration
 - [ ] Add color scheme customization
+- [ ] Add background image
 
 ## Performance
 - [ ] Add request batching
 - [ ] Add WebSocket for real-time updates
-- [ ] Add service worker for offline support
+- [x] Add service worker for offline support
 - [ ] Add asset caching
 
 ## Integrations

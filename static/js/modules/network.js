@@ -81,20 +81,136 @@ async function refreshIP() {
   }
 }
 
+// Track offline state (managed by WebSocket)
+let isOffline = false;
+
+// Initialize WebSocket connection for status detection
+function initWebSocket() {
+  console.log('[Network] Initializing WebSocket connection');
+  
+  // Set up status change handler
+  if (window.wsOnStatusChange) {
+    window.wsOnStatusChange(function(status, data) {
+      console.log('[Network] WebSocket status changed:', status, 'isOffline was:', isOffline);
+      const statusTextEl = document.getElementById("statusText");
+      const pulseEl = document.querySelector(".pulse");
+      
+      if (status === 'online') {
+        const wasOffline = isOffline;
+        isOffline = false;
+        console.log('[Network] Setting online status, wasOffline:', wasOffline);
+        setOnlineStatus(statusTextEl, pulseEl);
+        
+        // If we have server data from WebSocket, update it immediately
+        if (data && data.server) {
+          updateServerInfo(data.server);
+        }
+        
+        // Refresh full data when server comes back online (only if we were offline)
+        if (wasOffline) {
+          console.log('[Network] Server is back online, refreshing data');
+          refresh();
+        }
+      } else if (status === 'offline') {
+        isOffline = true;
+        console.log('[Network] Setting offline status');
+        setOfflineStatus(statusTextEl, pulseEl);
+        // Still try to refresh - WebSocket might reconnect soon
+        console.log('[Network] Server is offline, but will keep trying to refresh');
+      }
+    });
+  }
+  
+  // Set up WebSocket data update handler
+  if (window.wsOnUpdate) {
+    window.wsOnUpdate(function(type, data) {
+      console.log('[Network] WebSocket update received:', type);
+      if (type === 'system') {
+        // Update system metrics in real-time
+        if (data.system) {
+          updateSystemMetrics(data.system);
+        }
+        if (data.server) {
+          updateServerInfo(data.server);
+        }
+      }
+    });
+  }
+  
+  // Set up connect handler to refresh immediately on reconnect
+  if (window.wsOnConnect) {
+    window.wsOnConnect(function() {
+      console.log('[Network] WebSocket connected, refreshing data');
+      refresh();
+    });
+  }
+  
+  // Connect WebSocket
+  if (window.wsConnect) {
+    window.wsConnect();
+  }
+}
+
 async function refresh() {
+  console.log('[Network] refresh() called, isOffline:', isOffline);
+  const statusTextEl = document.getElementById("statusText");
+  const pulseEl = document.querySelector(".pulse");
+  
+  // If WebSocket is connected, skip HTTP polling - WebSocket handles real-time updates
+  if (window.wsIsConnected && window.wsIsConnected()) {
+    console.log('[Network] WebSocket is connected, skipping HTTP refresh');
+    return;
+  }
+  
+  // Only use HTTP as fallback when WebSocket is disconnected
+  console.log('[Network] WebSocket not connected, using HTTP fallback');
+  
   try {
-    const res = await fetch("/api/summary", {cache:"no-store"});
+    console.log('[Network] Starting fetch to /api/summary');
+    // Use fetchWithTimeout if available, otherwise use regular fetch
+    let res;
+    if (window.fetchWithTimeout) {
+      console.log('[Network] Using fetchWithTimeout');
+      res = await window.fetchWithTimeout("/api/summary", {cache:"no-store"}, 10000); // Increased timeout to 10s
+    } else {
+      console.log('[Network] Using AbortController fallback');
+      // Fallback: use AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.log('[Network] Timeout triggered, aborting');
+        controller.abort();
+      }, 10000); // Increased timeout to 10s
+      try {
+        res = await fetch("/api/summary", {cache:"no-store", signal: controller.signal});
+        clearTimeout(timeoutId);
+        console.log('[Network] Fetch completed:', res.status);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        console.log('[Network] Fetch error:', err.message);
+        throw err;
+      }
+    }
+    
+    // Check if response is successful
+    if (!res.ok) {
+      // Server returned an error status
+      console.log('[Network] Server returned error status:', res.status);
+      // WebSocket will detect this and update status
+      return;
+    }
+
     const j = await res.json();
+    console.log('[Network] Successfully fetched status, server is online, isOffline:', isOffline);
 
     const isLocal = j.client && j.client.isLocal;
 
     const statusTitle = document.getElementById("statusTitle");
     const serverInfoDiv = document.getElementById("serverInfo");
     const clientInfoDiv = document.getElementById("clientInfo");
-    const statusTextEl = document.getElementById("statusText");
-
-    // Set status to Online on successful API call
-    if (statusTextEl) statusTextEl.textContent = "Online";
+    
+    // Update offline flag on successful fetch
+    isOffline = false;
+    setOnlineStatus(statusTextEl, pulseEl);
 
     if (isLocal) {
       if (statusTitle) statusTitle.textContent = "Status";
@@ -142,8 +258,121 @@ async function refresh() {
       j.server.os + "/" + j.server.arch + " • " + j.server.goVersion;
 
   } catch(err) {
-    const statusTextEl = document.getElementById("statusText");
-    if (statusTextEl) statusTextEl.textContent = "Degraded";
+    // Network error, timeout, or fetch failed (server is down/unreachable)
+    console.log('[Network] Fetch failed:', err.name, err.message);
+    // WebSocket will detect disconnection and update status automatically
+    // No need for retry mechanism - WebSocket handles reconnection
+  }
+}
+
+function setOfflineStatus(statusTextEl, pulseEl) {
+  isOffline = true;
+  if (statusTextEl) statusTextEl.textContent = "Offline";
+  if (pulseEl) {
+    pulseEl.style.background = "var(--bad, #ef4444)";
+    pulseEl.style.boxShadow = "0 0 0 0 rgba(239, 68, 68, 0.7)";
+  }
+}
+
+function setOnlineStatus(statusTextEl, pulseEl) {
+  isOffline = false;
+  if (statusTextEl) statusTextEl.textContent = "Online";
+  if (pulseEl) {
+    pulseEl.style.background = "";
+    pulseEl.style.boxShadow = "";
+  }
+}
+
+function updateServerInfo(server) {
+  if (!server) return;
+  
+  // Update server time and uptime if available
+  if (server.time) {
+    const timeEl = document.getElementById("time");
+    if (timeEl) {
+      try {
+        const serverTime = new Date(server.time);
+        timeEl.textContent = serverTime.toLocaleTimeString();
+        
+        // Update UTC time
+        const utcTimeEl = document.getElementById("utcTime");
+        if (utcTimeEl) {
+          utcTimeEl.textContent = serverTime.toISOString();
+        }
+      } catch(e) {
+        console.error('[Network] Error updating server time:', e);
+      }
+    }
+  }
+  
+  if (server.uptimeSec !== undefined) {
+    const uptimeEl = document.getElementById("uptime");
+    if (uptimeEl && window.fmtUptime) {
+      uptimeEl.textContent = window.fmtUptime(server.uptimeSec);
+    }
+  }
+}
+
+function updateSystemMetrics(system) {
+  if (!system) return;
+  
+  // Update CPU usage
+  if (system.cpu && system.cpu.usage !== undefined) {
+    const cpuUsageEl = document.getElementById("cpuUsage");
+    if (cpuUsageEl) {
+      cpuUsageEl.textContent = system.cpu.usage.toFixed(1) + '%';
+    }
+    // Update CPU graph if available
+    if (window.updateCpuGraph) {
+      window.updateCpuGraph(system.cpu.usage);
+    }
+  }
+  
+  // Update RAM usage
+  if (system.ram) {
+    const ramPercentEl = document.getElementById("ramPercent");
+    if (ramPercentEl && system.ram.percent !== undefined) {
+      ramPercentEl.textContent = system.ram.percent.toFixed(1) + '%';
+    }
+    const ramSummaryEl = document.getElementById("ramSummary");
+    if (ramSummaryEl && system.ram.total && system.ram.used && system.ram.available) {
+      if (window.formatBytes) {
+        ramSummaryEl.textContent = 
+          window.formatBytes(system.ram.total) + ' / ' +
+          window.formatBytes(system.ram.used) + ' / ' +
+          window.formatBytes(system.ram.available);
+      }
+    }
+    // Update RAM graph if available
+    if (window.updateRamGraph && system.ram.percent !== undefined) {
+      window.updateRamGraph(system.ram.percent);
+    }
+  }
+  
+  // Update disk usage (root filesystem)
+  if (system.disk && system.disk.percent !== undefined) {
+    // Find the root disk module and update it
+    const diskModules = document.querySelectorAll('[data-disk-mount="/"]');
+    diskModules.forEach(function(module) {
+      const usageEl = module.querySelector('.disk-usage');
+      if (usageEl && window.formatBytes) {
+        const used = system.disk.used || 0;
+        const total = system.disk.total || 0;
+        const free = system.disk.free || 0;
+        usageEl.textContent = 
+          window.formatBytes(used) + ' / ' + 
+          window.formatBytes(total) + ' (' + 
+          window.formatBytes(free) + ' free)';
+      }
+      const percentEl = module.querySelector('.disk-percent');
+      if (percentEl) {
+        percentEl.textContent = system.disk.percent.toFixed(1) + '%';
+      }
+      // Update disk graph if available
+      if (window.updateDiskGraph) {
+        window.updateDiskGraph(system.disk.percent, '/');
+      }
+    });
   }
 }
 
@@ -151,3 +380,4 @@ async function refresh() {
 window.detectClientInfo = detectClientInfo;
 window.refreshIP = refreshIP;
 window.refresh = refresh;
+window.initWebSocket = initWebSocket;

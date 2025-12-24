@@ -30,8 +30,9 @@ import (
 	"github.com/earentir/gosmbios"
 	"github.com/earentir/gosmbios/types/type0"
 	"github.com/earentir/gosmbios/types/type1"
-	"github.com/earentir/gosmbios/types/type2"
 	"github.com/earentir/gosmbios/types/type17"
+	"github.com/earentir/gosmbios/types/type2"
+	"github.com/gorilla/websocket"
 	"github.com/gosnmp/gosnmp"
 	"github.com/miekg/dns"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -75,7 +76,7 @@ var (
 	templatesMap  map[string]*TemplateInfo // template name -> template info
 	templatesList []string                 // ordered list of template names
 	indexTemplate *template.Template
-	appversion    = "0.1.68" // Application version
+	appversion    = "0.2.82" // Application version
 )
 
 // Config holds the application configuration.
@@ -1466,6 +1467,18 @@ func main() {
 		})
 	})
 
+	// Serve service worker from root
+	mux.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {
+		swContent, err := fs.ReadFile(staticFS, "static/sw.js")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Service-Worker-Allowed", "/")
+		w.Write(swContent)
+	})
+
 	// Serve static files (JS, CSS, etc.)
 	staticContent, err := fs.Sub(staticFS, "static")
 	if err != nil {
@@ -1607,6 +1620,102 @@ func main() {
 		writeJSON(w, map[string]string{"success": "Config deleted successfully"})
 	})
 
+	// WebSocket upgrader
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			// Allow connections from same origin
+			return true
+		},
+	}
+
+	// WebSocket endpoint for real-time server status and data updates
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Printf("WebSocket upgrade error: %v", err)
+			return
+		}
+		defer conn.Close()
+
+		log.Printf("WebSocket client connected from %s", r.RemoteAddr)
+
+		ctx := r.Context()
+		isLocal := isLocalRequest(r)
+
+		// Send initial "online" message with server info
+		serverInfo := ServerInfo{
+			Hostname:  mustHostname(),
+			OS:        runtime.GOOS,
+			Arch:      runtime.GOARCH,
+			GoVersion: runtime.Version(),
+			UptimeSec: getSystemUptime(),
+			Time:      time.Now().Format(time.RFC3339),
+			IsLocal:   isLocal,
+		}
+		if err := conn.WriteJSON(map[string]any{
+			"type":   "status",
+			"status": "online",
+			"server": serverInfo,
+		}); err != nil {
+			log.Printf("WebSocket write error: %v", err)
+			return
+		}
+
+		// Send system metrics updates every 5 seconds
+		systemTicker := time.NewTicker(5 * time.Second)
+		defer systemTicker.Stop()
+
+		// Keep connection alive with periodic pings (every 30 seconds)
+		pingTicker := time.NewTicker(30 * time.Second)
+		defer pingTicker.Stop()
+
+		// Handle pong messages
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetPongHandler(func(string) error {
+			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			return nil
+		})
+
+		// Channel to handle read errors
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for {
+				_, _, err := conn.ReadMessage()
+				if err != nil {
+					if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+						log.Printf("WebSocket error: %v", err)
+					}
+					return
+				}
+			}
+		}()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-systemTicker.C:
+				// Send system metrics update
+				metrics := getSystemMetrics(ctx)
+				if err := conn.WriteJSON(map[string]any{
+					"type":    "system",
+					"system":  metrics,
+					"server":  ServerInfo{Time: time.Now().Format(time.RFC3339), UptimeSec: getSystemUptime()},
+				}); err != nil {
+					log.Printf("WebSocket system update error: %v", err)
+					return
+				}
+			case <-pingTicker.C:
+				// Send ping to keep connection alive
+				if err := conn.WriteJSON(map[string]string{"type": "ping"}); err != nil {
+					log.Printf("WebSocket ping error: %v", err)
+					return
+				}
+			}
+		}
+	})
+
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte("ok")); err != nil {
@@ -1669,7 +1778,7 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data:; font-src 'self' https://cdnjs.cloudflare.com data:;")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https: ws: wss:; img-src 'self' data:; font-src 'self' https://cdnjs.cloudflare.com data:;")
 		next.ServeHTTP(w, r)
 	})
 }
