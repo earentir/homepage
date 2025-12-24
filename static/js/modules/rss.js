@@ -69,18 +69,53 @@ function renderRssContent(moduleId, items) {
     return;
   }
 
+  // Get module settings
+  const mod = rssModules.find(m => m.id === moduleId);
+  const showTitle = mod && mod.showTitle !== undefined ? mod.showTitle : true;
+  const showText = mod && mod.showText !== undefined ? mod.showText : true;
+  const showDate = mod && mod.showDate !== undefined ? mod.showDate : true;
+
   let html = '';
   items.forEach(item => {
-    const dateHtml = item.pubDate ? `<div class="muted" style="font-size:0.85em; margin-top:4px;">${item.pubDate}</div>` : '';
+    // Build title with optional image preview on hover
+    let titleHtml = '';
+    if (showTitle) {
+      if (item.image) {
+        titleHtml = `<div style="font-weight:600; margin-bottom:8px; position:relative;" class="rss-title-hover">
+          <a href="${item.link}" target="_blank" rel="noreferrer" style="color:var(--txt); text-decoration:none;">${item.title || 'Untitled'}</a>
+          <div class="rss-image-preview" style="display:none; position:absolute; z-index:1000; left:0; top:100%; margin-top:8px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+            <img src="${item.image}" style="max-width:300px; max-height:200px; border-radius:4px;" alt="">
+          </div>
+        </div>`;
+      } else {
+        titleHtml = `<div style="font-weight:600; margin-bottom:8px;"><a href="${item.link}" target="_blank" rel="noreferrer" style="color:var(--txt); text-decoration:none;">${item.title || 'Untitled'}</a></div>`;
+      }
+    }
+    const textHtml = showText && item.description ? `<div style="color:var(--muted); font-size:0.9em; line-height:1.5; white-space:pre-wrap;">${item.description}</div>` : '';
+    const dateHtml = showDate && item.pubDate ? `<div class="muted" style="font-size:0.85em; margin-top:4px;">${item.pubDate}</div>` : '';
+
     html += `
       <div style="margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border);">
-        <div style="font-weight:600; margin-bottom:8px;"><a href="${item.link}" target="_blank" rel="noreferrer" style="color:var(--txt); text-decoration:none;">${item.title || 'Untitled'}</a></div>
-        <div style="color:var(--muted); font-size:0.9em; line-height:1.5; white-space:pre-wrap;">${item.description || ''}</div>
+        ${titleHtml}
+        ${textHtml}
         ${dateHtml}
       </div>
     `;
   });
   contentEl.innerHTML = html;
+
+  // Add hover handlers for image previews
+  contentEl.querySelectorAll('.rss-title-hover').forEach(el => {
+    const preview = el.querySelector('.rss-image-preview');
+    if (preview) {
+      el.addEventListener('mouseenter', () => {
+        preview.style.display = 'block';
+      });
+      el.addEventListener('mouseleave', () => {
+        preview.style.display = 'none';
+      });
+    }
+  });
 }
 
 function renderRssModules() {
@@ -133,7 +168,8 @@ function renderRssModules() {
 
 async function refreshRssModule(mod) {
   try {
-    const res = await fetch(`/api/rss?url=${encodeURIComponent(mod.url)}`, {cache: "no-store"});
+    const maxItems = mod.maxItems || 5;
+    const res = await fetch(`/api/rss?url=${encodeURIComponent(mod.url)}&count=${maxItems}`, {cache: "no-store"});
     const j = await res.json();
 
     const contentEl = document.getElementById(`rss-content-${mod.id}`);
@@ -149,8 +185,10 @@ async function refreshRssModule(mod) {
       return;
     }
 
-    setCachedFeed(mod.id, j.items);
-    renderRssContent(mod.id, j.items);
+    // Limit items to maxItems
+    const items = j.items.slice(0, maxItems);
+    setCachedFeed(mod.id, items);
+    renderRssContent(mod.id, items);
   } catch(err) {
     const contentEl = document.getElementById(`rss-content-${mod.id}`);
     if (contentEl) {
@@ -223,8 +261,14 @@ function renderRssModuleList() {
 }
 
 function showRssEditDialog(index) {
-  const mod = index >= 0 ? rssModules[index] : { id: 'rss-' + Date.now(), name: '', url: '', enabled: true };
+  const mod = index >= 0 ? rssModules[index] : { id: 'rss-' + Date.now(), name: '', url: '', enabled: true, showTitle: true, showText: true, showDate: true, maxItems: 5 };
   const isNew = index < 0;
+
+  // Ensure defaults for existing modules
+  if (mod.showTitle === undefined) mod.showTitle = true;
+  if (mod.showText === undefined) mod.showText = true;
+  if (mod.showDate === undefined) mod.showDate = true;
+  if (mod.maxItems === undefined) mod.maxItems = 5;
 
   const dialog = document.createElement('div');
   dialog.className = 'modal-overlay active';
@@ -243,6 +287,24 @@ function showRssEditDialog(index) {
           <div class="pref-row">
             <label>RSS Feed URL</label>
             <input type="text" id="rss-edit-url" placeholder="https://example.com/feed.xml" value="${mod.url || ''}">
+          </div>
+          <div class="pref-row">
+            <label>Articles</label>
+            <input type="number" id="rss-edit-max" value="${mod.maxItems || 5}" min="1" max="20" style="width:60px;">
+          </div>
+          <div class="pref-row" style="margin-top:10px;">
+            <label>Show</label>
+            <div style="display:flex; gap:15px;">
+              <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                <input type="checkbox" id="rss-edit-title" ${mod.showTitle ? 'checked' : ''}> Title
+              </label>
+              <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                <input type="checkbox" id="rss-edit-text" ${mod.showText ? 'checked' : ''}> Text
+              </label>
+              <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                <input type="checkbox" id="rss-edit-date" ${mod.showDate ? 'checked' : ''}> Date
+              </label>
+            </div>
           </div>
         </div>
         <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
@@ -265,6 +327,10 @@ function showRssEditDialog(index) {
   document.getElementById('rss-save').addEventListener('click', () => {
     const name = document.getElementById('rss-edit-name').value.trim();
     const url = document.getElementById('rss-edit-url').value.trim();
+    const maxItems = Math.max(1, Math.min(20, parseInt(document.getElementById('rss-edit-max').value) || 5));
+    const showTitle = document.getElementById('rss-edit-title').checked;
+    const showText = document.getElementById('rss-edit-text').checked;
+    const showDate = document.getElementById('rss-edit-date').checked;
 
     if (!url) {
       alert('RSS Feed URL is required');
@@ -276,11 +342,19 @@ function showRssEditDialog(index) {
         id: 'rss-' + Date.now(),
         name: name || 'RSS Feed',
         url: url,
-        enabled: true
+        enabled: true,
+        maxItems: maxItems,
+        showTitle: showTitle,
+        showText: showText,
+        showDate: showDate
       });
     } else {
       rssModules[index].name = name || 'RSS Feed';
       rssModules[index].url = url;
+      rssModules[index].maxItems = maxItems;
+      rssModules[index].showTitle = showTitle;
+      rssModules[index].showText = showText;
+      rssModules[index].showDate = showDate;
     }
 
     saveRssModules();

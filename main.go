@@ -1398,10 +1398,18 @@ func main() {
 			return
 		}
 
+		// Parse count parameter (default 5, max 20)
+		count := 5
+		if countStr := r.URL.Query().Get("count"); countStr != "" {
+			if c, err := strconv.Atoi(countStr); err == nil && c > 0 && c <= 20 {
+				count = c
+			}
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
 
-		items, err := fetchRSSFeed(ctx, feedURL)
+		items, err := fetchRSSFeed(ctx, feedURL, count)
 		if err != nil {
 			writeJSON(w, map[string]any{
 				"error": err.Error(),
@@ -4124,6 +4132,7 @@ type RSSFeedItem struct {
 	Description string `json:"description"`
 	Link        string `json:"link"`
 	PubDate     string `json:"pubDate"` // ISO 8601 format
+	Image       string `json:"image,omitempty"`
 }
 
 // RSSFeed represents an RSS feed structure
@@ -4140,16 +4149,31 @@ type RSSChannel struct {
 	Items       []RSSItem `xml:"item"`
 }
 
-// RSSItem represents a single item in an RSS feed
-type RSSItem struct {
-	Title       string `xml:"title"`
-	Description string `xml:"description"`
-	Link        string `xml:"link"`
-	PubDate     string `xml:"pubDate"`
+// RSSEnclosure represents an enclosure element in RSS
+type RSSEnclosure struct {
+	URL  string `xml:"url,attr"`
+	Type string `xml:"type,attr"`
 }
 
-// fetchRSSFeed fetches and parses an RSS feed, returning the last 5 items
-func fetchRSSFeed(ctx context.Context, feedURL string) ([]RSSFeedItem, error) {
+// RSSMediaContent represents media:content element
+type RSSMediaContent struct {
+	URL    string `xml:"url,attr"`
+	Medium string `xml:"medium,attr"`
+}
+
+// RSSItem represents a single item in an RSS feed
+type RSSItem struct {
+	Title        string          `xml:"title"`
+	Description  string          `xml:"description"`
+	Link         string          `xml:"link"`
+	PubDate      string          `xml:"pubDate"`
+	Enclosure    RSSEnclosure    `xml:"enclosure"`
+	MediaContent RSSMediaContent `xml:"http://search.yahoo.com/mrss/ content"`
+	MediaThumb   string          `xml:"http://search.yahoo.com/mrss/ thumbnail"`
+}
+
+// fetchRSSFeed fetches and parses an RSS feed, returning the specified number of items
+func fetchRSSFeed(ctx context.Context, feedURL string, count int) ([]RSSFeedItem, error) {
 	// Validate URL
 	parsedURL, err := url.Parse(feedURL)
 	if err != nil {
@@ -4195,10 +4219,10 @@ func fetchRSSFeed(ctx context.Context, feedURL string) ([]RSSFeedItem, error) {
 		return nil, fmt.Errorf("failed to parse RSS: %v", err)
 	}
 
-	// Convert to RSSFeedItem format and limit to 5 items
-	items := make([]RSSFeedItem, 0, 5)
+	// Convert to RSSFeedItem format and limit to count items
+	items := make([]RSSFeedItem, 0, count)
 	for i, item := range feed.Channel.Items {
-		if i >= 5 {
+		if i >= count {
 			break
 		}
 
@@ -4234,11 +4258,22 @@ func fetchRSSFeed(ctx context.Context, feedURL string) ([]RSSFeedItem, error) {
 			description = strings.Join(lines[:2], "\n")
 		}
 
+		// Extract image URL from enclosure or media:content
+		imageURL := ""
+		if item.Enclosure.URL != "" && strings.HasPrefix(item.Enclosure.Type, "image/") {
+			imageURL = item.Enclosure.URL
+		} else if item.MediaContent.URL != "" {
+			imageURL = item.MediaContent.URL
+		} else if item.MediaThumb != "" {
+			imageURL = item.MediaThumb
+		}
+
 		items = append(items, RSSFeedItem{
 			Title:       strings.TrimSpace(item.Title),
 			Description: strings.TrimSpace(description),
 			Link:        strings.TrimSpace(item.Link),
 			PubDate:     pubDate,
+			Image:       imageURL,
 		})
 	}
 
