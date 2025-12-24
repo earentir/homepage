@@ -76,7 +76,7 @@ var (
 	templatesMap  map[string]*TemplateInfo // template name -> template info
 	templatesList []string                 // ordered list of template names
 	indexTemplate *template.Template
-	appversion    = "0.1.68" // Application version
+	appversion    = "0.2.82" // Application version
 )
 
 // Config holds the application configuration.
