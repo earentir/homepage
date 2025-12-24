@@ -1620,7 +1620,45 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("listening on %s", cfg.ListenAddr)
+	// Extract port from listen address
+	_, listenPort, _ := net.SplitHostPort(cfg.ListenAddr)
+	if listenPort == "" {
+		listenPort = "8080"
+	}
+
+	log.Printf("Dashboard starting...")
+	log.Printf("  Listening on: %s", cfg.ListenAddr)
+
+	// List all accessible addresses
+	ifaces, err := net.Interfaces()
+	if err == nil {
+		for _, iface := range ifaces {
+			if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+				continue
+			}
+			addrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip == nil || ip.IsLoopback() {
+					continue
+				}
+				if ip.To4() != nil {
+					log.Printf("  http://%s:%s", ip.String(), listenPort)
+				}
+			}
+		}
+	}
+	log.Printf("  http://localhost:%s", listenPort)
+
 	log.Fatal(srv.ListenAndServe())
 }
 
