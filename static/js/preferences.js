@@ -266,6 +266,26 @@ function initGeneralSettings() {
       localStorage.setItem('diskInterval', val.toString());
     });
   }
+
+  // RSS refresh interval
+  const rssIntervalInput = document.getElementById('pref-rss-interval');
+  if (rssIntervalInput && window.timers) {
+    // Load saved value or use current timer value
+    const saved = localStorage.getItem('rssInterval');
+    if (saved) {
+      rssIntervalInput.value = parseInt(saved) || 300;
+      window.timers.rss.interval = parseInt(saved) * 1000 || 300000;
+    } else {
+      rssIntervalInput.value = window.timers.rss.interval / 1000;
+    }
+
+    rssIntervalInput.addEventListener('change', () => {
+      const val = Math.max(60, Math.min(86400, parseInt(rssIntervalInput.value) || 300));
+      rssIntervalInput.value = val;
+      window.timers.rss.interval = val * 1000;
+      localStorage.setItem('rssInterval', val.toString());
+    });
+  }
 }
 
 function renderModuleList() {

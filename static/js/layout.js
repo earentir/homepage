@@ -16,7 +16,6 @@ const moduleConfig = {
   links: { name: 'Quick Links', icon: 'fa-link', desc: 'Quick access links', hasTimer: false, enabled: true },
   monitoring: { name: 'Monitoring', icon: 'fa-heartbeat', desc: 'Service health monitoring', hasTimer: true, timerKey: 'monitoring', defaultInterval: 60, enabled: true },
   snmp: { name: 'SNMP', icon: 'fa-network-wired', desc: 'SNMP device queries', hasTimer: true, timerKey: 'snmp', defaultInterval: 60, enabled: true },
-  rss: { name: 'RSS', icon: 'fa-rss', desc: 'RSS feed reader', hasTimer: true, timerKey: 'rss', defaultInterval: 300, enabled: true },
   calendar: { name: 'Calendar', icon: 'fa-calendar-alt', desc: 'Month calendar view', hasTimer: false, enabled: true },
   weekcalendar: { name: 'Week Calendar', icon: 'fa-calendar-week', desc: 'Week view with events', hasTimer: false, enabled: true },
   events: { name: 'Upcoming Events', icon: 'fa-calendar-check', desc: 'Next 5 upcoming events', hasTimer: false, enabled: true },
