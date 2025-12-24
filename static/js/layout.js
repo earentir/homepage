@@ -322,6 +322,262 @@ function initLayoutEditor() {
 // Drag and drop
 let draggedElement = null;
 let grid = null;
+let leftDropZone = null;
+let rightDropZone = null;
+let pinnedModule = null;
+let pinnedDropSuccess = false;
+
+function createDropZones() {
+  // Create left zone (disable module)
+  if (!leftDropZone) {
+    leftDropZone = document.createElement('div');
+    leftDropZone.id = 'leftDropZone';
+    leftDropZone.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    leftDropZone.style.cssText = `
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 80px;
+      height: 100vh;
+      background: linear-gradient(90deg, rgba(180,80,90,0.5) 0%, rgba(180,80,90,0) 100%);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 9999;
+      transition: background 0.2s;
+    `;
+    document.body.appendChild(leftDropZone);
+
+    leftDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      leftDropZone.style.background = 'linear-gradient(90deg, rgba(180,80,90,0.7) 0%, rgba(180,80,90,0.2) 100%)';
+    });
+
+    leftDropZone.addEventListener('dragleave', () => {
+      leftDropZone.style.background = 'linear-gradient(90deg, rgba(180,80,90,0.5) 0%, rgba(180,80,90,0) 100%)';
+    });
+
+    leftDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (draggedElement) {
+        const moduleId = draggedElement.getAttribute('data-module');
+        if (moduleId) {
+          // Disable the module in moduleVisibility
+          const moduleVisibility = JSON.parse(localStorage.getItem('moduleVisibility') || '{}');
+          moduleVisibility[moduleId] = false;
+          localStorage.setItem('moduleVisibility', JSON.stringify(moduleVisibility));
+
+          // Also add to hiddenModules for compatibility
+          const hiddenModules = JSON.parse(localStorage.getItem('hiddenModules') || '[]');
+          if (!hiddenModules.includes(moduleId)) {
+            hiddenModules.push(moduleId);
+            localStorage.setItem('hiddenModules', JSON.stringify(hiddenModules));
+          }
+
+          // Remove from layout
+          layoutConfig.rows.forEach(row => {
+            const idx = row.modules.indexOf(moduleId);
+            if (idx !== -1) row.modules[idx] = null;
+          });
+
+          // Clear pinned module if this was it
+          if (pinnedModule && pinnedModule.moduleId === moduleId) {
+            pinnedModule.clone.remove();
+            pinnedModule = null;
+          }
+
+          saveLayoutConfig();
+          renderLayout();
+          setTimeout(() => initDragAndDrop(), 50);
+          if (window.applyModuleVisibility) window.applyModuleVisibility();
+        }
+      }
+      hideDropZones();
+    });
+  }
+
+  // Create right zone (temporary pin)
+  if (!rightDropZone) {
+    rightDropZone = document.createElement('div');
+    rightDropZone.id = 'rightDropZone';
+    rightDropZone.innerHTML = '<i class="fas fa-thumbtack"></i>';
+    rightDropZone.style.cssText = `
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 80px;
+      height: 100vh;
+      background: linear-gradient(270deg, rgba(100,160,120,0.5) 0%, rgba(100,160,120,0) 100%);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 9999;
+      transition: background 0.2s;
+    `;
+    document.body.appendChild(rightDropZone);
+
+    rightDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      rightDropZone.style.background = 'linear-gradient(270deg, rgba(100,160,120,0.7) 0%, rgba(100,160,120,0.2) 100%)';
+    });
+
+    rightDropZone.addEventListener('dragleave', () => {
+      rightDropZone.style.background = 'linear-gradient(270deg, rgba(100,160,120,0.5) 0%, rgba(100,160,120,0) 100%)';
+    });
+
+    rightDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (draggedElement) {
+        pinModule(draggedElement);
+      }
+      hideDropZones();
+    });
+  }
+}
+
+function pinModule(element) {
+  // Remove any existing pinned module
+  unpinModule();
+
+  const moduleId = element.getAttribute('data-module');
+  const clone = element.cloneNode(true);
+  clone.id = 'pinnedModuleClone';
+  clone.style.cssText = `
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 300px;
+    max-height: 80vh;
+    overflow: auto;
+    z-index: 9998;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    border: 2px solid var(--accent);
+  `;
+  clone.dataset.dragInitialized = 'false';
+  clone.dataset.isPinnedClone = 'true';
+  clone.draggable = true;
+  document.body.appendChild(clone);
+
+  // Hide original from layout but keep it in DOM
+  element.style.visibility = 'hidden';
+  element.style.height = '0';
+  element.style.overflow = 'hidden';
+  element.style.margin = '0';
+  element.style.padding = '0';
+  element.style.border = 'none';
+
+  pinnedModule = { original: element, clone: clone, moduleId: moduleId };
+  pinnedDropSuccess = false;
+
+  // Make clone draggable
+  clone.addEventListener('dragstart', function(e) {
+    draggedElement = clone; // Use clone as draggedElement
+    draggedElement.dataset.originalModuleId = moduleId;
+    clone.style.opacity = '0.5';
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', moduleId);
+    pinnedDropSuccess = false;
+    showDropZones();
+
+    // Also highlight columns
+    if (grid) {
+      const emptyColumns = grid.querySelectorAll('.layout-column');
+      emptyColumns.forEach(col => col.classList.add('dragging-active'));
+    }
+  });
+
+  clone.addEventListener('dragend', function() {
+    clone.style.opacity = '1';
+    hideDropZones();
+
+    // Remove column highlights
+    if (grid) {
+      const allColumns = Array.from(grid.querySelectorAll('.layout-column'));
+      allColumns.forEach(c => {
+        c.classList.remove('drag-over');
+        c.classList.remove('dragging-active');
+      });
+    }
+
+    if (pinnedDropSuccess) {
+      // Successful drop - fully unpin
+      unpinModule();
+    } else {
+      // Failed drop - keep pinned, restore clone visibility
+      clone.style.opacity = '1';
+    }
+
+    draggedElement = null;
+  });
+
+  // Add close button to pinned module
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+  closeBtn.style.cssText = `
+    position: absolute;
+    top: 5px;
+    right: 35px;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  `;
+  closeBtn.onclick = () => unpinModule();
+  clone.querySelector('h3')?.appendChild(closeBtn);
+}
+
+function unpinModule() {
+  if (pinnedModule) {
+    // Restore original element visibility
+    pinnedModule.original.style.visibility = '';
+    pinnedModule.original.style.height = '';
+    pinnedModule.original.style.overflow = '';
+    pinnedModule.original.style.margin = '';
+    pinnedModule.original.style.padding = '';
+    pinnedModule.original.style.border = '';
+    pinnedModule.clone.remove();
+    pinnedModule = null;
+  }
+}
+
+function showDropZones() {
+  createDropZones();
+  leftDropZone.style.display = 'flex';
+  rightDropZone.style.display = 'flex';
+}
+
+function hideDropZones() {
+  if (leftDropZone) {
+    leftDropZone.style.display = 'none';
+    leftDropZone.style.background = 'linear-gradient(90deg, rgba(180,80,90,0.5) 0%, rgba(180,80,90,0) 100%)';
+  }
+  if (rightDropZone) {
+    rightDropZone.style.display = 'none';
+    rightDropZone.style.background = 'linear-gradient(270deg, rgba(100,160,120,0.5) 0%, rgba(100,160,120,0) 100%)';
+  }
+}
 
 function loadModuleOrder() {
   if (!grid) return;
@@ -413,6 +669,9 @@ function initDragAndDrop() {
 
       const emptyColumns = grid.querySelectorAll('.layout-column.empty-column');
       emptyColumns.forEach(col => col.classList.add('dragging-active'));
+
+      // Show drop zones for disable/pin
+      showDropZones();
     });
 
     card.addEventListener('dragend', function() {
@@ -425,6 +684,9 @@ function initDragAndDrop() {
         c.classList.remove('dragging-active');
       });
       draggedElement = null;
+
+      // Hide drop zones
+      hideDropZones();
     });
 
     card.addEventListener('dragover', function(e) {
@@ -446,9 +708,13 @@ function initDragAndDrop() {
       this.classList.remove('drag-over');
 
       if (draggedElement && this !== draggedElement) {
-        const draggedModuleId = draggedElement.getAttribute('data-module');
+        // Check if this is a pinned module clone
+        const isPinnedClone = draggedElement.dataset.isPinnedClone === 'true';
+        const draggedModuleId = isPinnedClone
+          ? (draggedElement.dataset.originalModuleId || draggedElement.getAttribute('data-module'))
+          : draggedElement.getAttribute('data-module');
         const targetModuleId = this.getAttribute('data-module');
-        const draggedPos = findCardColumn(draggedElement);
+        const draggedPos = isPinnedClone ? null : findCardColumn(draggedElement);
         const targetPos = findCardColumn(this);
 
         if (draggedPos && targetPos) {
@@ -462,6 +728,10 @@ function initDragAndDrop() {
         } else if (!draggedPos && targetPos) {
           if (layoutConfig.rows[targetPos.rowIndex]) {
             layoutConfig.rows[targetPos.rowIndex].modules[targetPos.colIndex] = draggedModuleId;
+            // Mark pinned drop as successful
+            if (isPinnedClone) {
+              pinnedDropSuccess = true;
+            }
             saveLayoutConfig();
             renderLayout();
             setTimeout(() => initDragAndDrop(), 50);
@@ -512,7 +782,12 @@ function initDragAndDrop() {
       if (draggedElement) {
         const rowIndex = parseInt(this.dataset.rowIndex);
         const colIndex = parseInt(this.dataset.colIndex);
-        const moduleId = draggedElement.getAttribute('data-module');
+
+        // Check if this is a pinned module clone
+        const isPinnedClone = draggedElement.dataset.isPinnedClone === 'true';
+        const moduleId = isPinnedClone
+          ? (draggedElement.dataset.originalModuleId || draggedElement.getAttribute('data-module'))
+          : draggedElement.getAttribute('data-module');
 
         const githubContainer = document.getElementById('githubModulesContainer');
         const rssContainer = document.getElementById('rssModulesContainer');
@@ -532,12 +807,17 @@ function initDragAndDrop() {
           const existingModuleId = layoutConfig.rows[rowIndex].modules[colIndex];
           layoutConfig.rows[rowIndex].modules[colIndex] = moduleId;
 
-          if (existingModuleId && !isInGitHubContainer && !isInRssContainer && !isInDiskContainer) {
+          if (existingModuleId && !isInGitHubContainer && !isInRssContainer && !isInDiskContainer && !isPinnedClone) {
             const draggedPos = findCardColumn(draggedElement);
             if (draggedPos && layoutConfig.rows[draggedPos.rowIndex]) {
               layoutConfig.rows[draggedPos.rowIndex].modules[draggedPos.colIndex] = existingModuleId;
             }
           }
+        }
+
+        // Mark pinned drop as successful
+        if (isPinnedClone) {
+          pinnedDropSuccess = true;
         }
 
         saveLayoutConfig();
