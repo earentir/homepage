@@ -20,6 +20,8 @@ function saveDiskModules() {
 }
 
 async function refreshCPU() {
+  // Start timer immediately when refresh begins
+  if (window.startTimer) window.startTimer("cpu");
   try {
     const res = await fetch("/api/system", {cache:"no-store"});
     const j = await res.json();
@@ -29,13 +31,16 @@ async function refreshCPU() {
       // Cores are fetched from cpuid API, not system API
       window.updateCpuGraph(parseFloat(usage));
     }
-    window.startTimer("cpu");
   } catch(err) {
     console.error("Error refreshing CPU:", err);
+    // Ensure timer is still running even on error
+    if (window.startTimer) window.startTimer("cpu");
   }
 }
 
 async function refreshRAM() {
+  // Start timer immediately when refresh begins
+  if (window.startTimer) window.startTimer("ram");
   try {
     const res = await fetch("/api/system", {cache:"no-store"});
     const j = await res.json();
@@ -49,9 +54,10 @@ async function refreshRAM() {
       document.getElementById("ramPercent").textContent = percent.toFixed(1) + "%";
       window.updateRamGraph(percent);
     }
-    window.startTimer("ram");
   } catch(err) {
     console.error("Error refreshing RAM:", err);
+    // Ensure timer is still running even on error
+    if (window.startTimer) window.startTimer("ram");
   }
 }
 

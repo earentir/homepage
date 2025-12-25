@@ -87,25 +87,25 @@ let isOffline = false;
 // Initialize WebSocket connection for status detection
 function initWebSocket() {
   console.log('[Network] Initializing WebSocket connection');
-  
+
   // Set up status change handler
   if (window.wsOnStatusChange) {
     window.wsOnStatusChange(function(status, data) {
       console.log('[Network] WebSocket status changed:', status, 'isOffline was:', isOffline);
       const statusTextEl = document.getElementById("statusText");
       const pulseEl = document.querySelector(".pulse");
-      
+
       if (status === 'online') {
         const wasOffline = isOffline;
         isOffline = false;
         console.log('[Network] Setting online status, wasOffline:', wasOffline);
         setOnlineStatus(statusTextEl, pulseEl);
-        
+
         // If we have server data from WebSocket, update it immediately
         if (data && data.server) {
           updateServerInfo(data.server);
         }
-        
+
         // Refresh full data when server comes back online (only if we were offline)
         if (wasOffline) {
           console.log('[Network] Server is back online, refreshing data');
@@ -120,7 +120,7 @@ function initWebSocket() {
       }
     });
   }
-  
+
   // Set up WebSocket data update handler
   if (window.wsOnUpdate) {
     window.wsOnUpdate(function(type, data) {
@@ -136,7 +136,7 @@ function initWebSocket() {
       }
     });
   }
-  
+
   // Set up connect handler to refresh immediately on reconnect
   if (window.wsOnConnect) {
     window.wsOnConnect(function() {
@@ -144,7 +144,7 @@ function initWebSocket() {
       refresh();
     });
   }
-  
+
   // Connect WebSocket
   if (window.wsConnect) {
     window.wsConnect();
@@ -155,16 +155,16 @@ async function refresh() {
   console.log('[Network] refresh() called, isOffline:', isOffline);
   const statusTextEl = document.getElementById("statusText");
   const pulseEl = document.querySelector(".pulse");
-  
+
   // If WebSocket is connected, skip HTTP polling - WebSocket handles real-time updates
   if (window.wsIsConnected && window.wsIsConnected()) {
     console.log('[Network] WebSocket is connected, skipping HTTP refresh');
     return;
   }
-  
+
   // Only use HTTP as fallback when WebSocket is disconnected
   console.log('[Network] WebSocket not connected, using HTTP fallback');
-  
+
   try {
     console.log('[Network] Starting fetch to /api/summary');
     // Use fetchWithTimeout if available, otherwise use regular fetch
@@ -190,7 +190,7 @@ async function refresh() {
         throw err;
       }
     }
-    
+
     // Check if response is successful
     if (!res.ok) {
       // Server returned an error status
@@ -207,7 +207,7 @@ async function refresh() {
     const statusTitle = document.getElementById("statusTitle");
     const serverInfoDiv = document.getElementById("serverInfo");
     const clientInfoDiv = document.getElementById("clientInfo");
-    
+
     // Update offline flag on successful fetch
     isOffline = false;
     setOnlineStatus(statusTextEl, pulseEl);
@@ -285,7 +285,7 @@ function setOnlineStatus(statusTextEl, pulseEl) {
 
 function updateServerInfo(server) {
   if (!server) return;
-  
+
   // Update server time and uptime if available
   if (server.time) {
     const timeEl = document.getElementById("time");
@@ -293,7 +293,7 @@ function updateServerInfo(server) {
       try {
         const serverTime = new Date(server.time);
         timeEl.textContent = serverTime.toLocaleTimeString();
-        
+
         // Update UTC time
         const utcTimeEl = document.getElementById("utcTime");
         if (utcTimeEl) {
@@ -304,7 +304,7 @@ function updateServerInfo(server) {
       }
     }
   }
-  
+
   if (server.uptimeSec !== undefined) {
     const uptimeEl = document.getElementById("uptime");
     if (uptimeEl && window.fmtUptime) {
@@ -315,7 +315,7 @@ function updateServerInfo(server) {
 
 function updateSystemMetrics(system) {
   if (!system) return;
-  
+
   // Update CPU usage
   if (system.cpu && system.cpu.usage !== undefined) {
     const cpuUsageEl = document.getElementById("cpuUsage");
@@ -326,8 +326,12 @@ function updateSystemMetrics(system) {
     if (window.updateCpuGraph) {
       window.updateCpuGraph(system.cpu.usage);
     }
+    // Reset CPU timer when data is updated
+    if (window.startTimer) {
+      window.startTimer("cpu");
+    }
   }
-  
+
   // Update RAM usage
   if (system.ram) {
     const ramPercentEl = document.getElementById("ramPercent");
@@ -337,7 +341,7 @@ function updateSystemMetrics(system) {
     const ramSummaryEl = document.getElementById("ramSummary");
     if (ramSummaryEl && system.ram.total && system.ram.used && system.ram.available) {
       if (window.formatBytes) {
-        ramSummaryEl.textContent = 
+        ramSummaryEl.textContent =
           window.formatBytes(system.ram.total) + ' / ' +
           window.formatBytes(system.ram.used) + ' / ' +
           window.formatBytes(system.ram.available);
@@ -347,8 +351,12 @@ function updateSystemMetrics(system) {
     if (window.updateRamGraph && system.ram.percent !== undefined) {
       window.updateRamGraph(system.ram.percent);
     }
+    // Reset RAM timer when data is updated
+    if (window.startTimer) {
+      window.startTimer("ram");
+    }
   }
-  
+
   // Update disk usage (root filesystem)
   if (system.disk && system.disk.percent !== undefined) {
     // Find the root disk module and update it
@@ -359,9 +367,9 @@ function updateSystemMetrics(system) {
         const used = system.disk.used || 0;
         const total = system.disk.total || 0;
         const free = system.disk.free || 0;
-        usageEl.textContent = 
-          window.formatBytes(used) + ' / ' + 
-          window.formatBytes(total) + ' (' + 
+        usageEl.textContent =
+          window.formatBytes(used) + ' / ' +
+          window.formatBytes(total) + ' (' +
           window.formatBytes(free) + ' free)';
       }
       const percentEl = module.querySelector('.disk-percent');
