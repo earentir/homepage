@@ -2,43 +2,20 @@
 package main
 
 import (
-	"context"
-	"crypto/tls"
 	"embed"
-	"encoding/base64"
-	"encoding/json"
-	"encoding/xml"
-	"errors"
 	"flag"
-	"fmt"
 	"html/template"
-	"io"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
-	"net/url"
-	"os"
-	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/earentir/cpuid"
-	"github.com/earentir/gosmbios"
-	"github.com/earentir/gosmbios/types/type0"
-	"github.com/earentir/gosmbios/types/type1"
-	"github.com/earentir/gosmbios/types/type17"
-	"github.com/earentir/gosmbios/types/type2"
 	"github.com/gorilla/websocket"
-	"github.com/gosnmp/gosnmp"
-	"github.com/miekg/dns"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/host"
-	"github.com/shirou/gopsutil/v3/mem"
+
+	"homepage/api"
 )
 
 //go:embed templates
@@ -49,8 +26,8 @@ var staticFS embed.FS
 
 // ThemeMetadata represents metadata parsed from CSS template files.
 type ThemeMetadata struct {
-	Template string // "nordic", "modern", "minimal"
-	Scheme   string // "default", "blue-dark", "light", etc.
+	Template string
+	Scheme   string
 	Accent   string
 	Display  string
 	Border   bool
@@ -59,8 +36,8 @@ type ThemeMetadata struct {
 // TemplateInfo contains information about a CSS template and its color schemes.
 type TemplateInfo struct {
 	Name    string
-	BaseCSS string                // Base template CSS (without :root)
-	Schemes map[string]SchemeInfo // scheme name -> scheme info
+	BaseCSS string
+	Schemes map[string]SchemeInfo
 }
 
 // SchemeInfo contains information about a color scheme within a template.
@@ -69,334 +46,15 @@ type SchemeInfo struct {
 	Accent  string
 	Display string
 	Border  bool
-	CSS     string // CSS content (variables and overrides)
+	CSS     string
 }
 
 var (
-	templatesMap  map[string]*TemplateInfo // template name -> template info
-	templatesList []string                 // ordered list of template names
+	templatesMap  map[string]*TemplateInfo
+	templatesList []string
 	indexTemplate *template.Template
-	appversion    = "0.2.82" // Application version
+	appversion    = "0.2.82"
 )
-
-// Config holds the application configuration.
-type Config struct {
-	ListenAddr      string
-	Title           string
-	PublicIPTimeout time.Duration
-	Weather         WeatherConfig
-}
-
-// WeatherConfig holds weather service configuration.
-type WeatherConfig struct {
-	Enabled bool
-	// Optional fixed coordinates. If empty, UI can show "set coords" hint.
-	Lat string
-	Lon string
-	// API provider: "openmeteo" (default, no key), "openweathermap", "weatherapi"
-	Provider string
-	// API key for providers that require it
-	APIKey string
-}
-
-// APIRoot represents the root API response structure.
-type APIRoot struct {
-	Server  ServerInfo    `json:"server"`
-	Client  ClientInfo    `json:"client"` // Client information (when accessed remotely)
-	Network NetworkInfo   `json:"network"`
-	Public  PublicIPInfo  `json:"public"`
-	Weather WeatherInfo   `json:"weather"`
-	GitHub  GitHubInfo    `json:"github"`
-	System  SystemMetrics `json:"system"`
-}
-
-// ServerInfo contains server system information.
-type ServerInfo struct {
-	Hostname  string `json:"hostname"`
-	OS        string `json:"os"`
-	Arch      string `json:"arch"`
-	GoVersion string `json:"goVersion"`
-	UptimeSec int64  `json:"uptimeSec"`
-	Time      string `json:"time"`
-	IsLocal   bool   `json:"isLocal"` // true if request is from localhost
-}
-
-// ClientInfo contains client information extracted from the request.
-type ClientInfo struct {
-	IP       string `json:"ip"`       // Client IP from request
-	Hostname string `json:"hostname"` // Resolved hostname (PTR record)
-	IsLocal  bool   `json:"isLocal"`  // true if client is on localhost
-}
-
-// NetworkInfo contains network interface information.
-type NetworkInfo struct {
-	HostIPs []HostIPInfo `json:"hostIps"`
-}
-
-// HostIPInfo contains information about a host IP address.
-type HostIPInfo struct {
-	IP  string `json:"ip"`
-	PTR string `json:"ptr,omitempty"`
-}
-
-// PublicIPInfo contains information about the public IP address.
-type PublicIPInfo struct {
-	IP    string `json:"ip"`
-	PTR   string `json:"ptr,omitempty"`
-	Error string `json:"error,omitempty"`
-}
-
-// WeatherInfo contains weather data and forecast information.
-type WeatherInfo struct {
-	Enabled  bool            `json:"enabled"`
-	Summary  string          `json:"summary,omitempty"`
-	Forecast []string        `json:"forecast,omitempty"`
-	Current  *WeatherCurrent `json:"current,omitempty"`
-	Today    *WeatherDay     `json:"today,omitempty"`
-	Tomorrow *WeatherDay     `json:"tomorrow,omitempty"`
-	Error    string          `json:"error,omitempty"`
-}
-
-// WeatherCurrent contains current weather conditions.
-type WeatherCurrent struct {
-	Temperature         float64 `json:"temperature"`
-	TempUnit            string  `json:"tempUnit"`
-	FeelsLike           float64 `json:"feelsLike,omitempty"`
-	Humidity            float64 `json:"humidity"`
-	WindSpeed           float64 `json:"windSpeed"`
-	WindUnit            string  `json:"windUnit"`
-	WindDirection       int     `json:"windDirection,omitempty"` // Degrees (0-360)
-	Pressure            float64 `json:"pressure,omitempty"`     // hPa/mbar
-	UVIndex             float64 `json:"uvIndex,omitempty"`
-	CloudCover          float64 `json:"cloudCover,omitempty"`    // Percentage
-	Visibility          float64 `json:"visibility,omitempty"`     // km
-	DewPoint           float64 `json:"dewPoint,omitempty"`
-	PrecipitationProb   float64 `json:"precipitationProb,omitempty"` // Percentage
-	WeatherCode         int     `json:"weatherCode"`
-}
-
-// WeatherDay contains weather forecast for a single day.
-type WeatherDay struct {
-	TempMax          float64 `json:"tempMax"`
-	TempMin          float64 `json:"tempMin"`
-	TempUnit         string  `json:"tempUnit"`
-	PrecipitationProb float64 `json:"precipitationProb,omitempty"` // Percentage
-	UVIndexMax       float64 `json:"uvIndexMax,omitempty"`
-	WeatherCode      int     `json:"weatherCode"`
-	Sunrise          string  `json:"sunrise,omitempty"` // HH:MM format
-	Sunset           string  `json:"sunset,omitempty"`  // HH:MM format
-}
-
-// GitHubInfo contains GitHub repository information.
-type GitHubInfo struct {
-	UserRepos GitHubUserRepos `json:"userRepos,omitempty"`
-	OrgRepos  GitHubOrgRepos  `json:"orgRepos,omitempty"`
-}
-
-// SystemMetrics contains system resource usage metrics.
-type SystemMetrics struct {
-	CPU  CPUInfo  `json:"cpu"`
-	RAM  RAMInfo  `json:"ram"`
-	Disk DiskInfo `json:"disk"`
-}
-
-// CPUInfo contains CPU usage information.
-type CPUInfo struct {
-	Usage float64 `json:"usage"`
-	Error string  `json:"error,omitempty"`
-}
-
-// RAMInfo contains RAM/memory usage information.
-type RAMInfo struct {
-	Total     uint64  `json:"total"`
-	Used      uint64  `json:"used"`
-	Available uint64  `json:"available"`
-	Percent   float64 `json:"percent"`
-	Error     string  `json:"error,omitempty"`
-}
-
-// DiskInfo contains disk storage usage information.
-type DiskInfo struct {
-	MountPoint string  `json:"mountPoint,omitempty"`
-	Total      uint64  `json:"total"`
-	Used       uint64  `json:"used"`
-	Free       uint64  `json:"free"`
-	Percent    float64 `json:"percent"`
-	Error      string  `json:"error,omitempty"`
-}
-
-// DiskPartition represents a disk partition/mount point.
-type DiskPartition struct {
-	Device     string `json:"device"`
-	MountPoint string `json:"mountPoint"`
-	FSType     string `json:"fsType"`
-}
-
-// CPUDetailsInfo contains detailed CPU information from CPUID.
-type CPUDetailsInfo struct {
-	Name          string         `json:"name"`
-	Vendor        string         `json:"vendor,omitempty"`
-	PhysicalCores int            `json:"physicalCores"`
-	VirtualCores  int            `json:"virtualCores"`
-	Family        int            `json:"family,omitempty"`
-	Model         int            `json:"model,omitempty"`
-	Stepping      int            `json:"stepping,omitempty"`
-	Cache         []CPUCacheInfo `json:"cache,omitempty"`
-	Features      []string       `json:"features,omitempty"`
-	HybridCPU     bool           `json:"hybridCPU,omitempty"`
-	CoreType      string         `json:"coreType,omitempty"`
-	Error         string         `json:"error,omitempty"`
-}
-
-// CPUCacheInfo contains CPU cache information.
-type CPUCacheInfo struct {
-	Level    int     `json:"level"`
-	Type     string  `json:"type"`
-	SizeKB   int     `json:"sizeKB"`
-	SpeedMHz float64 `json:"speedMHz,omitempty"`
-}
-
-// RAMModuleInfo contains information about a single RAM module.
-type RAMModuleInfo struct {
-	Size          uint64 `json:"size"` // Size in MB
-	DeviceLocator string `json:"deviceLocator,omitempty"`
-	BankLocator   string `json:"bankLocator,omitempty"`
-	Manufacturer  string `json:"manufacturer,omitempty"`
-	PartNumber    string `json:"partNumber,omitempty"`
-	SerialNumber  string `json:"serialNumber,omitempty"`
-	SizeString    string `json:"sizeString"`
-	SpeedString   string `json:"speedString,omitempty"`
-	Type          string `json:"type,omitempty"`
-	FormFactor    string `json:"formFactor,omitempty"`
-	VoltageString string `json:"voltageString,omitempty"`
-	Speed         uint16 `json:"speed,omitempty"` // Speed in MHz
-	Voltage       uint16 `json:"voltage,omitempty"` // Voltage in mV
-}
-
-// SMBIOSRAMInfo contains SMBIOS RAM information.
-type SMBIOSRAMInfo struct {
-	TotalSize       uint64          `json:"totalSize"` // Total size in MB
-	TotalSizeString string          `json:"totalSizeString"`
-	Manufacturer    string          `json:"manufacturer,omitempty"`
-	Modules         []RAMModuleInfo `json:"modules,omitempty"`
-	Error           string          `json:"error,omitempty"`
-}
-
-// SMBIOSFirmwareInfo contains SMBIOS BIOS/Firmware information.
-type SMBIOSFirmwareInfo struct {
-	Vendor      string `json:"vendor,omitempty"`
-	Version     string `json:"version,omitempty"`
-	ReleaseDate string `json:"releaseDate,omitempty"`
-	Error       string `json:"error,omitempty"`
-}
-
-// SMBIOSSystemInfo contains SMBIOS System information.
-type SMBIOSSystemInfo struct {
-	Manufacturer string `json:"manufacturer,omitempty"`
-	ProductName  string `json:"productName,omitempty"`
-	Version      string `json:"version,omitempty"`
-	SerialNumber string `json:"serialNumber,omitempty"`
-	UUID         string `json:"uuid,omitempty"`
-	WakeUpType   string `json:"wakeUpType,omitempty"`
-	SKUNumber    string `json:"skuNumber,omitempty"`
-	Family       string `json:"family,omitempty"`
-	Error        string `json:"error,omitempty"`
-}
-
-// SMBIOSBaseboardInfo contains SMBIOS Baseboard information.
-type SMBIOSBaseboardInfo struct {
-	Manufacturer      string   `json:"manufacturer,omitempty"`
-	Product           string   `json:"product,omitempty"`
-	Version           string   `json:"version,omitempty"`
-	SerialNumber      string   `json:"serialNumber,omitempty"`
-	AssetTag          string   `json:"assetTag,omitempty"`
-	LocationInChassis string   `json:"locationInChassis,omitempty"`
-	BoardType         string   `json:"boardType,omitempty"`
-	FeatureFlags      []string `json:"featureFlags,omitempty"`
-	Error             string   `json:"error,omitempty"`
-}
-
-// GitHubUserRepos contains GitHub user repository information.
-type GitHubUserRepos struct {
-	Repos      []GitHubRepo `json:"repos,omitempty"`
-	Total      int          `json:"total,omitempty"`
-	AccountURL string       `json:"accountUrl,omitempty"`
-	Error      string       `json:"error,omitempty"`
-}
-
-// GitHubOrgRepos contains GitHub organization repository information.
-type GitHubOrgRepos struct {
-	Repos      []GitHubRepo `json:"repos,omitempty"`
-	Total      int          `json:"total,omitempty"`
-	AccountURL string       `json:"accountUrl,omitempty"`
-	Error      string       `json:"error,omitempty"`
-}
-
-// GitHubRepo contains information about a GitHub repository.
-type GitHubRepo struct {
-	Name        string `json:"name"`
-	FullName    string `json:"fullName"`
-	Description string `json:"description"`
-	URL         string `json:"url"`
-	Stars       int    `json:"stars"`
-	Language    string `json:"language"`
-	Updated     string `json:"updated"`
-}
-
-// GitHubCache provides thread-safe caching for GitHub repository data.
-type GitHubCache struct {
-	mu        sync.RWMutex
-	userRepos GitHubUserRepos
-	orgRepos  GitHubOrgRepos
-	lastFetch time.Time
-	hasData   bool
-}
-
-var githubCache = &GitHubCache{}
-
-// PTR cache to avoid frequent DNS lookups
-type PTRCacheEntry struct {
-	PTR       string
-	Timestamp time.Time
-}
-
-type PTRCache struct {
-	mu      sync.RWMutex
-	entries map[string]PTRCacheEntry
-}
-
-var ptrCache = &PTRCache{
-	entries: make(map[string]PTRCacheEntry),
-}
-
-const ptrCacheTTL = 1 * time.Hour
-
-// getCachedPTR returns cached PTR or performs lookup if cache is stale
-func getCachedPTR(ip string, dnsServer string) string {
-	cacheKey := ip + "@" + dnsServer
-
-	// Check cache first
-	ptrCache.mu.RLock()
-	entry, exists := ptrCache.entries[cacheKey]
-	ptrCache.mu.RUnlock()
-
-	if exists && time.Since(entry.Timestamp) < ptrCacheTTL {
-		return entry.PTR
-	}
-
-	// Cache miss or stale - perform lookup
-	ptr := reverseDNSUncached(ip, dnsServer)
-
-	// Store in cache
-	ptrCache.mu.Lock()
-	ptrCache.entries[cacheKey] = PTRCacheEntry{
-		PTR:       ptr,
-		Timestamp: time.Now(),
-	}
-	ptrCache.mu.Unlock()
-
-	return ptr
-}
 
 // findBlockEnd finds the end of a CSS block (the matching closing brace)
 func findBlockEnd(content string, startPos int) int {
@@ -404,14 +62,12 @@ func findBlockEnd(content string, startPos int) int {
 		return len(content)
 	}
 
-	// Find the opening brace
 	openBrace := strings.Index(content[startPos:], "{")
 	if openBrace == -1 {
 		return len(content)
 	}
 	openBrace += startPos
 
-	// Find the matching closing brace
 	depth := 1
 	pos := openBrace + 1
 	for pos < len(content) && depth > 0 {
@@ -431,13 +87,11 @@ func parseThemeMetadata(cssContent string) ThemeMetadata {
 	meta := ThemeMetadata{
 		Template: "",
 		Scheme:   "",
-		Accent:   "rgba(136,192,208,.85)", // default
+		Accent:   "rgba(136,192,208,.85)",
 		Display:  "",
 		Border:   false,
 	}
 
-	// Look for metadata block in CSS comments
-	// Format: /*\nTheme: ...\nTemplate: ...\nScheme: ...\nAccent: ...\nDisplay: ...\nBorder: ...\n*/
 	startIdx := strings.Index(cssContent, "/*")
 	if startIdx == -1 {
 		return meta
@@ -470,19 +124,13 @@ func parseThemeMetadata(cssContent string) ThemeMetadata {
 	return meta
 }
 
-// parseSchemesFromTemplate parses all schemes from a single template file
-// Format: Each scheme has a metadata block followed by [data-scheme="name"] :root { ... } and optionally body { ... }
 func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 	var schemes []SchemeInfo
 	content := cssContent
-
-	// Find all scheme blocks (metadata + CSS)
-	// Look for pattern: /* ... Template: ... Scheme: ... */ followed by [data-scheme="..."]
 	pos := 0
 	lastSchemeEnd := 0
 
 	for pos < len(content) {
-		// Find next metadata block
 		metaStart := strings.Index(content[pos:], "/*")
 		if metaStart == -1 {
 			break
@@ -495,24 +143,18 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 		}
 		metaEnd += metaStart
 
-		// Parse metadata
 		metadataBlock := content[metaStart : metaEnd+2]
 		meta := parseThemeMetadata(metadataBlock)
 
-		// Check if this is a scheme metadata (has Template and Scheme)
 		if meta.Template == "" || meta.Scheme == "" {
-			// Not a scheme block, continue
 			pos = metaEnd + 2
 			continue
 		}
 
-		// Find the scheme CSS block after metadata
-		// Look for [data-scheme="schemeName"] first, then fall back to :root
 		schemeSelector := `[data-scheme="` + meta.Scheme + `"]`
 		schemeStart := strings.Index(content[metaEnd:], schemeSelector)
 		isWrappedFormat := true
 		if schemeStart == -1 {
-			// Fallback: look for :root directly (for files like nordic.css that don't use data-scheme)
 			rootStart := strings.Index(content[metaEnd:], ":root")
 			if rootStart == -1 {
 				pos = metaEnd + 2
@@ -524,14 +166,10 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 			schemeStart += metaEnd
 		}
 
-		// Find where this scheme block ends
 		var schemeEnd int
 		if isWrappedFormat {
-			// For wrapped format ([data-scheme="..."]), find the end of the scheme block
-			// Look for next "/*" that starts a new scheme metadata, or "/* Base CSS" comment
 			nextMetaStart := strings.Index(content[schemeStart:], "/*")
 			if nextMetaStart == -1 {
-				// Last scheme, find where base CSS starts
 				baseCSSMarker := strings.Index(content[schemeStart:], "/* Base CSS")
 				if baseCSSMarker != -1 {
 					schemeEnd = schemeStart + baseCSSMarker
@@ -539,17 +177,14 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 					schemeEnd = len(content)
 				}
 			} else {
-				// Check if next /* is a scheme metadata or base CSS marker
 				nextMetaPos := schemeStart + nextMetaStart
 				nextMetaEnd := strings.Index(content[nextMetaPos:], "*/")
 				if nextMetaEnd != -1 {
 					nextMetaBlock := content[nextMetaPos : nextMetaPos+nextMetaEnd+2]
 					nextMeta := parseThemeMetadata(nextMetaBlock)
-					// If next metadata has Template and Scheme, it's another scheme
 					if nextMeta.Template != "" && nextMeta.Scheme != "" {
 						schemeEnd = nextMetaPos
 					} else {
-						// It's base CSS marker
 						schemeEnd = nextMetaPos
 					}
 				} else {
@@ -557,14 +192,11 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 				}
 			}
 		} else {
-			// For unwrapped format (:root), only extract :root{...} and optionally body{...}
-			// Find the end of :root block
 			rootBlockEnd := findBlockEnd(content, schemeStart)
 			schemeEnd = rootBlockEnd
 
-			// Check if there's a body block immediately after :root
 			bodyStart := strings.Index(content[schemeEnd:], "body{")
-			if bodyStart != -1 && bodyStart < 50 { // body should be close to :root
+			if bodyStart != -1 && bodyStart < 50 {
 				bodyBlockEnd := findBlockEnd(content, schemeEnd+bodyStart)
 				schemeEnd = bodyBlockEnd
 			}
@@ -573,15 +205,11 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 		schemeCSS := strings.TrimSpace(content[schemeStart:schemeEnd])
 		lastSchemeEnd = schemeEnd
 
-		// If the CSS doesn't start with [data-scheme="..."], wrap it
-		// This handles files like nordic.css that use :root directly
 		if !strings.HasPrefix(schemeCSS, `[data-scheme="`) {
-			// Wrap :root and body selectors with [data-scheme="..."]
 			wrappedCSS := `[data-scheme="` + meta.Scheme + `"] ` + schemeCSS
 			schemeCSS = wrappedCSS
 		}
 
-		// Check if we've already added this scheme (avoid duplicates)
 		alreadyExists := false
 		for _, existingScheme := range schemes {
 			if existingScheme.Name == meta.Scheme {
@@ -591,7 +219,6 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 		}
 
 		if !alreadyExists {
-			// Store scheme
 			schemes = append(schemes, SchemeInfo{
 				Name:    meta.Scheme,
 				Accent:  meta.Accent,
@@ -604,22 +231,17 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 		pos = schemeEnd
 	}
 
-	// Base CSS is everything after the last scheme block
-	// Find "/* Base CSS" comment or use everything after last scheme
 	baseCSSStart := strings.Index(content, "/* Base CSS")
 	if baseCSSStart != -1 {
 		baseCSSEnd := strings.Index(content[baseCSSStart:], "*/")
 		if baseCSSEnd != -1 {
 			baseCSSStart = baseCSSStart + baseCSSEnd + 2
-			// Skip whitespace
 			for baseCSSStart < len(content) && (content[baseCSSStart] == ' ' || content[baseCSSStart] == '\n' || content[baseCSSStart] == '\r' || content[baseCSSStart] == '\t') {
 				baseCSSStart++
 			}
 		}
 	} else {
-		// No base CSS marker, use everything after last scheme
 		baseCSSStart = lastSchemeEnd
-		// Skip whitespace
 		for baseCSSStart < len(content) && (content[baseCSSStart] == ' ' || content[baseCSSStart] == '\n' || content[baseCSSStart] == '\r' || content[baseCSSStart] == '\t') {
 			baseCSSStart++
 		}
@@ -631,89 +253,118 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 }
 
 func init() {
-	// Initialize templates map
 	templatesMap = make(map[string]*TemplateInfo)
 	templatesList = []string{}
 
-	// Read index.html template
 	indexHTML, err := templatesFS.ReadFile("templates/index.html")
 	if err != nil {
 		log.Fatalf("Failed to read index.html: %v", err)
 	}
 	indexTemplate = template.Must(template.New("index").Parse(string(indexHTML)))
 
-	// Dynamically discover and load all CSS templates from the templates directory
 	entries, err := fs.ReadDir(templatesFS, "templates")
 	if err != nil {
 		log.Fatalf("Failed to read templates directory: %v", err)
 	}
 
 	for _, entry := range entries {
-		// Skip directories and non-CSS files
-		if entry.IsDir() {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".css") {
 			continue
 		}
 
-		filename := entry.Name()
-		// Skip index.html and any non-CSS files
-		if filename == "index.html" || !strings.HasSuffix(filename, ".css") {
-			continue
-		}
-
-		// Extract template name from filename (e.g., "nordic.css" -> "nordic")
-		templateName := strings.TrimSuffix(filename, ".css")
-		if templateName == "" {
-			continue
-		}
-
-		// embed.FS ALWAYS uses forward slashes, even when built on Windows
-		path := "templates/" + filename
-		cssContent, err := templatesFS.ReadFile(path)
+		cssContent, err := templatesFS.ReadFile("templates/" + entry.Name())
 		if err != nil {
-			log.Printf("Warning: Failed to read template %s: %v", path, err)
+			log.Printf("Warning: failed to read template %s: %v", entry.Name(), err)
 			continue
 		}
 
-		cssStr := string(cssContent)
+		schemes, baseCSS := parseSchemesFromTemplate(string(cssContent))
+		if len(schemes) == 0 {
+			continue
+		}
 
-		// Parse all schemes from the template file
-		schemes, baseCSS := parseSchemesFromTemplate(cssStr)
+		// Get template name from metadata - search for a metadata block with Template:
+		templateName := ""
+		content := string(cssContent)
+		pos := 0
+		for pos < len(content) {
+			metaStart := strings.Index(content[pos:], "/*")
+			if metaStart == -1 {
+				break
+			}
+			metaStart += pos
+			metaEnd := strings.Index(content[metaStart:], "*/")
+			if metaEnd == -1 {
+				break
+			}
+			metaEnd += metaStart
+			metadataBlock := content[metaStart+2 : metaEnd]
+			if strings.Contains(metadataBlock, "Template:") {
+				meta := parseThemeMetadata(content[metaStart : metaEnd+2])
+				if meta.Template != "" {
+					templateName = meta.Template
+					break
+				}
+			}
+			pos = metaEnd + 2
+		}
+		if templateName == "" {
+			templateName = strings.TrimSuffix(entry.Name(), ".css")
+		}
 
-		// Initialize template info
-		templatesMap[templateName] = &TemplateInfo{
+		templateInfo := &TemplateInfo{
 			Name:    templateName,
 			BaseCSS: baseCSS,
 			Schemes: make(map[string]SchemeInfo),
 		}
 
-		// Add all schemes
 		for _, scheme := range schemes {
-			templatesMap[templateName].Schemes[scheme.Name] = scheme
-			log.Printf("Loaded scheme: %s/%s (Accent: %s)", templateName, scheme.Name, scheme.Accent)
+			templateInfo.Schemes[scheme.Name] = scheme
 		}
 
+		templatesMap[templateName] = templateInfo
 		templatesList = append(templatesList, templateName)
-		log.Printf("Loaded template: %s with %d schemes", templateName, len(schemes))
 	}
 
-	// Sort templates (nordic first, then alphabetical)
 	templatesList = sortTemplates(templatesList)
+
+	log.Printf("Loaded %d theme templates:", len(templatesMap))
+	for name, info := range templatesMap {
+		schemeNames := make([]string, 0, len(info.Schemes))
+		for schemeName := range info.Schemes {
+			schemeNames = append(schemeNames, schemeName)
+		}
+		log.Printf("  - %s: %d schemes (%s)", name, len(info.Schemes), strings.Join(schemeNames, ", "))
+	}
 }
 
 func sortTemplates(templates []string) []string {
-	// Put nordic first, then sort the rest alphabetically
+	preferredOrder := []string{"nordic", "modern", "minimal", "matrix", "ocean", "forest", "bladerunner", "alien", "youtube"}
 	var sorted []string
 	var others []string
 
-	for _, template := range templates {
-		if template == "nordic" {
-			sorted = append(sorted, template)
-		} else {
-			others = append(others, template)
+	for _, preferred := range preferredOrder {
+		for _, t := range templates {
+			if t == preferred {
+				sorted = append(sorted, t)
+				break
+			}
 		}
 	}
 
-	// Simple alphabetical sort for others
+	for _, t := range templates {
+		found := false
+		for _, preferred := range preferredOrder {
+			if t == preferred {
+				found = true
+				break
+			}
+		}
+		if !found {
+			others = append(others, t)
+		}
+	}
+
 	for i := 0; i < len(others); i++ {
 		for j := i + 1; j < len(others); j++ {
 			if others[i] > others[j] {
@@ -730,11 +381,11 @@ func main() {
 	flag.Parse()
 
 	listenAddr := ":" + *port
-	cfg := Config{
+	cfg := api.Config{
 		ListenAddr:      listenAddr,
 		Title:           "LAN Index",
 		PublicIPTimeout: 1500 * time.Millisecond,
-		Weather: WeatherConfig{
+		Weather: api.WeatherConfig{
 			Enabled:  true,
 			Lat:      "",
 			Lon:      "",
@@ -744,14 +395,14 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+
+	// Index page handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
 
-		// Theme CSS is loaded dynamically by client from /api/theme based on localStorage
-		// Server provides an empty placeholder and the list of templates/schemes for the UI
 		defaultTemplate := "nordic"
 		defaultScheme := "default"
 		if len(templatesList) > 0 {
@@ -767,14 +418,11 @@ func main() {
 		templateName := defaultTemplate
 		schemeName := defaultScheme
 
-		// Placeholder CSS - actual theme is fetched by client
 		themeCSS := "/* Theme CSS loaded dynamically from /api/theme */"
 
-		// Build template and scheme menu HTML
 		var templateMenuHTML strings.Builder
 		var schemeMenuHTML strings.Builder
 
-		// Template menu
 		for _, tmplName := range templatesList {
 			if _, exists := templatesMap[tmplName]; exists {
 				displayName := strings.ToUpper(tmplName[:1]) + tmplName[1:]
@@ -790,14 +438,11 @@ func main() {
 			}
 		}
 
-		// Scheme menu (for current template)
 		if templateInfo, exists := templatesMap[templateName]; exists {
-			// Sort schemes (default first, then alphabetical)
 			schemeNames := make([]string, 0, len(templateInfo.Schemes))
 			for name := range templateInfo.Schemes {
 				schemeNames = append(schemeNames, name)
 			}
-			// Sort: default first, then alphabetical
 			for i := 0; i < len(schemeNames); i++ {
 				for j := i + 1; j < len(schemeNames); j++ {
 					if schemeNames[i] == "default" {
@@ -813,7 +458,6 @@ func main() {
 				scheme := templateInfo.Schemes[schName]
 				displayName := scheme.Display
 				if displayName == "" {
-					// Format scheme name
 					parts := strings.Split(schName, "-")
 					for i, part := range parts {
 						if len(part) > 0 {
@@ -850,13 +494,11 @@ func main() {
 		})
 	})
 
-	// Theme CSS API - returns CSS for a given template+scheme
+	// Theme CSS API
 	mux.HandleFunc("/api/theme", func(w http.ResponseWriter, r *http.Request) {
 		templateName := "nordic"
 		schemeName := "default"
 
-		// Note: template/scheme come from client localStorage, passed via query params
-		// This is fine for API calls - we just don't want them in the main page URL
 		if qTemplate := r.URL.Query().Get("template"); qTemplate != "" {
 			if _, exists := templatesMap[qTemplate]; exists {
 				templateName = qTemplate
@@ -884,590 +526,11 @@ func main() {
 		_, _ = w.Write([]byte(themeCSS))
 	})
 
-	mux.HandleFunc("/api/summary", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		isLocal := isLocalRequest(r)
-
-		// Get client information from request
-		clientIP := getClientIP(r)
-		clientInfo := ClientInfo{
-			IP:      clientIP,
-			IsLocal: isLocal,
-		}
-
-		// Try to resolve client hostname from IP (only if not localhost)
-		if !isLocal && clientIP != "" {
-			// Use Cloudflare DNS for reverse lookup
-			clientInfo.Hostname = reverseDNS(clientIP, "1.1.1.1")
-		}
-
-		resp := APIRoot{
-			Server: ServerInfo{
-				Hostname:  mustHostname(),
-				OS:        runtime.GOOS,
-				Arch:      runtime.GOARCH,
-				GoVersion: runtime.Version(),
-				UptimeSec: getSystemUptime(),
-				Time:      time.Now().Format(time.RFC3339),
-				IsLocal:   isLocal,
-			},
-			Client: clientInfo,
-			Network: NetworkInfo{
-				// Show server LAN IPs if local, client IP if remote
-				HostIPs: func() []HostIPInfo {
-					if isLocal {
-						return hostIPs()
-					}
-					// For remote clients, show their IP
-					if clientIP != "" {
-						ipInfo := HostIPInfo{IP: clientIP}
-						if clientInfo.Hostname != "" {
-							ipInfo.PTR = clientInfo.Hostname
-						}
-						return []HostIPInfo{ipInfo}
-					}
-					return []HostIPInfo{}
-				}(),
-			},
-			Public: PublicIPInfo{},
-			Weather: WeatherInfo{
-				Enabled: cfg.Weather.Enabled,
-			},
-		}
-
-		// Public IP (best effort, short timeout)
-		{
-			ip, err := publicIP(ctx, cfg.PublicIPTimeout)
-			if err != nil {
-				resp.Public.Error = err.Error()
-			} else {
-				resp.Public.IP = ip
-				// Get PTR record for public IP using Cloudflare DNS
-				resp.Public.PTR = reverseDNS(ip, "1.1.1.1")
-			}
-		}
-
-		// Weather (best effort; uses Open-Meteo, no key needed)
-		if cfg.Weather.Enabled && cfg.Weather.Lat != "" && cfg.Weather.Lon != "" {
-			wd, err := openMeteoSummary(ctx, cfg.Weather.Lat, cfg.Weather.Lon)
-			if err != nil {
-				resp.Weather.Error = err.Error()
-			} else {
-				resp.Weather.Summary = wd.Summary
-				resp.Weather.Forecast = wd.Forecast
-			}
-		} else if cfg.Weather.Enabled {
-			resp.Weather.Summary = "Set your location in Preferences to enable weather."
-		}
-
-		// GitHub repos - don't fetch here, let frontend modules handle it via /api/github/repos
-		// This avoids hitting rate limits on every page load
-
-		// System metrics
-		{
-			resp.System = getSystemMetrics(ctx)
-		}
-
-		writeJSON(w, resp)
-	})
-
-	mux.HandleFunc("/api/system", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		resp := getSystemMetrics(ctx)
-		writeJSON(w, resp)
-	})
-
-	// List all available disk partitions
-	mux.HandleFunc("/api/disks", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		partitions, err := disk.PartitionsWithContext(ctx, false)
-		if err != nil {
-			writeJSON(w, map[string]any{"error": err.Error(), "partitions": []any{}})
-			return
-		}
-
-		var result []DiskPartition
-		for _, p := range partitions {
-			// Filter out system partitions and only include real mount points
-			if p.Mountpoint != "" && p.Mountpoint != "/proc" && p.Mountpoint != "/sys" && p.Mountpoint != "/dev" {
-				result = append(result, DiskPartition{
-					Device:     p.Device,
-					MountPoint: p.Mountpoint,
-					FSType:     p.Fstype,
-				})
-			}
-		}
-		writeJSON(w, map[string]any{"partitions": result})
-	})
-
-	// Get disk usage for a specific mount point
-	mux.HandleFunc("/api/disk", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		mountPoint := r.URL.Query().Get("mount")
-		if mountPoint == "" {
-			mountPoint = "/" // Default to root
-		}
-
-		usage, err := disk.UsageWithContext(ctx, mountPoint)
-		if err != nil {
-			writeJSON(w, DiskInfo{
-				MountPoint: mountPoint,
-				Error:      err.Error(),
-			})
-			return
-		}
-
-		writeJSON(w, DiskInfo{
-			MountPoint: mountPoint,
-			Total:      usage.Total,
-			Used:       usage.Used,
-			Free:       usage.Free,
-			Percent:    usage.UsedPercent,
-		})
-	})
-
-	mux.HandleFunc("/api/cpuid", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		resp := getCPUDetails(ctx)
-		writeJSON(w, resp)
-	})
-
-	mux.HandleFunc("/api/raminfo", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		resp := getSMBIOSRAMInfo(ctx)
-		writeJSON(w, resp)
-	})
-
-	mux.HandleFunc("/api/firmware", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		resp := getSMBIOSFirmwareInfo(ctx)
-		writeJSON(w, resp)
-	})
-
-	mux.HandleFunc("/api/systeminfo", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		resp := getSMBIOSSystemInfo(ctx)
-		writeJSON(w, resp)
-	})
-
-	mux.HandleFunc("/api/baseboard", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		resp := getSMBIOSBaseboardInfo(ctx)
-		writeJSON(w, resp)
-	})
-
-	mux.HandleFunc("/api/weather", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		resp := WeatherInfo{
-			Enabled: true, // Always enabled, user can set location
-		}
-
-		// Check for lat/lon query parameters (from user preferences)
-		lat := r.URL.Query().Get("lat")
-		lon := r.URL.Query().Get("lon")
-
-		// Fall back to config if not provided
-		if lat == "" || lon == "" {
-			lat = cfg.Weather.Lat
-			lon = cfg.Weather.Lon
-		}
-
-		if lat != "" && lon != "" {
-			var wd WeatherData
-			var err error
-
-			// Use configured provider or fallback to openmeteo
-			provider := cfg.Weather.Provider
-			if provider == "" {
-				provider = "openmeteo"
-			}
-
-			switch provider {
-			case "openweathermap":
-				wd, err = openWeatherMapSummary(ctx, lat, lon, cfg.Weather.APIKey)
-			case "weatherapi":
-				wd, err = weatherAPISummary(ctx, lat, lon, cfg.Weather.APIKey)
-			default: // openmeteo (default, no key required)
-				wd, err = openMeteoSummary(ctx, lat, lon)
-			}
-
-			if err != nil {
-				resp.Error = err.Error()
-			} else {
-				resp.Summary = wd.Summary
-				resp.Forecast = wd.Forecast
-				resp.Current = wd.Current
-				resp.Today = wd.Today
-				resp.Tomorrow = wd.Tomorrow
-			}
-		} else {
-			resp.Summary = "Set your location in Preferences to enable weather."
-		}
-		writeJSON(w, resp)
-	})
-
-	// Geocoding endpoint to convert city name to coordinates
-	mux.HandleFunc("/api/geocode", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		query := r.URL.Query().Get("q")
-		if query == "" {
-			writeJSON(w, map[string]string{"error": "Missing query parameter 'q'"})
-			return
-		}
-
-		results, err := geocodeCity(ctx, query)
-		if err != nil {
-			writeJSON(w, map[string]string{"error": err.Error()})
-			return
-		}
-		writeJSON(w, results)
-	})
-
-	mux.HandleFunc("/api/github", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		var resp GitHubInfo
-		userRepos, orgRepos, err := fetchGitHubRepos(ctx)
-		resp.UserRepos = userRepos
-		resp.OrgRepos = orgRepos
-		if err != nil {
-			log.Printf("GitHub fetch error: %v", err)
-			if userRepos.Error == "" {
-				resp.UserRepos.Error = err.Error()
-			}
-			if orgRepos.Error == "" {
-				resp.OrgRepos.Error = err.Error()
-			}
-		}
-		writeJSON(w, resp)
-	})
-
-	// Fetch repos for a specific user or org
-	mux.HandleFunc("/api/github/repos", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		name := r.URL.Query().Get("name")
-		repoType := r.URL.Query().Get("type") // "user" or "org"
-		token := r.URL.Query().Get("token")   // optional GitHub API token
-
-		if name == "" {
-			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
-			return
-		}
-		if repoType == "" {
-			repoType = "user" // default to user
-		}
-
-		repos, err := fetchGitHubReposForName(ctx, name, repoType, token)
-		if err != nil {
-			writeJSON(w, map[string]any{"error": err.Error(), "repos": []any{}, "total": 0})
-			return
-		}
-		writeJSON(w, repos)
-	})
-
-	// Fetch pull requests for a user/org/repo
-	mux.HandleFunc("/api/github/prs", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		name := r.URL.Query().Get("name")
-		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
-		token := r.URL.Query().Get("token")      // optional GitHub API token
-
-		if name == "" {
-			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
-			return
-		}
-
-		prs, err := fetchGitHubPRs(ctx, name, accountType, token)
-		if err != nil {
-			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
-			return
-		}
-		writeJSON(w, prs)
-	})
-
-	// Fetch commits for a user/org/repo
-	mux.HandleFunc("/api/github/commits", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		name := r.URL.Query().Get("name")
-		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
-		token := r.URL.Query().Get("token")      // optional GitHub API token
-
-		if name == "" {
-			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
-			return
-		}
-
-		commits, err := fetchGitHubCommits(ctx, name, accountType, token)
-		if err != nil {
-			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
-			return
-		}
-		writeJSON(w, commits)
-	})
-
-	// Fetch issues for a user/org/repo
-	mux.HandleFunc("/api/github/issues", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		name := r.URL.Query().Get("name")
-		accountType := r.URL.Query().Get("type") // "user", "org", or "repo"
-		token := r.URL.Query().Get("token")      // optional GitHub API token
-
-		if name == "" {
-			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
-			return
-		}
-
-		issues, err := fetchGitHubIssues(ctx, name, accountType, token)
-		if err != nil {
-			writeJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
-			return
-		}
-		writeJSON(w, issues)
-	})
-
-	// Fetch stats for a repo
-	mux.HandleFunc("/api/github/stats", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		name := r.URL.Query().Get("name")
-		token := r.URL.Query().Get("token") // optional GitHub API token
-
-		if name == "" {
-			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
-			return
-		}
-
-		stats, err := fetchGitHubStats(ctx, name, token)
-		if err != nil {
-			writeJSON(w, map[string]any{"error": err.Error()})
-			return
-		}
-		writeJSON(w, stats)
-	})
-
-	mux.HandleFunc("/api/ip", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		isLocal := isLocalRequest(r)
-		clientIP := getClientIP(r)
-
-		// Determine which IPs to show
-		var networkIPs []HostIPInfo
-		if isLocal {
-			// Show server's LAN IPs
-			networkIPs = hostIPs()
-		} else if clientIP != "" {
-			// Show client's IP
-			hostname := reverseDNS(clientIP, "1.1.1.1")
-			ipInfo := HostIPInfo{IP: clientIP}
-			if hostname != "" {
-				ipInfo.PTR = hostname
-			}
-			networkIPs = []HostIPInfo{ipInfo}
-		}
-
-		resp := struct {
-			Network NetworkInfo  `json:"network"`
-			Public  PublicIPInfo `json:"public"`
-		}{
-			Network: NetworkInfo{
-				HostIPs: networkIPs,
-			},
-			Public: PublicIPInfo{},
-		}
-		ip, err := publicIP(ctx, cfg.PublicIPTimeout)
-		if err != nil {
-			resp.Public.Error = err.Error()
-		} else {
-			resp.Public.IP = ip
-			resp.Public.PTR = reverseDNS(ip, "1.1.1.1")
-		}
-		writeJSON(w, resp)
-	})
-
-	// Favicon fetcher - fetches favicon from a URL and returns as base64
-	mux.HandleFunc("/api/favicon", func(w http.ResponseWriter, r *http.Request) {
-		targetURL := r.URL.Query().Get("url")
-		log.Printf("[favicon] Request for URL: %s", targetURL)
-
-		if targetURL == "" {
-			log.Printf("[favicon] Error: Missing 'url' parameter")
-			writeJSON(w, map[string]string{"error": "Missing 'url' parameter"})
-			return
-		}
-
-		// Parse the URL to get the origin
-		parsed, err := url.Parse(targetURL)
-		if err != nil {
-			log.Printf("[favicon] Error parsing URL: %v", err)
-			writeJSON(w, map[string]string{"error": "Invalid URL"})
-			return
-		}
-		origin := parsed.Scheme + "://" + parsed.Host
-		log.Printf("[favicon] Origin: %s", origin)
-
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-
-		// Try to fetch favicon from common locations
-		faviconData, contentType, err := fetchFavicon(ctx, origin)
-		if err != nil {
-			log.Printf("[favicon] Error fetching favicon: %v", err)
-			writeJSON(w, map[string]string{"error": err.Error()})
-			return
-		}
-
-		log.Printf("[favicon] Success! Got %d bytes, type: %s", len(faviconData), contentType)
-
-		// Return as base64 data URL
-		base64Data := base64.StdEncoding.EncodeToString(faviconData)
-		dataURL := "data:" + contentType + ";base64," + base64Data
-
-		writeJSON(w, map[string]string{"favicon": dataURL})
-	})
-
-	// Service monitoring endpoint
-	mux.HandleFunc("/api/monitor", func(w http.ResponseWriter, r *http.Request) {
-		monType := r.URL.Query().Get("type")
-
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
-
-		var result struct {
-			Success   bool   `json:"success"`
-			Latency   int64  `json:"latency,omitempty"`
-			Error     string `json:"error,omitempty"`
-			SSLExpiry string `json:"sslExpiry,omitempty"`
-			SSLError  string `json:"sslError,omitempty"`
-		}
-
-		switch monType {
-		case "http":
-			targetURL := r.URL.Query().Get("url")
-			if targetURL == "" {
-				result.Error = "Missing 'url' parameter"
-				writeJSON(w, result)
-				return
-			}
-			httpResult, err := checkHTTP(ctx, targetURL)
-			if err != nil {
-				result.Error = err.Error()
-				if httpResult != nil {
-					result.Latency = httpResult.Latency
-				}
-			} else {
-				result.Success = true
-				result.Latency = httpResult.Latency
-				if httpResult.SSLExpiry != nil {
-					result.SSLExpiry = httpResult.SSLExpiry.Format(time.RFC3339)
-				}
-				if httpResult.SSLError != "" {
-					result.SSLError = httpResult.SSLError
-				}
-			}
-
-		case "port":
-			host := r.URL.Query().Get("host")
-			port := r.URL.Query().Get("port")
-			if host == "" || port == "" {
-				result.Error = "Missing 'host' or 'port' parameter"
-				writeJSON(w, result)
-				return
-			}
-			latency, err := checkPort(ctx, host, port)
-			if err != nil {
-				result.Error = err.Error()
-			} else {
-				result.Success = true
-				result.Latency = latency
-			}
-
-		case "ping":
-			host := r.URL.Query().Get("host")
-			if host == "" {
-				result.Error = "Missing 'host' parameter"
-				writeJSON(w, result)
-				return
-			}
-			latency, err := checkPing(ctx, host)
-			if err != nil {
-				result.Error = err.Error()
-			} else {
-				result.Success = true
-				result.Latency = latency
-			}
-
-		default:
-			result.Error = "Invalid monitor type"
-		}
-
-		writeJSON(w, result)
-	})
-
-	// SNMP query endpoint
-	mux.HandleFunc("/api/snmp", func(w http.ResponseWriter, r *http.Request) {
-		host := r.URL.Query().Get("host")
-		port := r.URL.Query().Get("port")
-		community := r.URL.Query().Get("community")
-		oid := r.URL.Query().Get("oid")
-
-		if host == "" || port == "" || community == "" || oid == "" {
-			writeJSON(w, map[string]any{
-				"success": false,
-				"error":   "Missing required parameters: host, port, community, oid",
-			})
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
-
-		result, err := querySNMP(ctx, host, port, community, oid)
-		if err != nil {
-			writeJSON(w, map[string]any{
-				"success": false,
-				"error":   err.Error(),
-			})
-			return
-		}
-
-		writeJSON(w, map[string]any{
-			"success": true,
-			"value":   result,
-		})
-	})
-
-	mux.HandleFunc("/api/rss", func(w http.ResponseWriter, r *http.Request) {
-		feedURL := r.URL.Query().Get("url")
-		if feedURL == "" {
-			writeJSON(w, map[string]any{
-				"error": "Missing required parameter: url",
-			})
-			return
-		}
-
-		// Parse count parameter (default 5, max 20)
-		count := 5
-		if countStr := r.URL.Query().Get("count"); countStr != "" {
-			if c, err := strconv.Atoi(countStr); err == nil && c > 0 && c <= 20 {
-				count = c
-			}
-		}
-
-		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-		defer cancel()
-
-		items, err := fetchRSSFeed(ctx, feedURL, count)
-		if err != nil {
-			writeJSON(w, map[string]any{
-				"error": err.Error(),
-			})
-			return
-		}
-
-		writeJSON(w, map[string]any{
-			"items": items,
-		})
-	})
-
-	// Serve service worker from root
+	// Register API handlers
+	apiHandler := api.NewHandler(cfg)
+	apiHandler.RegisterHandlers(mux)
+
+	// Service worker
 	mux.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {
 		swContent, err := fs.ReadFile(staticFS, "static/sw.js")
 		if err != nil {
@@ -1479,156 +542,20 @@ func main() {
 		w.Write(swContent)
 	})
 
-	// Serve static files (JS, CSS, etc.)
+	// Static files
 	staticContent, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		log.Fatalf("Failed to create static file sub-filesystem: %v", err)
 	}
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
 
-	// Config management endpoints
-	mux.HandleFunc("/api/config/upload", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		name := r.URL.Query().Get("name")
-		if name == "" {
-			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
-			return
-		}
-
-		// Validate name (alphanumeric, dash, underscore only)
-		if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(name) {
-			writeJSON(w, map[string]string{"error": "Invalid config name (only alphanumeric, dash, underscore allowed)"})
-			return
-		}
-
-		var configData map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&configData); err != nil {
-			writeJSON(w, map[string]string{"error": "Invalid JSON: " + err.Error()})
-			return
-		}
-
-		// Save to configs directory
-		configsDir := "configs"
-		if err := os.MkdirAll(configsDir, 0755); err != nil {
-			log.Printf("Failed to create configs directory: %v", err)
-			writeJSON(w, map[string]string{"error": "Failed to save config"})
-			return
-		}
-
-		configPath := configsDir + "/" + name + ".json"
-		configJSON, err := json.MarshalIndent(configData, "", "  ")
-		if err != nil {
-			writeJSON(w, map[string]string{"error": "Failed to encode config: " + err.Error()})
-			return
-		}
-
-		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			log.Printf("Failed to write config file: %v", err)
-			writeJSON(w, map[string]string{"error": "Failed to save config"})
-			return
-		}
-
-		writeJSON(w, map[string]string{"success": "Config uploaded successfully"})
-	})
-
-	mux.HandleFunc("/api/config/list", func(w http.ResponseWriter, r *http.Request) {
-		configsDir := "configs"
-		files, err := os.ReadDir(configsDir)
-		if err != nil {
-			// Directory doesn't exist, return empty list
-			writeJSON(w, map[string]any{"configs": []string{}})
-			return
-		}
-
-		var configs []string
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-				name := strings.TrimSuffix(file.Name(), ".json")
-				configs = append(configs, name)
-			}
-		}
-
-		writeJSON(w, map[string]any{"configs": configs})
-	})
-
-	mux.HandleFunc("/api/config/download", func(w http.ResponseWriter, r *http.Request) {
-		name := r.URL.Query().Get("name")
-		if name == "" {
-			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
-			return
-		}
-
-		// Validate name
-		if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(name) {
-			writeJSON(w, map[string]string{"error": "Invalid config name"})
-			return
-		}
-
-		configPath := "configs/" + name + ".json"
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				writeJSON(w, map[string]string{"error": "Config not found"})
-			} else {
-				writeJSON(w, map[string]string{"error": "Failed to read config"})
-			}
-			return
-		}
-
-		// Validate JSON
-		var configData map[string]any
-		if err := json.Unmarshal(data, &configData); err != nil {
-			writeJSON(w, map[string]string{"error": "Invalid config file: " + err.Error()})
-			return
-		}
-
-		writeJSON(w, configData)
-	})
-
-	mux.HandleFunc("/api/config/delete", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		name := r.URL.Query().Get("name")
-		if name == "" {
-			writeJSON(w, map[string]string{"error": "Missing 'name' parameter"})
-			return
-		}
-
-		// Validate name
-		if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(name) {
-			writeJSON(w, map[string]string{"error": "Invalid config name"})
-			return
-		}
-
-		configPath := "configs/" + name + ".json"
-		if err := os.Remove(configPath); err != nil {
-			if os.IsNotExist(err) {
-				writeJSON(w, map[string]string{"error": "Config not found"})
-			} else {
-				writeJSON(w, map[string]string{"error": "Failed to delete config"})
-			}
-			return
-		}
-
-		writeJSON(w, map[string]string{"success": "Config deleted successfully"})
-	})
-
-	// WebSocket upgrader
+	// WebSocket handler
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			// Allow connections from same origin
 			return true
 		},
 	}
 
-	// WebSocket endpoint for real-time server status and data updates
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -1640,15 +567,14 @@ func main() {
 		log.Printf("WebSocket client connected from %s", r.RemoteAddr)
 
 		ctx := r.Context()
-		isLocal := isLocalRequest(r)
+		isLocal := api.IsLocalRequest(r)
 
-		// Send initial "online" message with server info
-		serverInfo := ServerInfo{
-			Hostname:  mustHostname(),
+		serverInfo := api.ServerInfo{
+			Hostname:  api.MustHostname(),
 			OS:        runtime.GOOS,
 			Arch:      runtime.GOARCH,
 			GoVersion: runtime.Version(),
-			UptimeSec: getSystemUptime(),
+			UptimeSec: api.GetSystemUptime(),
 			Time:      time.Now().Format(time.RFC3339),
 			IsLocal:   isLocal,
 		}
@@ -1661,22 +587,18 @@ func main() {
 			return
 		}
 
-		// Send system metrics updates every 5 seconds
 		systemTicker := time.NewTicker(5 * time.Second)
 		defer systemTicker.Stop()
 
-		// Keep connection alive with periodic pings (every 30 seconds)
 		pingTicker := time.NewTicker(30 * time.Second)
 		defer pingTicker.Stop()
 
-		// Handle pong messages
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		conn.SetPongHandler(func(string) error {
 			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 			return nil
 		})
 
-		// Channel to handle read errors
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
@@ -1696,18 +618,16 @@ func main() {
 			case <-done:
 				return
 			case <-systemTicker.C:
-				// Send system metrics update
-				metrics := getSystemMetrics(ctx)
+				metrics := api.GetSystemMetrics(ctx)
 				if err := conn.WriteJSON(map[string]any{
-					"type":    "system",
-					"system":  metrics,
-					"server":  ServerInfo{Time: time.Now().Format(time.RFC3339), UptimeSec: getSystemUptime()},
+					"type":   "system",
+					"system": metrics,
+					"server": api.ServerInfo{Time: time.Now().Format(time.RFC3339), UptimeSec: api.GetSystemUptime()},
 				}); err != nil {
 					log.Printf("WebSocket system update error: %v", err)
 					return
 				}
 			case <-pingTicker.C:
-				// Send ping to keep connection alive
 				if err := conn.WriteJSON(map[string]string{"type": "ping"}); err != nil {
 					log.Printf("WebSocket ping error: %v", err)
 					return
@@ -1716,20 +636,12 @@ func main() {
 		}
 	})
 
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("ok")); err != nil {
-			log.Printf("Error writing healthz response: %v", err)
-		}
-	})
-
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           withSecurityHeaders(mux),
+		Handler:           api.WithSecurityHeaders(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// Extract port from listen address
 	_, listenPort, _ := net.SplitHostPort(cfg.ListenAddr)
 	if listenPort == "" {
 		listenPort = "8080"
@@ -1738,7 +650,6 @@ func main() {
 	log.Printf("Dashboard starting...")
 	log.Printf("  Listening on: %s", cfg.ListenAddr)
 
-	// List all accessible addresses
 	ifaces, err := net.Interfaces()
 	if err == nil {
 		for _, iface := range ifaces {
@@ -1769,2726 +680,4 @@ func main() {
 	log.Printf("  http://localhost:%s", listenPort)
 
 	log.Fatal(srv.ListenAndServe())
-}
-
-func withSecurityHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Same-origin dashboard; keep it tight.
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https: ws: wss:; img-src 'self' data:; font-src 'self' https://cdnjs.cloudflare.com data:;")
-		next.ServeHTTP(w, r)
-	})
-}
-
-func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(v)
-}
-
-func mustHostname() string {
-	h, err := os.Hostname()
-	if err != nil || h == "" {
-		return "unknown"
-	}
-	return h
-}
-
-func getSystemUptime() int64 {
-	uptime, err := host.Uptime()
-	if err != nil {
-		return 0
-	}
-	return int64(uptime)
-}
-
-// isLocalRequest determines if the request is from localhost or a local network interface.
-func isLocalRequest(r *http.Request) bool {
-	// Get the client IP from the request
-	ip := getClientIP(r)
-	if ip == "" {
-		return false
-	}
-
-	// Check if it's localhost
-	if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
-		return true
-	}
-
-	// Parse the IP
-	ipAddr := net.ParseIP(ip)
-	if ipAddr == nil {
-		return false
-	}
-
-	// Check if it's a loopback address
-	if ipAddr.IsLoopback() {
-		return true
-	}
-
-	// Check if it's a link-local address (169.254.x.x)
-	if ipAddr.IsLinkLocalUnicast() {
-		return true
-	}
-
-	// Check if it's in private IP ranges
-	if ipAddr.To4() != nil {
-		// IPv4 private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-		ip4 := ipAddr.To4()
-		if ip4[0] == 10 {
-			return true
-		}
-		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
-			return true
-		}
-		if ip4[0] == 192 && ip4[1] == 168 {
-			return true
-		}
-	}
-
-	return false
-}
-
-// getClientIP extracts the client IP address from the request, considering X-Forwarded-For and X-Real-IP headers.
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (for proxies/load balancers)
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		// X-Forwarded-For can contain multiple IPs, take the first one
-		ips := strings.Split(forwarded, ",")
-		if len(ips) > 0 {
-			ip := strings.TrimSpace(ips[0])
-			if ip != "" {
-				return ip
-			}
-		}
-	}
-
-	// Check X-Real-IP header
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		return strings.TrimSpace(realIP)
-	}
-
-	// Fall back to RemoteAddr
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
-}
-
-// reverseDNS returns cached PTR record, refreshing every hour
-func reverseDNS(ip string, dnsServer string) string {
-	return getCachedPTR(ip, dnsServer)
-}
-
-// reverseDNSUncached performs actual DNS PTR lookup
-func reverseDNSUncached(ip string, dnsServer string) string {
-	// Parse IP address
-	ipAddr := net.ParseIP(ip)
-	if ipAddr == nil {
-		return ""
-	}
-
-	// Create reverse DNS query
-	var arpa string
-	if ipAddr.To4() != nil {
-		// IPv4: reverse the octets and append .in-addr.arpa.
-		parts := strings.Split(ip, ".")
-		if len(parts) != 4 {
-			return ""
-		}
-		arpa = parts[3] + "." + parts[2] + "." + parts[1] + "." + parts[0] + ".in-addr.arpa."
-	} else {
-		// IPv6: reverse the hex digits and append .ip6.arpa.
-		ip6 := ipAddr.To16()
-		if ip6 == nil {
-			return ""
-		}
-		// Convert each byte to two hex digits, then reverse the entire string
-		var hexDigits []string
-		for i := len(ip6) - 1; i >= 0; i-- {
-			b := ip6[i]
-			// Each byte becomes two hex digits (low nibble first, then high)
-			low := b & 0x0f
-			high := (b >> 4) & 0x0f
-			// Convert to hex character
-			toHex := func(n byte) string {
-				if n < 10 {
-					return string('0' + n)
-				}
-				return string('a' + (n - 10))
-			}
-			// Add low nibble first, then high (reversed byte order)
-			hexDigits = append(hexDigits, toHex(low))
-			hexDigits = append(hexDigits, toHex(high))
-		}
-		// Join with dots
-		arpa = strings.Join(hexDigits, ".") + ".ip6.arpa."
-	}
-
-	// Create DNS client
-	client := &dns.Client{
-		Timeout: 2 * time.Second,
-	}
-
-	// Create PTR query
-	m := new(dns.Msg)
-	m.SetQuestion(arpa, dns.TypePTR)
-	m.RecursionDesired = true
-
-	// Query DNS server
-	r, _, err := client.Exchange(m, dnsServer+":53")
-	if err != nil {
-		log.Printf("DNS query error for %s (server %s): %v", ip, dnsServer, err)
-		return ""
-	}
-	if r == nil || len(r.Answer) == 0 {
-		log.Printf("DNS query returned no answer for %s (server %s, query: %s)", ip, dnsServer, arpa)
-		return ""
-	}
-
-	// Extract PTR record
-	for _, ans := range r.Answer {
-		if ptr, ok := ans.(*dns.PTR); ok {
-			name := strings.TrimSuffix(ptr.Ptr, ".")
-			return name
-		}
-	}
-
-	return ""
-}
-
-func hostIPs() []HostIPInfo {
-	var ipInfos []HostIPInfo
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return ipInfos
-	}
-	var ips []string
-	for _, ifc := range ifaces {
-		if (ifc.Flags&net.FlagUp) == 0 || (ifc.Flags&net.FlagLoopback) != 0 {
-			continue
-		}
-		addrs, _ := ifc.Addrs()
-		for _, a := range addrs {
-			ip := ipFromAddr(a)
-			if ip == "" {
-				continue
-			}
-			// Prefer IPv4, but allow IPv6.
-			if strings.Contains(ip, ":") {
-				continue
-			}
-			ips = append(ips, ip)
-		}
-	}
-	// If no IPv4 found, include non-loopback IPv6 as fallback.
-	if len(ips) == 0 {
-		for _, ifc := range ifaces {
-			if (ifc.Flags&net.FlagUp) == 0 || (ifc.Flags&net.FlagLoopback) != 0 {
-				continue
-			}
-			addrs, _ := ifc.Addrs()
-			for _, a := range addrs {
-				ip := ipFromAddr(a)
-				if ip != "" && strings.Contains(ip, ":") {
-					ips = append(ips, ip)
-				}
-			}
-		}
-	}
-	ips = dedup(ips)
-
-	// Get PTR records for each IP using local DNS server
-	for _, ip := range ips {
-		ptr := reverseDNS(ip, "192.168.178.21")
-		ipInfos = append(ipInfos, HostIPInfo{
-			IP:  ip,
-			PTR: ptr,
-		})
-	}
-	return ipInfos
-}
-
-func ipFromAddr(a net.Addr) string {
-	switch v := a.(type) {
-	case *net.IPNet:
-		ip := v.IP
-		if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-			return ""
-		}
-		return ip.String()
-	case *net.IPAddr:
-		ip := v.IP
-		if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-			return ""
-		}
-		return ip.String()
-	default:
-		return ""
-	}
-}
-
-func dedup(in []string) []string {
-	seen := make(map[string]struct{}, len(in))
-	var out []string
-	for _, s := range in {
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	return out
-}
-
-func publicIP(ctx context.Context, timeout time.Duration) (string, error) {
-	cctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Try multiple (fast) endpoints.
-	endpoints := []string{
-		"https://api.ipify.org",
-		"https://ifconfig.me/ip",
-		"https://icanhazip.com",
-	}
-
-	var lastErr error
-	for _, u := range endpoints {
-		req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
-		req.Header.Set("User-Agent", "lan-index/1.0")
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		b, _ := io.ReadAll(io.LimitReader(res.Body, 128))
-		_ = res.Body.Close()
-		if res.StatusCode < 200 || res.StatusCode > 299 {
-			lastErr = errors.New("public ip http status " + res.Status)
-			continue
-		}
-		ip := strings.TrimSpace(string(b))
-		if net.ParseIP(ip) == nil {
-			lastErr = errors.New("invalid public ip response")
-			continue
-		}
-		return ip, nil
-	}
-	if lastErr == nil {
-		lastErr = errors.New("public ip unavailable")
-	}
-	return "", lastErr
-}
-
-// WeatherData contains parsed weather data from external APIs.
-type WeatherData struct {
-	Summary  string
-	Forecast []string
-	Current  *WeatherCurrent
-	Today    *WeatherDay
-	Tomorrow *WeatherDay
-}
-
-func openMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error) {
-	// Current weather via Open-Meteo. No key required.
-	// Docs: https://open-meteo.com/
-	u := "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,pressure_msl,uv_index,cloud_cover,visibility,dewpoint_2m,precipitation_probability,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,weather_code&timezone=auto&forecast_days=3"
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return WeatherData{}, err
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing weather response body: %v", closeErr)
-		}
-	}()
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return WeatherData{}, errors.New("weather http status " + res.Status)
-	}
-	var raw struct {
-		Current struct {
-			Temperature         float64 `json:"temperature_2m"`
-			ApparentTemperature float64 `json:"apparent_temperature"`
-			Humidity            float64 `json:"relative_humidity_2m"`
-			WindSpeed           float64 `json:"wind_speed_10m"`
-			WindDirection       int     `json:"wind_direction_10m"`
-			Pressure            float64 `json:"pressure_msl"`
-			UVIndex             float64 `json:"uv_index"`
-			CloudCover          float64 `json:"cloud_cover"`
-			Visibility          float64 `json:"visibility"`
-			DewPoint            float64 `json:"dewpoint_2m"`
-			PrecipitationProb   float64 `json:"precipitation_probability"`
-			WeatherCode         int     `json:"weather_code"`
-		} `json:"current"`
-		CurrentUnits struct {
-			Temperature string `json:"temperature_2m"`
-			Humidity    string `json:"relative_humidity_2m"`
-			WindSpeed   string `json:"wind_speed_10m"`
-			Pressure    string `json:"pressure_msl"`
-			Visibility  string `json:"visibility"`
-		} `json:"current_units"`
-		Daily struct {
-			Time                 []string  `json:"time"`
-			TemperatureMax       []float64 `json:"temperature_2m_max"`
-			TemperatureMin       []float64 `json:"temperature_2m_min"`
-			PrecipitationProbMax []float64 `json:"precipitation_probability_max"`
-			UVIndexMax           []float64 `json:"uv_index_max"`
-			Sunrise              []string  `json:"sunrise"`
-			Sunset               []string  `json:"sunset"`
-			WeatherCode          []int     `json:"weather_code"`
-		} `json:"daily"`
-		DailyUnits struct {
-			TemperatureMax string `json:"temperature_2m_max"`
-		} `json:"daily_units"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&raw); err != nil {
-		return WeatherData{}, err
-	}
-
-	summary := "Now: " +
-		format1(raw.Current.Temperature) + raw.CurrentUnits.Temperature +
-		", " + format0(raw.Current.Humidity) + raw.CurrentUnits.Humidity +
-		", wind " + format1(raw.Current.WindSpeed) + raw.CurrentUnits.WindSpeed
-
-	var forecast []string
-	if len(raw.Daily.Time) > 0 && len(raw.Daily.TemperatureMax) > 0 {
-		// Skip today (index 0), show next 3 days
-		for i := 1; i < len(raw.Daily.Time) && i <= 3; i++ {
-			if i < len(raw.Daily.TemperatureMax) && i < len(raw.Daily.TemperatureMin) {
-				date := raw.Daily.Time[i]
-				if len(date) >= 10 {
-					date = date[5:10] // MM-DD format
-				}
-				forecast = append(forecast, date+": "+
-					format1(raw.Daily.TemperatureMax[i])+"°/"+
-					format1(raw.Daily.TemperatureMin[i])+"°")
-			}
-		}
-	}
-
-	// Build structured current weather
-	current := &WeatherCurrent{
-		Temperature:       raw.Current.Temperature,
-		TempUnit:          raw.CurrentUnits.Temperature,
-		FeelsLike:         raw.Current.ApparentTemperature,
-		Humidity:          raw.Current.Humidity,
-		WindSpeed:         raw.Current.WindSpeed,
-		WindUnit:          raw.CurrentUnits.WindSpeed,
-		WindDirection:     raw.Current.WindDirection,
-		Pressure:          raw.Current.Pressure,
-		UVIndex:           raw.Current.UVIndex,
-		CloudCover:        raw.Current.CloudCover,
-		Visibility:        raw.Current.Visibility,
-		DewPoint:          raw.Current.DewPoint,
-		PrecipitationProb: raw.Current.PrecipitationProb,
-		WeatherCode:       raw.Current.WeatherCode,
-	}
-
-	// Build structured today/tomorrow
-	tempUnit := raw.DailyUnits.TemperatureMax
-	if tempUnit == "" {
-		tempUnit = "°C"
-	}
-
-	var today, tomorrow *WeatherDay
-	if len(raw.Daily.TemperatureMax) > 0 && len(raw.Daily.TemperatureMin) > 0 && len(raw.Daily.WeatherCode) > 0 {
-		today = &WeatherDay{
-			TempMax:          raw.Daily.TemperatureMax[0],
-			TempMin:          raw.Daily.TemperatureMin[0],
-			TempUnit:         tempUnit,
-			PrecipitationProb: 0,
-			WeatherCode:      raw.Daily.WeatherCode[0],
-		}
-		if len(raw.Daily.PrecipitationProbMax) > 0 {
-			today.PrecipitationProb = raw.Daily.PrecipitationProbMax[0]
-		}
-		if len(raw.Daily.UVIndexMax) > 0 {
-			today.UVIndexMax = raw.Daily.UVIndexMax[0]
-		}
-		if len(raw.Daily.Sunrise) > 0 && len(raw.Daily.Sunrise[0]) >= 16 {
-			today.Sunrise = raw.Daily.Sunrise[0][11:16] // Extract HH:MM from ISO format
-		}
-		if len(raw.Daily.Sunset) > 0 && len(raw.Daily.Sunset[0]) >= 16 {
-			today.Sunset = raw.Daily.Sunset[0][11:16] // Extract HH:MM from ISO format
-		}
-	}
-	if len(raw.Daily.TemperatureMax) > 1 && len(raw.Daily.TemperatureMin) > 1 && len(raw.Daily.WeatherCode) > 1 {
-		tomorrow = &WeatherDay{
-			TempMax:          raw.Daily.TemperatureMax[1],
-			TempMin:          raw.Daily.TemperatureMin[1],
-			TempUnit:         tempUnit,
-			PrecipitationProb: 0,
-			WeatherCode:      raw.Daily.WeatherCode[1],
-		}
-		if len(raw.Daily.PrecipitationProbMax) > 1 {
-			tomorrow.PrecipitationProb = raw.Daily.PrecipitationProbMax[1]
-		}
-		if len(raw.Daily.UVIndexMax) > 1 {
-			tomorrow.UVIndexMax = raw.Daily.UVIndexMax[1]
-		}
-		if len(raw.Daily.Sunrise) > 1 && len(raw.Daily.Sunrise[1]) >= 16 {
-			tomorrow.Sunrise = raw.Daily.Sunrise[1][11:16]
-		}
-		if len(raw.Daily.Sunset) > 1 && len(raw.Daily.Sunset[1]) >= 16 {
-			tomorrow.Sunset = raw.Daily.Sunset[1][11:16]
-		}
-	}
-
-	return WeatherData{
-		Summary:  summary,
-		Forecast: forecast,
-		Current:  current,
-		Today:    today,
-		Tomorrow: tomorrow,
-	}, nil
-}
-
-func openWeatherMapSummary(ctx context.Context, lat, lon, apiKey string) (WeatherData, error) {
-	// OpenWeatherMap API. Requires API key.
-	// Docs: https://openweathermap.org/api
-	if apiKey == "" {
-		return WeatherData{}, errors.New("OpenWeatherMap API key required (set in Preferences)")
-	}
-
-	var today, tomorrow *WeatherDay
-
-	u := "https://api.openweathermap.org/data/2.5/weather?lat=" + lat + "&lon=" + lon + "&appid=" + apiKey + "&units=metric"
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return WeatherData{}, err
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing weather response body: %v", closeErr)
-		}
-	}()
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return WeatherData{}, fmt.Errorf("OpenWeatherMap API error: %s", res.Status)
-	}
-
-	var currentResp struct {
-		Main struct {
-			Temp      float64 `json:"temp"`
-			FeelsLike float64 `json:"feels_like"`
-			Pressure  float64 `json:"pressure"`
-			Humidity  float64 `json:"humidity"`
-		} `json:"main"`
-		Wind struct {
-			Speed float64 `json:"speed"`
-			Deg   int     `json:"deg"`
-		} `json:"wind"`
-		Clouds struct {
-			All float64 `json:"all"` // Cloud cover percentage
-		} `json:"clouds"`
-		Visibility int `json:"visibility"` // in meters
-		Weather    []struct {
-			ID int `json:"id"`
-		} `json:"weather"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&currentResp); err != nil {
-		return WeatherData{}, err
-	}
-
-	// Get forecast for today/tomorrow
-	forecastURL := "https://api.openweathermap.org/data/2.5/forecast?lat=" + lat + "&lon=" + lon + "&appid=" + apiKey + "&units=metric&cnt=2"
-	forecastReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, forecastURL, nil)
-	forecastReq.Header.Set("User-Agent", "lan-index/1.0")
-	forecastRes, err := http.DefaultClient.Do(forecastReq)
-	if err == nil {
-		defer forecastRes.Body.Close()
-		if forecastRes.StatusCode >= 200 && forecastRes.StatusCode <= 299 {
-			var forecastResp struct {
-				List []struct {
-					Main struct {
-						Temp float64 `json:"temp"`
-					} `json:"main"`
-					Weather []struct {
-						ID int `json:"id"`
-					} `json:"weather"`
-					Dt int64 `json:"dt"`
-				} `json:"list"`
-			}
-			if err := json.NewDecoder(forecastRes.Body).Decode(&forecastResp); err == nil && len(forecastResp.List) > 0 {
-				// Use first forecast entry for today
-				if len(forecastResp.List) > 0 && len(forecastResp.List[0].Weather) > 0 {
-					today = &WeatherDay{
-						TempMax:     forecastResp.List[0].Main.Temp,
-						TempMin:     forecastResp.List[0].Main.Temp,
-						TempUnit:    "°C",
-						WeatherCode: forecastResp.List[0].Weather[0].ID,
-					}
-				}
-				if len(forecastResp.List) > 1 && len(forecastResp.List[1].Weather) > 0 {
-					tomorrow = &WeatherDay{
-						TempMax:     forecastResp.List[1].Main.Temp,
-						TempMin:     forecastResp.List[1].Main.Temp,
-						TempUnit:    "°C",
-						WeatherCode: forecastResp.List[1].Weather[0].ID,
-					}
-				}
-			}
-		}
-	}
-
-	weatherCode := 0
-	if len(currentResp.Weather) > 0 {
-		weatherCode = currentResp.Weather[0].ID
-	}
-
-	summary := fmt.Sprintf("Now: %.1f°C, %.0f%%, wind %.1f m/s",
-		currentResp.Main.Temp, currentResp.Main.Humidity, currentResp.Wind.Speed)
-
-	visibilityKm := float64(currentResp.Visibility) / 1000.0
-	current := &WeatherCurrent{
-		Temperature:       currentResp.Main.Temp,
-		TempUnit:          "°C",
-		FeelsLike:         currentResp.Main.FeelsLike,
-		Humidity:          currentResp.Main.Humidity,
-		WindSpeed:         currentResp.Wind.Speed,
-		WindUnit:          "m/s",
-		WindDirection:     currentResp.Wind.Deg,
-		Pressure:          currentResp.Main.Pressure,
-		CloudCover:        currentResp.Clouds.All,
-		Visibility:         visibilityKm,
-		WeatherCode:       weatherCode,
-	}
-
-	return WeatherData{
-		Summary:  summary,
-		Forecast: []string{}, // OpenWeatherMap free tier doesn't provide daily forecast easily
-		Current:  current,
-		Today:    today,
-		Tomorrow: tomorrow,
-	}, nil
-}
-
-func weatherAPISummary(ctx context.Context, lat, lon, apiKey string) (WeatherData, error) {
-	// WeatherAPI.com API. Requires API key.
-	// Docs: https://www.weatherapi.com/docs/
-	if apiKey == "" {
-		return WeatherData{}, errors.New("WeatherAPI.com API key required (set in Preferences)")
-	}
-
-	u := "https://api.weatherapi.com/v1/forecast.json?key=" + apiKey + "&q=" + lat + "," + lon + "&days=3&aqi=no&alerts=no"
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return WeatherData{}, err
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing weather response body: %v", closeErr)
-		}
-	}()
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return WeatherData{}, fmt.Errorf("WeatherAPI.com error: %s", res.Status)
-	}
-
-	var raw struct {
-		Current struct {
-			TempC          float64 `json:"temp_c"`
-			FeelsLikeC     float64 `json:"feelslike_c"`
-			Humidity       float64 `json:"humidity"`
-			WindKph        float64 `json:"wind_kph"`
-			WindDir        string  `json:"wind_dir"`
-			WindDegree     int     `json:"wind_degree"`
-			PressureMb     float64 `json:"pressure_mb"`
-			UV             float64 `json:"uv"`
-			Cloud          float64 `json:"cloud"`
-			VisKm          float64 `json:"vis_km"`
-			DewpointC      float64 `json:"dewpoint_c"`
-			PrecipMm       float64 `json:"precip_mm"`
-			Condition      struct {
-				Code int `json:"code"`
-			} `json:"condition"`
-		} `json:"current"`
-		Forecast struct {
-			Forecastday []struct {
-				Day struct {
-					MaxtempC        float64 `json:"maxtemp_c"`
-					MintempC        float64 `json:"mintemp_c"`
-					DailyChanceOfRain float64 `json:"daily_chance_of_rain"`
-					Condition       struct {
-						Code int `json:"code"`
-					} `json:"condition"`
-				} `json:"day"`
-				Astro struct {
-					Sunrise string `json:"sunrise"`
-					Sunset  string `json:"sunset"`
-				} `json:"astro"`
-			} `json:"forecastday"`
-		} `json:"forecast"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&raw); err != nil {
-		return WeatherData{}, err
-	}
-
-	summary := fmt.Sprintf("Now: %.1f°C, %.0f%%, wind %.1f km/h",
-		raw.Current.TempC, raw.Current.Humidity, raw.Current.WindKph)
-
-	var forecast []string
-	if len(raw.Forecast.Forecastday) > 1 {
-		for i := 1; i < len(raw.Forecast.Forecastday) && i <= 3; i++ {
-			day := raw.Forecast.Forecastday[i]
-			forecast = append(forecast, fmt.Sprintf("%.1f°/%.1f°",
-				day.Day.MaxtempC, day.Day.MintempC))
-		}
-	}
-
-	current := &WeatherCurrent{
-		Temperature:       raw.Current.TempC,
-		TempUnit:          "°C",
-		FeelsLike:         raw.Current.FeelsLikeC,
-		Humidity:          raw.Current.Humidity,
-		WindSpeed:         raw.Current.WindKph,
-		WindUnit:          "km/h",
-		WindDirection:     raw.Current.WindDegree,
-		Pressure:          raw.Current.PressureMb,
-		UVIndex:           raw.Current.UV,
-		CloudCover:        raw.Current.Cloud,
-		Visibility:         raw.Current.VisKm,
-		DewPoint:          raw.Current.DewpointC,
-		PrecipitationProb: func() float64 {
-			if raw.Current.PrecipMm > 0 {
-				return 100.0
-			}
-			return 0.0
-		}(), // WeatherAPI doesn't provide probability directly
-		WeatherCode:       raw.Current.Condition.Code,
-	}
-
-	var today, tomorrow *WeatherDay
-	if len(raw.Forecast.Forecastday) > 0 {
-		day0 := raw.Forecast.Forecastday[0]
-		today = &WeatherDay{
-			TempMax:          day0.Day.MaxtempC,
-			TempMin:          day0.Day.MintempC,
-			TempUnit:         "°C",
-			PrecipitationProb: day0.Day.DailyChanceOfRain,
-			WeatherCode:      day0.Day.Condition.Code,
-		}
-		if day0.Astro.Sunrise != "" {
-			today.Sunrise = day0.Astro.Sunrise
-		}
-		if day0.Astro.Sunset != "" {
-			today.Sunset = day0.Astro.Sunset
-		}
-	}
-	if len(raw.Forecast.Forecastday) > 1 {
-		day1 := raw.Forecast.Forecastday[1]
-		tomorrow = &WeatherDay{
-			TempMax:          day1.Day.MaxtempC,
-			TempMin:          day1.Day.MintempC,
-			TempUnit:         "°C",
-			PrecipitationProb: day1.Day.DailyChanceOfRain,
-			WeatherCode:      day1.Day.Condition.Code,
-		}
-		if day1.Astro.Sunrise != "" {
-			tomorrow.Sunrise = day1.Astro.Sunrise
-		}
-		if day1.Astro.Sunset != "" {
-			tomorrow.Sunset = day1.Astro.Sunset
-		}
-	}
-
-	return WeatherData{
-		Summary:  summary,
-		Forecast: forecast,
-		Current:  current,
-		Today:    today,
-		Tomorrow: tomorrow,
-	}, nil
-}
-
-// GeoLocation represents a geocoded location result
-type GeoLocation struct {
-	Name      string  `json:"name"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Country   string  `json:"country"`
-	Admin1    string  `json:"admin1,omitempty"` // State/region
-}
-
-func geocodeCity(ctx context.Context, query string) ([]GeoLocation, error) {
-	// Use Open-Meteo's geocoding API (free, no key required)
-	u := "https://geocoding-api.open-meteo.com/v1/search?name=" + url.QueryEscape(query) + "&count=5&language=en&format=json"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing geocode response body: %v", closeErr)
-		}
-	}()
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return nil, errors.New("geocode http status " + res.Status)
-	}
-
-	var raw struct {
-		Results []struct {
-			Name      string  `json:"name"`
-			Latitude  float64 `json:"latitude"`
-			Longitude float64 `json:"longitude"`
-			Country   string  `json:"country"`
-			Admin1    string  `json:"admin1"`
-		} `json:"results"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&raw); err != nil {
-		return nil, err
-	}
-
-	if len(raw.Results) == 0 {
-		return nil, errors.New("no locations found")
-	}
-
-	var results []GeoLocation
-	for _, r := range raw.Results {
-		results = append(results, GeoLocation{
-			Name:      r.Name,
-			Latitude:  r.Latitude,
-			Longitude: r.Longitude,
-			Country:   r.Country,
-			Admin1:    r.Admin1,
-		})
-	}
-	return results, nil
-}
-
-// fetchFavicon tries to fetch a favicon from a site
-func fetchFavicon(ctx context.Context, origin string) ([]byte, string, error) {
-	log.Printf("[favicon] fetchFavicon called for origin: %s", origin)
-
-	// Skip TLS verification for LAN sites with self-signed/expired certs
-	tlsConfig := &tls.Config{InsecureSkipVerify: true}
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-
-	client := &http.Client{
-		Timeout:   5 * time.Second,
-		Transport: transport,
-		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
-			if len(via) >= 3 {
-				return errors.New("too many redirects")
-			}
-			return nil
-		},
-	}
-
-	// Common favicon locations to try
-	faviconPaths := []string{
-		"/favicon.ico",
-		"/favicon.png",
-		"/apple-touch-icon.png",
-		"/apple-touch-icon-precomposed.png",
-	}
-
-	// First, try to parse the HTML to find the favicon link
-	log.Printf("[favicon] Fetching HTML from %s", origin)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, origin, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; lan-index/1.0)")
-	res, err := client.Do(req)
-	if err != nil {
-		log.Printf("[favicon] Error fetching HTML: %v", err)
-	} else if res.StatusCode >= 200 && res.StatusCode < 300 {
-		defer func() {
-			if closeErr := res.Body.Close(); closeErr != nil {
-				log.Printf("Error closing favicon response body: %v", closeErr)
-			}
-		}()
-		log.Printf("[favicon] Got HTML response, status: %d", res.StatusCode)
-		body, err := io.ReadAll(io.LimitReader(res.Body, 100*1024)) // Limit to 100KB
-		if err == nil {
-			log.Printf("[favicon] Read %d bytes of HTML", len(body))
-			// Look for favicon in HTML
-			faviconURL := extractFaviconFromHTML(string(body), origin)
-			if faviconURL != "" {
-				log.Printf("[favicon] Found favicon URL in HTML: %s", faviconURL)
-				data, contentType, err := downloadFavicon(ctx, client, faviconURL)
-				if err == nil {
-					log.Printf("[favicon] Successfully downloaded favicon from HTML link")
-					return data, contentType, nil
-				}
-				log.Printf("[favicon] Failed to download from HTML link: %v", err)
-			} else {
-				log.Printf("[favicon] No favicon URL found in HTML")
-			}
-		} else {
-			log.Printf("[favicon] Error reading HTML body: %v", err)
-		}
-	} else if res != nil {
-		log.Printf("[favicon] HTML response status: %d", res.StatusCode)
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing favicon HTML response body: %v", closeErr)
-		}
-	}
-
-	// Try common favicon paths
-	log.Printf("[favicon] Trying common favicon paths...")
-	for _, path := range faviconPaths {
-		faviconURL := origin + path
-		log.Printf("[favicon] Trying: %s", faviconURL)
-		data, contentType, err := downloadFavicon(ctx, client, faviconURL)
-		if err == nil {
-			log.Printf("[favicon] Success with %s", path)
-			return data, contentType, nil
-		}
-		log.Printf("[favicon] Failed %s: %v", path, err)
-	}
-
-	log.Printf("[favicon] All attempts failed for %s", origin)
-	return nil, "", errors.New("favicon not found")
-}
-
-func extractFaviconFromHTML(html, origin string) string {
-	// Look for <link rel="icon" or <link rel="shortcut icon"
-	patterns := []*regexp.Regexp{
-		regexp.MustCompile(`<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']`),
-		regexp.MustCompile(`<link[^>]+href=["']([^"']+)["'][^>]+rel=["'](?:shortcut )?icon["']`),
-		regexp.MustCompile(`<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']`),
-	}
-
-	for _, re := range patterns {
-		matches := re.FindStringSubmatch(html)
-		if len(matches) > 1 {
-			href := matches[1]
-			// Resolve relative URLs
-			if strings.HasPrefix(href, "//") {
-				return "https:" + href
-			}
-			if strings.HasPrefix(href, "/") {
-				return origin + href
-			}
-			if strings.HasPrefix(href, "http") {
-				return href
-			}
-			return origin + "/" + href
-		}
-	}
-	return ""
-}
-
-// HTTPCheckResult contains the result of an HTTP check
-type HTTPCheckResult struct {
-	Latency   int64
-	SSLExpiry *time.Time
-	SSLError  string
-}
-
-// checkHTTP performs an HTTP check and returns latency in ms and SSL info
-func checkHTTP(ctx context.Context, targetURL string) (*HTTPCheckResult, error) {
-	result := &HTTPCheckResult{}
-
-	// Parse URL to check if HTTPS
-	parsedURL, err := url.Parse(targetURL)
-	if err != nil {
-		return nil, err
-	}
-
-	// Skip TLS verification for LAN sites
-	tlsConfig := &tls.Config{InsecureSkipVerify: true}
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	client := &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: transport,
-		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("too many redirects")
-			}
-			return nil
-		},
-	}
-
-	start := time.Now()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; lan-index-monitor/1.0)")
-
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing DNS over HTTPS response body: %v", closeErr)
-		}
-	}()
-
-	result.Latency = time.Since(start).Milliseconds()
-
-	if res.StatusCode >= 400 {
-		return result, errors.New("HTTP " + res.Status)
-	}
-
-	// Check SSL certificate if HTTPS
-	if parsedURL.Scheme == "https" {
-		sslExpiry, sslErr := checkSSLCert(ctx, parsedURL.Host)
-		if sslErr != nil {
-			result.SSLError = sslErr.Error()
-		} else {
-			result.SSLExpiry = sslExpiry
-		}
-	}
-
-	return result, nil
-}
-
-// checkSSLCert checks the SSL certificate expiration for a host
-func checkSSLCert(ctx context.Context, host string) (*time.Time, error) {
-	// Add default port if not specified
-	if !strings.Contains(host, ":") {
-		host = host + ":443"
-	}
-
-	dialer := &tls.Dialer{
-		NetDialer: &net.Dialer{Timeout: 5 * time.Second},
-		Config:    &tls.Config{InsecureSkipVerify: true},
-	}
-	conn, err := dialer.DialContext(ctx, "tcp", host)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := conn.Close(); closeErr != nil {
-			log.Printf("Error closing DNS connection: %v", closeErr)
-		}
-	}()
-
-	tlsConn := conn.(*tls.Conn)
-	certs := tlsConn.ConnectionState().PeerCertificates
-	if len(certs) == 0 {
-		return nil, errors.New("no certificates found")
-	}
-
-	// Get the leaf certificate expiry
-	expiry := certs[0].NotAfter
-	return &expiry, nil
-}
-
-// checkPort performs a TCP port check and returns latency in ms
-func checkPort(ctx context.Context, host, port string) (int64, error) {
-	address := net.JoinHostPort(host, port)
-
-	start := time.Now()
-
-	dialer := &net.Dialer{
-		Timeout: 10 * time.Second,
-	}
-
-	conn, err := dialer.DialContext(ctx, "tcp", address)
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		if closeErr := conn.Close(); closeErr != nil {
-			log.Printf("Error closing DNS connection: %v", closeErr)
-		}
-	}()
-
-	latency := time.Since(start).Milliseconds()
-	return latency, nil
-}
-
-// checkPing performs an ICMP ping (or TCP fallback) and returns latency in ms
-func checkPing(ctx context.Context, host string) (int64, error) {
-	// Try TCP connect to common ports as a ping alternative
-	// (ICMP ping requires root privileges)
-	ports := []string{"80", "443", "22", "21"}
-
-	for _, port := range ports {
-		latency, err := checkPort(ctx, host, port)
-		if err == nil {
-			return latency, nil
-		}
-	}
-
-	// If all ports fail, try a DNS lookup as last resort
-	start := time.Now()
-	_, err := net.LookupHost(host)
-	if err != nil {
-		return 0, errors.New("host unreachable")
-	}
-	latency := time.Since(start).Milliseconds()
-
-	return latency, nil
-}
-
-func querySNMP(ctx context.Context, host, port, community, oid string) (string, error) {
-	// Create SNMP client
-	snmp := &gosnmp.GoSNMP{
-		Target:    host,
-		Port:      parsePort(port),
-		Community: community,
-		Version:   gosnmp.Version2c,
-		Timeout:   time.Duration(5) * time.Second,
-		Retries:   1,
-		Context:   ctx,
-	}
-
-	// Connect
-	err := snmp.Connect()
-	if err != nil {
-		return "", errors.New("SNMP connect failed: " + err.Error())
-	}
-	defer func() {
-		if closeErr := snmp.Conn.Close(); closeErr != nil {
-			log.Printf("Error closing SNMP connection: %v", closeErr)
-		}
-	}()
-
-	// Perform GET request
-	result, err := snmp.Get([]string{oid})
-	if err != nil {
-		return "", errors.New("SNMP GET failed: " + err.Error())
-	}
-
-	if len(result.Variables) == 0 {
-		return "", errors.New("no SNMP variables returned")
-	}
-
-	variable := result.Variables[0]
-	if variable.Type == gosnmp.NoSuchObject || variable.Type == gosnmp.NoSuchInstance {
-		return "", errors.New("OID not found")
-	}
-
-	// Format the value based on type
-	switch variable.Type {
-	case gosnmp.OctetString:
-		return string(variable.Value.([]byte)), nil
-	case gosnmp.Integer, gosnmp.Counter32, gosnmp.Counter64, gosnmp.Gauge32, gosnmp.TimeTicks, gosnmp.Uinteger32:
-		return fmt.Sprintf("%v", variable.Value), nil
-	case gosnmp.IPAddress:
-		return variable.Value.(string), nil
-	default:
-		return fmt.Sprintf("%v", variable.Value), nil
-	}
-}
-
-func parsePort(portStr string) uint16 {
-	port := 161 // default SNMP port
-	if p, err := strconv.Atoi(portStr); err == nil && p > 0 && p < 65536 {
-		port = p
-	}
-	return uint16(port)
-}
-
-func downloadFavicon(ctx context.Context, client *http.Client, faviconURL string) ([]byte, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, faviconURL, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; lan-index/1.0)")
-
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing response body: %v", closeErr)
-		}
-	}()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, "", errors.New("favicon not found: " + res.Status)
-	}
-
-	// Check content type
-	contentType := res.Header.Get("Content-Type")
-	if contentType == "" {
-		// Guess from URL
-		if strings.HasSuffix(faviconURL, ".ico") {
-			contentType = "image/x-icon"
-		} else if strings.HasSuffix(faviconURL, ".png") {
-			contentType = "image/png"
-		} else if strings.HasSuffix(faviconURL, ".svg") {
-			contentType = "image/svg+xml"
-		} else {
-			contentType = "image/x-icon"
-		}
-	}
-
-	// Only accept image types
-	if !strings.HasPrefix(contentType, "image/") {
-		return nil, "", errors.New("not an image: " + contentType)
-	}
-
-	// Read favicon data (limit to 100KB)
-	data, err := io.ReadAll(io.LimitReader(res.Body, 100*1024))
-	if err != nil {
-		return nil, "", err
-	}
-
-	if len(data) == 0 {
-		return nil, "", errors.New("empty favicon")
-	}
-
-	return data, contentType, nil
-}
-
-func formatRateLimitReset(resetHeader string) string {
-	if resetHeader == "" {
-		return "unknown"
-	}
-	// Parse epoch timestamp
-	var resetTime int64
-	if err := itoaParse(resetHeader, &resetTime); err != nil {
-		return resetHeader + " (parse error)"
-	}
-	reset := time.Unix(resetTime, 0)
-	now := time.Now()
-	untilReset := reset.Sub(now)
-
-	if untilReset <= 0 {
-		return "expired"
-	}
-
-	// Format as "in X minutes" or "at HH:MM:SS"
-	if untilReset < time.Hour {
-		minutes := int(untilReset.Minutes())
-		if minutes == 0 {
-			seconds := int(untilReset.Seconds())
-			return reset.Format("15:04:05") + " (in " + itoa(int64(seconds)) + "s)"
-		}
-		return reset.Format("15:04:05") + " (in " + itoa(int64(minutes)) + "m)"
-	}
-	return reset.Format("15:04:05") + " (in " + formatDuration(untilReset) + ")"
-}
-
-func formatDuration(d time.Duration) string {
-	hours := int(d.Hours())
-	minutes := int(d.Minutes()) % 60
-	if hours > 0 {
-		return itoa(int64(hours)) + "h" + itoa(int64(minutes)) + "m"
-	}
-	return itoa(int64(minutes)) + "m"
-}
-
-func itoaParse(s string, out *int64) error {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return errors.New("empty string")
-	}
-	var result int64
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return errors.New("invalid character")
-		}
-		result = result*10 + int64(c-'0')
-	}
-	*out = result
-	return nil
-}
-
-func fetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, error) {
-	// Check in-memory cache first
-	githubCache.mu.RLock()
-	timeSinceLastFetch := time.Since(githubCache.lastFetch)
-	hasCachedData := githubCache.hasData
-	cachedUserRepos := githubCache.userRepos
-	cachedOrgRepos := githubCache.orgRepos
-	githubCache.mu.RUnlock()
-
-	// If we have cached data, only refresh every 15 minutes
-	// If we don't have cached data, allow refresh every 5 minutes
-	minWaitTime := 5 * time.Minute
-	if hasCachedData {
-		minWaitTime = 15 * time.Minute
-	}
-
-	// Return cached data if available and within time limits
-	if hasCachedData && timeSinceLastFetch < minWaitTime {
-		log.Printf("GitHub: returning cached data (last fetch: %v ago)", timeSinceLastFetch)
-		return cachedUserRepos, cachedOrgRepos, nil
-	}
-
-	// Don't make API call if less than 5 minutes since last call
-	if timeSinceLastFetch < 5*time.Minute {
-		log.Printf("GitHub: too soon since last call (%v), returning cached data", timeSinceLastFetch)
-		if hasCachedData {
-			return cachedUserRepos, cachedOrgRepos, nil
-		}
-		// If no cached data and too soon, return empty with error
-		return GitHubUserRepos{Error: "Rate limited. Please wait a few minutes."},
-			GitHubOrgRepos{Error: "Rate limited. Please wait a few minutes."},
-			nil
-	}
-
-	// Make API calls
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	var userRepos GitHubUserRepos
-	var orgRepos GitHubOrgRepos
-
-	// Fetch from Earentir user
-	{
-		u := "https://api.github.com/users/Earentir/repos?sort=updated&per_page=5"
-		req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
-		req.Header.Set("User-Agent", "lan-index/1.0")
-		req.Header.Set("Accept", "application/vnd.github.v3+json")
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Printf("GitHub API error (user repos): %v", err)
-			userRepos.Error = "Failed to fetch user repos: " + err.Error()
-		} else if res.StatusCode == 403 {
-			rateLimitRemaining := res.Header.Get("X-RateLimit-Remaining")
-			rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-			resetTime := formatRateLimitReset(rateLimitReset)
-			log.Printf("GitHub API rate limit (user repos): Remaining=%s, Resets at %s", rateLimitRemaining, resetTime)
-			userRepos.Error = "Rate Limited (403) will be available again in " + formatRateLimitResetForUI(rateLimitReset)
-			if closeErr := res.Body.Close(); closeErr != nil {
-				log.Printf("Error closing GitHub rate limit response body: %v", closeErr)
-			}
-		} else if res.StatusCode < 200 || res.StatusCode > 299 {
-			log.Printf("GitHub API error (user repos): HTTP %d - %s", res.StatusCode, res.Status)
-			userRepos.Error = "Failed to fetch user repos: HTTP " + res.Status
-			if closeErr := res.Body.Close(); closeErr != nil {
-				log.Printf("Error closing GitHub error response body: %v", closeErr)
-			}
-		} else {
-			var repos []struct {
-				Name        string    `json:"name"`
-				FullName    string    `json:"full_name"`
-				Description string    `json:"description"`
-				HTMLURL     string    `json:"html_url"`
-				Stargazers  int       `json:"stargazers_count"`
-				Language    string    `json:"language"`
-				UpdatedAt   time.Time `json:"updated_at"`
-			}
-			if err := json.NewDecoder(res.Body).Decode(&repos); err != nil {
-				log.Printf("GitHub API error (user repos decode): %v", err)
-				userRepos.Error = "Failed to decode user repos: " + err.Error()
-			} else {
-				for _, r := range repos {
-					userRepos.Repos = append(userRepos.Repos, GitHubRepo{
-						Name:        r.Name,
-						FullName:    r.FullName,
-						Description: r.Description,
-						URL:         r.HTMLURL,
-						Stars:       r.Stargazers,
-						Language:    r.Language,
-						Updated:     r.UpdatedAt.Format("2006-01-02"),
-					})
-				}
-				userRepos.Total = len(repos)
-				userRepos.AccountURL = "https://github.com/Earentir"
-				log.Printf("GitHub: fetched %d user repos", len(repos))
-
-				// Fetch total count for user (only if repos fetch succeeded to avoid extra API calls on errors)
-				{
-					u := "https://api.github.com/users/Earentir"
-					req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
-					req.Header.Set("User-Agent", "lan-index/1.0")
-					req.Header.Set("Accept", "application/vnd.github.v3+json")
-					res, err := http.DefaultClient.Do(req)
-					if err != nil {
-						log.Printf("GitHub API error (user total count): %v", err)
-					} else if res.StatusCode == 403 {
-						rateLimitRemaining := res.Header.Get("X-RateLimit-Remaining")
-						rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-						resetTime := formatRateLimitReset(rateLimitReset)
-						log.Printf("GitHub API rate limit (user total count): Remaining=%s, Resets at %s", rateLimitRemaining, resetTime)
-						// Don't set error here, we already have repos, just use count as fallback
-						// Use repos count as fallback
-						userRepos.Total = len(userRepos.Repos)
-						if closeErr := res.Body.Close(); closeErr != nil {
-							log.Printf("Error closing GitHub rate limit response body: %v", closeErr)
-						}
-					} else if res.StatusCode < 200 || res.StatusCode > 299 {
-						log.Printf("GitHub API error (user total count): HTTP %d - %s", res.StatusCode, res.Status)
-						// Use repos count as fallback
-						userRepos.Total = len(userRepos.Repos)
-						if closeErr := res.Body.Close(); closeErr != nil {
-							log.Printf("Error closing GitHub error response body: %v", closeErr)
-						}
-					} else {
-						var user struct {
-							PublicRepos int `json:"public_repos"`
-						}
-						if err := json.NewDecoder(res.Body).Decode(&user); err != nil {
-							log.Printf("GitHub API error (user total count decode): %v", err)
-							userRepos.Total = len(userRepos.Repos)
-						} else {
-							userRepos.Total = user.PublicRepos
-							log.Printf("GitHub: user total repos = %d", user.PublicRepos)
-						}
-						if closeErr := res.Body.Close(); closeErr != nil {
-							log.Printf("Error closing GitHub user profile response body: %v", closeErr)
-						}
-					}
-				}
-			}
-			if closeErr := res.Body.Close(); closeErr != nil {
-				log.Printf("Error closing GitHub user repos response body: %v", closeErr)
-			}
-		}
-	}
-
-	// Fetch from network-plane org
-	{
-		u := "https://api.github.com/orgs/network-plane/repos?sort=updated&per_page=5"
-		req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
-		req.Header.Set("User-Agent", "lan-index/1.0")
-		req.Header.Set("Accept", "application/vnd.github.v3+json")
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Printf("GitHub API error (org repos): %v", err)
-			orgRepos.Error = "Failed to fetch org repos: " + err.Error()
-		} else if res.StatusCode == 403 {
-			rateLimitRemaining := res.Header.Get("X-RateLimit-Remaining")
-			rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-			resetTime := formatRateLimitReset(rateLimitReset)
-			log.Printf("GitHub API rate limit (org repos): Remaining=%s, Resets at %s", rateLimitRemaining, resetTime)
-			orgRepos.Error = "Rate Limited (403) will be available again in " + formatRateLimitResetForUI(rateLimitReset)
-			if closeErr := res.Body.Close(); closeErr != nil {
-				log.Printf("Error closing GitHub org rate limit response body: %v", closeErr)
-			}
-		} else if res.StatusCode < 200 || res.StatusCode > 299 {
-			log.Printf("GitHub API error (org repos): HTTP %d - %s", res.StatusCode, res.Status)
-			orgRepos.Error = "Failed to fetch org repos: HTTP " + res.Status
-			if closeErr := res.Body.Close(); closeErr != nil {
-				log.Printf("Error closing GitHub org error response body: %v", closeErr)
-			}
-		} else {
-			var repos []struct {
-				Name        string    `json:"name"`
-				FullName    string    `json:"full_name"`
-				Description string    `json:"description"`
-				HTMLURL     string    `json:"html_url"`
-				Stargazers  int       `json:"stargazers_count"`
-				Language    string    `json:"language"`
-				UpdatedAt   time.Time `json:"updated_at"`
-			}
-			if err := json.NewDecoder(res.Body).Decode(&repos); err != nil {
-				log.Printf("GitHub API error (org repos decode): %v", err)
-				orgRepos.Error = "Failed to decode org repos: " + err.Error()
-			} else {
-				for _, r := range repos {
-					orgRepos.Repos = append(orgRepos.Repos, GitHubRepo{
-						Name:        r.Name,
-						FullName:    r.FullName,
-						Description: r.Description,
-						URL:         r.HTMLURL,
-						Stars:       r.Stargazers,
-						Language:    r.Language,
-						Updated:     r.UpdatedAt.Format("2006-01-02"),
-					})
-				}
-				orgRepos.Total = len(repos)
-				orgRepos.AccountURL = "https://github.com/network-plane"
-				log.Printf("GitHub: fetched %d org repos", len(repos))
-
-				// Fetch total count for org (only if repos fetch succeeded to avoid extra API calls on errors)
-				{
-					u := "https://api.github.com/orgs/network-plane"
-					req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
-					req.Header.Set("User-Agent", "lan-index/1.0")
-					req.Header.Set("Accept", "application/vnd.github.v3+json")
-					res, err := http.DefaultClient.Do(req)
-					if err != nil {
-						log.Printf("GitHub API error (org total count): %v", err)
-						// Use repos count as fallback
-						orgRepos.Total = len(orgRepos.Repos)
-					} else if res.StatusCode == 403 {
-						rateLimitRemaining := res.Header.Get("X-RateLimit-Remaining")
-						rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-						resetTime := formatRateLimitReset(rateLimitReset)
-						log.Printf("GitHub API rate limit (org total count): Remaining=%s, Resets at %s", rateLimitRemaining, resetTime)
-						// Don't set error here, we already have repos, just use count as fallback
-						orgRepos.Total = len(orgRepos.Repos)
-						if closeErr := res.Body.Close(); closeErr != nil {
-							log.Printf("Error closing GitHub org rate limit response body: %v", closeErr)
-						}
-					} else if res.StatusCode < 200 || res.StatusCode > 299 {
-						log.Printf("GitHub API error (org total count): HTTP %d - %s", res.StatusCode, res.Status)
-						// Use repos count as fallback
-						orgRepos.Total = len(orgRepos.Repos)
-						if closeErr := res.Body.Close(); closeErr != nil {
-							log.Printf("Error closing GitHub org error response body: %v", closeErr)
-						}
-					} else {
-						var org struct {
-							PublicRepos int `json:"public_repos"`
-						}
-						if err := json.NewDecoder(res.Body).Decode(&org); err != nil {
-							log.Printf("GitHub API error (org total count decode): %v", err)
-							orgRepos.Total = len(orgRepos.Repos)
-						} else {
-							orgRepos.Total = org.PublicRepos
-							log.Printf("GitHub: org total repos = %d", org.PublicRepos)
-						}
-						if closeErr := res.Body.Close(); closeErr != nil {
-							log.Printf("Error closing GitHub org profile response body: %v", closeErr)
-						}
-					}
-				}
-			}
-			if closeErr := res.Body.Close(); closeErr != nil {
-				log.Printf("Error closing GitHub org repos response body: %v", closeErr)
-			}
-		}
-	}
-
-	// If we got errors but have cached data, return cached data instead
-	if (userRepos.Error != "" || orgRepos.Error != "") && hasCachedData {
-		log.Printf("GitHub: API call failed but returning cached data")
-		return cachedUserRepos, cachedOrgRepos, nil
-	}
-
-	// Only return error if we have no repos AND no error messages (meaning we actually tried but found nothing)
-	// If we have error messages (like rate limiting), return nil error so the error messages are shown in the UI
-	if len(userRepos.Repos) == 0 && len(orgRepos.Repos) == 0 {
-		if userRepos.Error == "" && orgRepos.Error == "" {
-			return userRepos, orgRepos, errors.New("no repos found")
-		}
-		// If we have error messages, return nil error so the UI can display them
-		// Don't cache errors
-		return userRepos, orgRepos, nil
-	}
-
-	// Cache successful results in memory (only if we have data and no errors)
-	if len(userRepos.Repos) > 0 || len(orgRepos.Repos) > 0 {
-		githubCache.mu.Lock()
-		githubCache.userRepos = userRepos
-		githubCache.orgRepos = orgRepos
-		githubCache.lastFetch = time.Now()
-		githubCache.hasData = true
-		githubCache.mu.Unlock()
-
-		log.Printf("GitHub: cached %d user repos and %d org repos", len(userRepos.Repos), len(orgRepos.Repos))
-	}
-
-	return userRepos, orgRepos, nil
-}
-
-// GitHubReposResponse is the response for the /api/github/repos endpoint
-type GitHubReposResponse struct {
-	Repos      []GitHubRepo `json:"repos"`
-	Total      int          `json:"total"`
-	AccountURL string       `json:"accountUrl"`
-	Error      string       `json:"error,omitempty"`
-}
-
-func fetchGitHubReposForName(ctx context.Context, name, repoType, token string) (GitHubReposResponse, error) {
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	var resp GitHubReposResponse
-	resp.AccountURL = "https://github.com/" + name
-
-	// Determine API URL based on type
-	var reposURL, profileURL string
-	if repoType == "org" {
-		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=updated&per_page=5"
-		profileURL = "https://api.github.com/orgs/" + name
-	} else {
-		reposURL = "https://api.github.com/users/" + name + "/repos?sort=updated&per_page=5"
-		profileURL = "https://api.github.com/users/" + name
-	}
-
-	// Fetch repos
-	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, reposURL, nil)
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		resp.Error = "Failed to fetch repos: " + err.Error()
-		return resp, nil
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing response body: %v", closeErr)
-		}
-	}()
-
-	if res.StatusCode == 403 {
-		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
-		return resp, nil
-	}
-	if res.StatusCode == 404 {
-		resp.Error = "Not found: " + name
-		return resp, nil
-	}
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		resp.Error = "HTTP error: " + res.Status
-		return resp, nil
-	}
-
-	var repos []struct {
-		Name        string    `json:"name"`
-		FullName    string    `json:"full_name"`
-		Description string    `json:"description"`
-		HTMLURL     string    `json:"html_url"`
-		Stargazers  int       `json:"stargazers_count"`
-		Language    string    `json:"language"`
-		UpdatedAt   time.Time `json:"updated_at"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&repos); err != nil {
-		resp.Error = "Failed to decode repos: " + err.Error()
-		return resp, nil
-	}
-
-	for _, r := range repos {
-		resp.Repos = append(resp.Repos, GitHubRepo{
-			Name:        r.Name,
-			FullName:    r.FullName,
-			Description: r.Description,
-			URL:         r.HTMLURL,
-			Stars:       r.Stargazers,
-			Language:    r.Language,
-			Updated:     r.UpdatedAt.Format("2006-01-02"),
-		})
-	}
-	resp.Total = len(repos)
-
-	// Fetch total count
-	req2, _ := http.NewRequestWithContext(cctx, http.MethodGet, profileURL, nil)
-	req2.Header.Set("User-Agent", "lan-index/1.0")
-	req2.Header.Set("Accept", "application/vnd.github.v3+json")
-	if token != "" {
-		req2.Header.Set("Authorization", "Bearer "+token)
-	}
-	res2, err := http.DefaultClient.Do(req2)
-	if err == nil && res2.StatusCode >= 200 && res2.StatusCode <= 299 {
-		var profile struct {
-			PublicRepos int `json:"public_repos"`
-		}
-		if err := json.NewDecoder(res2.Body).Decode(&profile); err == nil {
-			resp.Total = profile.PublicRepos
-		}
-		if closeErr := res2.Body.Close(); closeErr != nil {
-			log.Printf("Error closing GitHub profile response body: %v", closeErr)
-		}
-	}
-
-	return resp, nil
-}
-
-// GitHubPRItem represents a pull request
-type GitHubPRItem struct {
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	User    string `json:"user"`
-	State   string `json:"state"`
-	Created string `json:"created"`
-	Repo    string `json:"repo"`
-}
-
-// GitHubPRsResponse is the response for the /api/github/prs endpoint
-type GitHubPRsResponse struct {
-	Items []GitHubPRItem `json:"items"`
-	Total int            `json:"total"`
-	Error string         `json:"error,omitempty"`
-}
-
-func fetchGitHubPRs(ctx context.Context, name, accountType, token string) (GitHubPRsResponse, error) {
-	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	var resp GitHubPRsResponse
-
-	var searchQuery string
-	switch accountType {
-	case "repo":
-		// For a specific repo: name is "user/repo"
-		searchQuery = "repo:" + name + " is:pr is:open"
-	case "org":
-		searchQuery = "org:" + name + " is:pr is:open"
-	default:
-		searchQuery = "author:" + name + " is:pr is:open"
-	}
-
-	apiURL := "https://api.github.com/search/issues?q=" + url.QueryEscape(searchQuery) + "&sort=updated&per_page=10"
-
-	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		resp.Error = "Failed to fetch PRs: " + err.Error()
-		return resp, nil
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing response body: %v", closeErr)
-		}
-	}()
-
-	if res.StatusCode == 403 {
-		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
-		return resp, nil
-	}
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		resp.Error = "HTTP error: " + res.Status
-		return resp, nil
-	}
-
-	var searchResult struct {
-		TotalCount int `json:"total_count"`
-		Items      []struct {
-			Title     string `json:"title"`
-			HTMLURL   string `json:"html_url"`
-			State     string `json:"state"`
-			CreatedAt string `json:"created_at"`
-			User      struct {
-				Login string `json:"login"`
-			} `json:"user"`
-			Repository struct {
-				FullName string `json:"full_name"`
-			} `json:"repository"`
-			RepositoryURL string `json:"repository_url"`
-		} `json:"items"`
-	}
-
-	if err := json.NewDecoder(res.Body).Decode(&searchResult); err != nil {
-		resp.Error = "Failed to decode PRs: " + err.Error()
-		return resp, nil
-	}
-
-	for _, item := range searchResult.Items {
-		created := ""
-		if t, err := time.Parse(time.RFC3339, item.CreatedAt); err == nil {
-			created = t.Format("2006-01-02")
-		}
-		repoName := item.Repository.FullName
-		if repoName == "" && item.RepositoryURL != "" {
-			// Extract from URL like https://api.github.com/repos/user/repo
-			parts := strings.Split(item.RepositoryURL, "/")
-			if len(parts) >= 2 {
-				repoName = parts[len(parts)-2] + "/" + parts[len(parts)-1]
-			}
-		}
-		resp.Items = append(resp.Items, GitHubPRItem{
-			Title:   item.Title,
-			URL:     item.HTMLURL,
-			User:    item.User.Login,
-			State:   item.State,
-			Created: created,
-			Repo:    repoName,
-		})
-	}
-	resp.Total = searchResult.TotalCount
-
-	return resp, nil
-}
-
-// GitHubCommitItem represents a commit
-type GitHubCommitItem struct {
-	Message string `json:"message"`
-	URL     string `json:"url"`
-	Author  string `json:"author"`
-	Date    string `json:"date"`
-	Sha     string `json:"sha"`
-	Repo    string `json:"repo"`
-}
-
-// GitHubCommitsResponse is the response for the /api/github/commits endpoint
-type GitHubCommitsResponse struct {
-	Items []GitHubCommitItem `json:"items"`
-	Total int                `json:"total"`
-	Error string             `json:"error,omitempty"`
-}
-
-func fetchGitHubCommits(ctx context.Context, name, accountType, token string) (GitHubCommitsResponse, error) {
-	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	var resp GitHubCommitsResponse
-
-	var apiURL string
-	if accountType == "repo" {
-		// For a specific repo: name is "user/repo"
-		apiURL = "https://api.github.com/repos/" + name + "/commits?per_page=10"
-	} else {
-		// For user/org, we need to search commits
-		var searchQuery string
-		if accountType == "org" {
-			searchQuery = "org:" + name
-		} else {
-			searchQuery = "author:" + name
-		}
-		apiURL = "https://api.github.com/search/commits?q=" + url.QueryEscape(searchQuery) + "&sort=author-date&order=desc&per_page=10"
-	}
-
-	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if accountType != "repo" {
-		// Search commits requires special accept header
-		req.Header.Set("Accept", "application/vnd.github.cloak-preview+json")
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		resp.Error = "Failed to fetch commits: " + err.Error()
-		return resp, nil
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing response body: %v", closeErr)
-		}
-	}()
-
-	if res.StatusCode == 403 {
-		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
-		return resp, nil
-	}
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		resp.Error = "HTTP error: " + res.Status
-		return resp, nil
-	}
-
-	if accountType == "repo" {
-		// Direct commits endpoint
-		var commits []struct {
-			Sha     string `json:"sha"`
-			HTMLURL string `json:"html_url"`
-			Commit  struct {
-				Message string `json:"message"`
-				Author  struct {
-					Name string `json:"name"`
-					Date string `json:"date"`
-				} `json:"author"`
-			} `json:"commit"`
-		}
-		if err := json.NewDecoder(res.Body).Decode(&commits); err != nil {
-			resp.Error = "Failed to decode commits: " + err.Error()
-			return resp, nil
-		}
-
-		for _, c := range commits {
-			date := ""
-			if t, err := time.Parse(time.RFC3339, c.Commit.Author.Date); err == nil {
-				date = t.Format("2006-01-02")
-			}
-			// Truncate message to first line
-			msg := c.Commit.Message
-			if idx := strings.Index(msg, "\n"); idx > 0 {
-				msg = msg[:idx]
-			}
-			if len(msg) > 60 {
-				msg = msg[:57] + "..."
-			}
-			resp.Items = append(resp.Items, GitHubCommitItem{
-				Message: msg,
-				URL:     c.HTMLURL,
-				Author:  c.Commit.Author.Name,
-				Date:    date,
-				Sha:     c.Sha[:7],
-				Repo:    name,
-			})
-		}
-		resp.Total = len(commits)
-	} else {
-		// Search commits endpoint
-		var searchResult struct {
-			TotalCount int `json:"total_count"`
-			Items      []struct {
-				Sha        string `json:"sha"`
-				HTMLURL    string `json:"html_url"`
-				Repository struct {
-					FullName string `json:"full_name"`
-				} `json:"repository"`
-				Commit struct {
-					Message string `json:"message"`
-					Author  struct {
-						Name string `json:"name"`
-						Date string `json:"date"`
-					} `json:"author"`
-				} `json:"commit"`
-			} `json:"items"`
-		}
-		if err := json.NewDecoder(res.Body).Decode(&searchResult); err != nil {
-			resp.Error = "Failed to decode commits: " + err.Error()
-			return resp, nil
-		}
-
-		for _, c := range searchResult.Items {
-			date := ""
-			if t, err := time.Parse(time.RFC3339, c.Commit.Author.Date); err == nil {
-				date = t.Format("2006-01-02")
-			}
-			msg := c.Commit.Message
-			if idx := strings.Index(msg, "\n"); idx > 0 {
-				msg = msg[:idx]
-			}
-			if len(msg) > 60 {
-				msg = msg[:57] + "..."
-			}
-			resp.Items = append(resp.Items, GitHubCommitItem{
-				Message: msg,
-				URL:     c.HTMLURL,
-				Author:  c.Commit.Author.Name,
-				Date:    date,
-				Sha:     c.Sha[:7],
-				Repo:    c.Repository.FullName,
-			})
-		}
-		resp.Total = searchResult.TotalCount
-	}
-
-	return resp, nil
-}
-
-// GitHubIssueItem represents an issue
-type GitHubIssueItem struct {
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	User    string `json:"user"`
-	State   string `json:"state"`
-	Created string `json:"created"`
-	Repo    string `json:"repo"`
-}
-
-// GitHubIssuesResponse is the response for the /api/github/issues endpoint
-type GitHubIssuesResponse struct {
-	Items []GitHubIssueItem `json:"items"`
-	Total int               `json:"total"`
-	Error string            `json:"error,omitempty"`
-}
-
-func fetchGitHubIssues(ctx context.Context, name, accountType, token string) (GitHubIssuesResponse, error) {
-	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	var resp GitHubIssuesResponse
-
-	var searchQuery string
-	switch accountType {
-	case "repo":
-		// For a specific repo: name is "user/repo"
-		searchQuery = "repo:" + name + " is:issue is:open"
-	case "org":
-		searchQuery = "org:" + name + " is:issue is:open"
-	default:
-		searchQuery = "author:" + name + " is:issue is:open"
-	}
-
-	apiURL := "https://api.github.com/search/issues?q=" + url.QueryEscape(searchQuery) + "&sort=updated&per_page=10"
-
-	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		resp.Error = "Failed to fetch issues: " + err.Error()
-		return resp, nil
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing response body: %v", closeErr)
-		}
-	}()
-
-	if res.StatusCode == 403 {
-		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
-		return resp, nil
-	}
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		resp.Error = "HTTP error: " + res.Status
-		return resp, nil
-	}
-
-	var searchResult struct {
-		TotalCount int `json:"total_count"`
-		Items      []struct {
-			Title     string `json:"title"`
-			HTMLURL   string `json:"html_url"`
-			State     string `json:"state"`
-			CreatedAt string `json:"created_at"`
-			User      struct {
-				Login string `json:"login"`
-			} `json:"user"`
-			Repository struct {
-				FullName string `json:"full_name"`
-			} `json:"repository"`
-			RepositoryURL string `json:"repository_url"`
-		} `json:"items"`
-	}
-
-	if err := json.NewDecoder(res.Body).Decode(&searchResult); err != nil {
-		resp.Error = "Failed to decode issues: " + err.Error()
-		return resp, nil
-	}
-
-	for _, item := range searchResult.Items {
-		created := ""
-		if t, err := time.Parse(time.RFC3339, item.CreatedAt); err == nil {
-			created = t.Format("2006-01-02")
-		}
-		repoName := item.Repository.FullName
-		if repoName == "" && item.RepositoryURL != "" {
-			parts := strings.Split(item.RepositoryURL, "/")
-			if len(parts) >= 2 {
-				repoName = parts[len(parts)-2] + "/" + parts[len(parts)-1]
-			}
-		}
-		resp.Items = append(resp.Items, GitHubIssueItem{
-			Title:   item.Title,
-			URL:     item.HTMLURL,
-			User:    item.User.Login,
-			State:   item.State,
-			Created: created,
-			Repo:    repoName,
-		})
-	}
-	resp.Total = searchResult.TotalCount
-
-	return resp, nil
-}
-
-// GitHubStatsResponse is the response for the /api/github/stats endpoint
-type GitHubStatsResponse struct {
-	Stats struct {
-		Stars      int    `json:"stars"`
-		Forks      int    `json:"forks"`
-		Watchers   int    `json:"watchers"`
-		OpenIssues int    `json:"openIssues"`
-		Language   string `json:"language"`
-		Size       int    `json:"size"`
-		Created    string `json:"created"`
-		Updated    string `json:"updated"`
-	} `json:"stats"`
-	Error string `json:"error,omitempty"`
-}
-
-func fetchGitHubStats(ctx context.Context, name, token string) (GitHubStatsResponse, error) {
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	var resp GitHubStatsResponse
-
-	// name should be "user/repo"
-	apiURL := "https://api.github.com/repos/" + name
-
-	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
-	req.Header.Set("User-Agent", "lan-index/1.0")
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		resp.Error = "Failed to fetch stats: " + err.Error()
-		return resp, nil
-	}
-	defer func() {
-		if closeErr := res.Body.Close(); closeErr != nil {
-			log.Printf("Error closing response body: %v", closeErr)
-		}
-	}()
-
-	if res.StatusCode == 403 {
-		rateLimitReset := res.Header.Get("X-RateLimit-Reset")
-		resp.Error = "Rate Limited - available again in " + formatRateLimitResetForUI(rateLimitReset)
-		return resp, nil
-	}
-	if res.StatusCode == 404 {
-		resp.Error = "Repository not found: " + name
-		return resp, nil
-	}
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		resp.Error = "HTTP error: " + res.Status
-		return resp, nil
-	}
-
-	var repo struct {
-		StargazersCount int       `json:"stargazers_count"`
-		ForksCount      int       `json:"forks_count"`
-		WatchersCount   int       `json:"watchers_count"`
-		OpenIssuesCount int       `json:"open_issues_count"`
-		Language        string    `json:"language"`
-		Size            int       `json:"size"`
-		CreatedAt       time.Time `json:"created_at"`
-		UpdatedAt       time.Time `json:"updated_at"`
-	}
-
-	if err := json.NewDecoder(res.Body).Decode(&repo); err != nil {
-		resp.Error = "Failed to decode stats: " + err.Error()
-		return resp, nil
-	}
-
-	resp.Stats.Stars = repo.StargazersCount
-	resp.Stats.Forks = repo.ForksCount
-	resp.Stats.Watchers = repo.WatchersCount
-	resp.Stats.OpenIssues = repo.OpenIssuesCount
-	resp.Stats.Language = repo.Language
-	resp.Stats.Size = repo.Size
-	resp.Stats.Created = repo.CreatedAt.Format("2006-01-02")
-	resp.Stats.Updated = repo.UpdatedAt.Format("2006-01-02")
-
-	return resp, nil
-}
-
-func formatRateLimitResetForUI(resetHeader string) string {
-	if resetHeader == "" {
-		return "unknown time"
-	}
-	// Parse epoch timestamp
-	var resetTime int64
-	if err := itoaParse(resetHeader, &resetTime); err != nil {
-		return "unknown time"
-	}
-	reset := time.Unix(resetTime, 0)
-	now := time.Now()
-	untilReset := reset.Sub(now)
-
-	if untilReset <= 0 {
-		return "now"
-	}
-
-	// Format as "Xm" or "XhYm" for UI
-	if untilReset < time.Hour {
-		minutes := int(untilReset.Minutes())
-		if minutes == 0 {
-			seconds := int(untilReset.Seconds())
-			return itoa(int64(seconds)) + "s"
-		}
-		return itoa(int64(minutes)) + "m"
-	}
-	hours := int(untilReset.Hours())
-	minutes := int(untilReset.Minutes()) % 60
-	if minutes > 0 {
-		return itoa(int64(hours)) + "h" + itoa(int64(minutes)) + "m"
-	}
-	return itoa(int64(hours)) + "h"
-}
-
-func getSystemMetrics(ctx context.Context) SystemMetrics {
-	var metrics SystemMetrics
-
-	// CPU metrics
-	{
-		// Get CPU usage percentage
-		percentages, err := cpu.PercentWithContext(ctx, time.Second, false)
-		if err != nil {
-			metrics.CPU.Error = err.Error()
-		} else if len(percentages) > 0 {
-			metrics.CPU.Usage = percentages[0]
-		}
-		// Load average not available in gopsutil v3, would need platform-specific code
-	}
-
-	// RAM metrics
-	{
-		vm, err := mem.VirtualMemoryWithContext(ctx)
-		if err != nil {
-			metrics.RAM.Error = err.Error()
-		} else {
-			metrics.RAM.Total = vm.Total
-			metrics.RAM.Used = vm.Used
-			metrics.RAM.Available = vm.Available
-			metrics.RAM.Percent = vm.UsedPercent
-		}
-	}
-
-	// Disk metrics (root filesystem)
-	{
-		usage, err := disk.UsageWithContext(ctx, "/")
-		if err != nil {
-			metrics.Disk.Error = err.Error()
-		} else {
-			metrics.Disk.Total = usage.Total
-			metrics.Disk.Used = usage.Used
-			metrics.Disk.Free = usage.Free
-			metrics.Disk.Percent = usage.UsedPercent
-		}
-	}
-
-	return metrics
-}
-
-func getCPUDetails(_ context.Context) CPUDetailsInfo {
-	var info CPUDetailsInfo
-
-	// Get vendor and max functions from cpuid
-	vendorID := cpuid.GetVendorID(false, "")
-	maxFunc, maxExtFunc := cpuid.GetMaxFunctions(false, "")
-
-	// Get vendor name
-	info.Vendor = cpuid.GetVendorName(false, "")
-
-	// Get brand string (full CPU name) from cpuid
-	brand := cpuid.GetBrandString(maxExtFunc, false, "")
-	if brand != "" {
-		info.Name = strings.TrimSpace(brand)
-	} else {
-		info.Name = "Unknown CPU"
-	}
-
-	// Get processor info from cpuid
-	// Note: CoreCount from cpuid already includes hyperthreading (logical cores)
-	procInfo := cpuid.GetProcessorInfo(maxFunc, maxExtFunc, false, "")
-	info.VirtualCores = int(procInfo.CoreCount) // This is already logical cores
-	if procInfo.ThreadPerCore > 1 {
-		// Physical cores = logical cores / threads per core
-		info.PhysicalCores = int(procInfo.CoreCount) / int(procInfo.ThreadPerCore)
-	} else {
-		info.PhysicalCores = int(procInfo.CoreCount)
-	}
-
-	// Get model data from cpuid
-	modelData := cpuid.GetModelData(false, "")
-	info.Family = int(modelData.ExtendedFamily)
-	info.Model = int(modelData.ExtendedModel)
-	info.Stepping = int(modelData.SteppingID)
-
-	// Get cache information from cpuid
-	caches, err := cpuid.GetCacheInfo(maxFunc, maxExtFunc, vendorID, false, "")
-	if err == nil {
-		for _, cache := range caches {
-			// Only include L1, L2, L3
-			if cache.Level >= 1 && cache.Level <= 3 {
-				cacheInfo := CPUCacheInfo{
-					Level:  int(cache.Level),
-					Type:   cache.Type,
-					SizeKB: int(cache.SizeKB),
-				}
-				info.Cache = append(info.Cache, cacheInfo)
-			}
-		}
-	}
-
-	// Get supported features from cpuid
-	categories := cpuid.GetAllFeatureCategories()
-	for _, cat := range categories {
-		features := cpuid.GetSupportedFeatures(cat, false, "")
-		info.Features = append(info.Features, features...)
-	}
-
-	// Check for Intel Hybrid (P-core/E-core) info
-	hybridInfo := cpuid.GetIntelHybrid(false, "")
-	if hybridInfo.HybridCPU {
-		info.HybridCPU = true
-		info.CoreType = hybridInfo.CoreTypeName
-	}
-
-	return info
-}
-
-func getSMBIOSRAMInfo(_ context.Context) SMBIOSRAMInfo {
-	var info SMBIOSRAMInfo
-
-	// Read SMBIOS data
-	sm, err := gosmbios.Read()
-	if err != nil {
-		info.Error = "Failed to read SMBIOS: " + err.Error()
-		return info
-	}
-
-	// Get all populated memory devices
-	memoryDevices, err := type17.GetPopulated(sm)
-	if err != nil {
-		info.Error = "Failed to get memory devices: " + err.Error()
-		return info
-	}
-
-	if len(memoryDevices) == 0 {
-		info.Error = "No memory devices found"
-		return info
-	}
-
-	var totalSizeMB uint64
-	var modules []RAMModuleInfo
-	manufacturers := make(map[string]bool)
-
-	for _, dev := range memoryDevices {
-		module := RAMModuleInfo{
-			DeviceLocator: dev.DeviceLocator,
-			BankLocator:   dev.BankLocator,
-			Size:          dev.Size, // Already in MB
-			SizeString:    dev.SizeString(),
-		}
-
-		// Manufacturer
-		if dev.Manufacturer != "" {
-			module.Manufacturer = dev.Manufacturer
-			manufacturers[dev.Manufacturer] = true
-		}
-
-		// Part number
-		if dev.PartNumber != "" {
-			module.PartNumber = dev.PartNumber
-		}
-
-		// Serial number
-		if dev.SerialNumber != "" {
-			module.SerialNumber = dev.SerialNumber
-		}
-
-		// Speed
-		if dev.Speed > 0 {
-			module.Speed = dev.Speed
-			module.SpeedString = fmt.Sprintf("%d MHz", dev.Speed)
-		}
-
-		// Memory type
-		if dev.MemoryType > 0 {
-			module.Type = dev.MemoryType.String()
-		}
-
-		// Form factor
-		if dev.FormFactor > 0 {
-			module.FormFactor = dev.FormFactor.String()
-		}
-
-		// Voltage
-		if dev.ConfiguredVoltage > 0 {
-			module.Voltage = dev.ConfiguredVoltage
-			voltageV := float64(dev.ConfiguredVoltage) / 1000.0
-			module.VoltageString = fmt.Sprintf("%.3f V", voltageV)
-		}
-
-		modules = append(modules, module)
-		totalSizeMB += dev.Size
-	}
-
-	info.Modules = modules
-	info.TotalSize = totalSizeMB
-
-	// Format total size
-	if totalSizeMB >= 1024 {
-		info.TotalSizeString = fmt.Sprintf("%.1f GB", float64(totalSizeMB)/1024.0)
-	} else {
-		info.TotalSizeString = fmt.Sprintf("%d MB", totalSizeMB)
-	}
-
-	// Set manufacturer (use most common if multiple)
-	if len(manufacturers) == 1 {
-		for mfr := range manufacturers {
-			info.Manufacturer = mfr
-		}
-	} else if len(manufacturers) > 1 {
-		// Multiple manufacturers, list them
-		var mfrList []string
-		for mfr := range manufacturers {
-			mfrList = append(mfrList, mfr)
-		}
-		info.Manufacturer = strings.Join(mfrList, ", ")
-	}
-
-	return info
-}
-
-func getSMBIOSFirmwareInfo(_ context.Context) SMBIOSFirmwareInfo {
-	var info SMBIOSFirmwareInfo
-
-	// Read SMBIOS data
-	sm, err := gosmbios.Read()
-	if err != nil {
-		info.Error = "Failed to read SMBIOS: " + err.Error()
-		return info
-	}
-
-	// Get BIOS information (Type 0)
-	biosInfo, err := type0.Get(sm)
-	if err != nil {
-		info.Error = "Failed to get BIOS information: " + err.Error()
-		return info
-	}
-
-	// Extract BIOS vendor
-	if biosInfo.Vendor != "" {
-		info.Vendor = biosInfo.Vendor
-	}
-
-	// Extract BIOS version
-	if biosInfo.Version != "" {
-		info.Version = biosInfo.Version
-	}
-
-	// Extract BIOS release date
-	if biosInfo.ReleaseDate != "" {
-		info.ReleaseDate = biosInfo.ReleaseDate
-	}
-
-	return info
-}
-
-func getSMBIOSSystemInfo(_ context.Context) SMBIOSSystemInfo {
-	var info SMBIOSSystemInfo
-
-	// Read SMBIOS data
-	sm, err := gosmbios.Read()
-	if err != nil {
-		info.Error = "Failed to read SMBIOS: " + err.Error()
-		return info
-	}
-
-	// Get System information (Type 1)
-	systemInfo, err := type1.Get(sm)
-	if err != nil {
-		info.Error = "Failed to get System information: " + err.Error()
-		return info
-	}
-
-	// Extract System information
-	if systemInfo.Manufacturer != "" {
-		info.Manufacturer = systemInfo.Manufacturer
-	}
-
-	if systemInfo.ProductName != "" {
-		info.ProductName = systemInfo.ProductName
-	}
-
-	if systemInfo.Version != "" {
-		info.Version = systemInfo.Version
-	}
-
-	if systemInfo.SerialNumber != "" {
-		info.SerialNumber = systemInfo.SerialNumber
-	}
-
-	// UUID
-	if systemInfo.UUID != (type1.UUID{}) {
-		uuid := systemInfo.UUID
-		if len(uuid) >= 16 {
-			info.UUID = fmt.Sprintf("%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X",
-				uuid[0], uuid[1], uuid[2], uuid[3],
-				uuid[4], uuid[5],
-				uuid[6], uuid[7],
-				uuid[8], uuid[9],
-				uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15])
-		} else if len(uuid) > 0 {
-			// Handle shorter UUIDs by formatting what we have
-			var parts []string
-			for i := 0; i < len(uuid); i++ {
-				parts = append(parts, fmt.Sprintf("%02X", uuid[i]))
-			}
-			info.UUID = strings.Join(parts, "-")
-		}
-	}
-
-	// Wake Up Type
-	if systemInfo.WakeUpType > 0 {
-		info.WakeUpType = systemInfo.WakeUpType.String()
-	}
-
-	if systemInfo.SKUNumber != "" {
-		info.SKUNumber = systemInfo.SKUNumber
-	}
-
-	if systemInfo.Family != "" {
-		info.Family = systemInfo.Family
-	}
-
-	return info
-}
-
-func getSMBIOSBaseboardInfo(_ context.Context) SMBIOSBaseboardInfo {
-	var info SMBIOSBaseboardInfo
-
-	// Read SMBIOS data
-	sm, err := gosmbios.Read()
-	if err != nil {
-		info.Error = "Failed to read SMBIOS: " + err.Error()
-		return info
-	}
-
-	// Get Baseboard information (Type 2)
-	baseboardInfo, err := type2.Get(sm)
-	if err != nil {
-		info.Error = "Failed to get Baseboard information: " + err.Error()
-		return info
-	}
-
-	// Extract Baseboard information
-	if baseboardInfo.Manufacturer != "" {
-		info.Manufacturer = baseboardInfo.Manufacturer
-	}
-
-	if baseboardInfo.Product != "" {
-		info.Product = baseboardInfo.Product
-	}
-
-	if baseboardInfo.Version != "" {
-		info.Version = baseboardInfo.Version
-	}
-
-	if baseboardInfo.SerialNumber != "" {
-		info.SerialNumber = baseboardInfo.SerialNumber
-	}
-
-	if baseboardInfo.AssetTag != "" {
-		info.AssetTag = baseboardInfo.AssetTag
-	}
-
-	if baseboardInfo.LocationInChassis != "" {
-		info.LocationInChassis = baseboardInfo.LocationInChassis
-	}
-
-	if baseboardInfo.BoardType > 0 {
-		info.BoardType = baseboardInfo.BoardType.String()
-	}
-
-	// Feature Flags
-	var features []string
-	if baseboardInfo.FeatureFlags.IsHostingBoard() {
-		features = append(features, "Hosting Board")
-	}
-	if len(features) > 0 {
-		info.FeatureFlags = features
-	}
-
-	return info
-}
-
-func format1(v float64) string {
-	return strings.TrimRight(strings.TrimRight(fmtFloat(v, 1), "0"), ".")
-}
-func format0(v float64) string {
-	return strings.TrimRight(strings.TrimRight(fmtFloat(v, 0), "0"), ".")
-}
-func fmtFloat(v float64, decimals int) string {
-	// small local formatter to avoid importing fmt for a couple numbers
-	pow := 1.0
-	for i := 0; i < decimals; i++ {
-		pow *= 10
-	}
-	iv := int64(v*pow + 0.5)
-	neg := iv < 0
-	if neg {
-		iv = -iv
-	}
-	s := itoa(iv)
-	if decimals == 0 {
-		if neg {
-			return "-" + s
-		}
-		return s
-	}
-	for len(s) <= decimals {
-		s = "0" + s
-	}
-	pos := len(s) - decimals
-	out := s[:pos] + "." + s[pos:]
-	if neg {
-		return "-" + out
-	}
-	return out
-}
-func itoa(v int64) string {
-	if v == 0 {
-		return "0"
-	}
-	var b [32]byte
-	i := len(b)
-	for v > 0 {
-		i--
-		b[i] = byte('0' + (v % 10))
-		v /= 10
-	}
-	return string(b[i:])
-}
-
-
-// RSSFeedItem represents a single RSS feed item
-type RSSFeedItem struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Link        string `json:"link"`
-	PubDate     string `json:"pubDate"` // ISO 8601 format
-	Image       string `json:"image,omitempty"`
-}
-
-// RSSFeed represents an RSS feed structure
-type RSSFeed struct {
-	XMLName xml.Name   `xml:"rss"`
-	Channel RSSChannel `xml:"channel"`
-}
-
-// RSSChannel represents the channel element in RSS
-type RSSChannel struct {
-	Title       string    `xml:"title"`
-	Description string    `xml:"description"`
-	Link        string    `xml:"link"`
-	Items       []RSSItem `xml:"item"`
-}
-
-// RSSEnclosure represents an enclosure element in RSS
-type RSSEnclosure struct {
-	URL  string `xml:"url,attr"`
-	Type string `xml:"type,attr"`
-}
-
-// RSSMediaContent represents media:content element
-type RSSMediaContent struct {
-	URL    string `xml:"url,attr"`
-	Medium string `xml:"medium,attr"`
-}
-
-// RSSItem represents a single item in an RSS feed
-type RSSItem struct {
-	Title        string          `xml:"title"`
-	Description  string          `xml:"description"`
-	Link         string          `xml:"link"`
-	PubDate      string          `xml:"pubDate"`
-	Enclosure    RSSEnclosure    `xml:"enclosure"`
-	MediaContent RSSMediaContent `xml:"http://search.yahoo.com/mrss/ content"`
-	MediaThumb   string          `xml:"http://search.yahoo.com/mrss/ thumbnail"`
-}
-
-// fetchRSSFeed fetches and parses an RSS feed, returning the specified number of items
-func fetchRSSFeed(ctx context.Context, feedURL string, count int) ([]RSSFeedItem, error) {
-	// Validate URL
-	parsedURL, err := url.Parse(feedURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %v", err)
-	}
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return nil, fmt.Errorf("URL must be http or https")
-	}
-
-	// Create HTTP client
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-
-	// Fetch RSS feed
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-	req.Header.Set("User-Agent", "lan-index/1.0")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch feed: %v", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Printf("Error closing RSS response body: %v", closeErr)
-		}
-	}()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
-	}
-
-	// Parse XML
-	var feed RSSFeed
-	decoder := xml.NewDecoder(resp.Body)
-	if err := decoder.Decode(&feed); err != nil {
-		return nil, fmt.Errorf("failed to parse RSS: %v", err)
-	}
-
-	// Convert to RSSFeedItem format and limit to count items
-	items := make([]RSSFeedItem, 0, count)
-	for i, item := range feed.Channel.Items {
-		if i >= count {
-			break
-		}
-
-		// Parse and format date to ISO 8601
-		pubDate := ""
-		if item.PubDate != "" {
-			// Try common RSS date formats
-			formats := []string{
-				time.RFC1123Z,
-				time.RFC1123,
-				time.RFC822Z,
-				time.RFC822,
-				time.RFC3339,
-			}
-			for _, format := range formats {
-				if t, err := time.Parse(format, item.PubDate); err == nil {
-					pubDate = t.Format(time.RFC3339)
-					break
-				}
-			}
-			// If no format matched, try parsing as RFC3339 directly
-			if pubDate == "" {
-				if t, err := time.Parse(time.RFC3339, item.PubDate); err == nil {
-					pubDate = t.Format(time.RFC3339)
-				}
-			}
-		}
-
-		// Clean description (remove HTML tags, limit to 2 lines)
-		description := cleanHTML(item.Description)
-		lines := strings.Split(description, "\n")
-		if len(lines) > 2 {
-			description = strings.Join(lines[:2], "\n")
-		}
-
-		// Extract image URL from enclosure or media:content
-		imageURL := ""
-		if item.Enclosure.URL != "" && strings.HasPrefix(item.Enclosure.Type, "image/") {
-			imageURL = item.Enclosure.URL
-		} else if item.MediaContent.URL != "" {
-			imageURL = item.MediaContent.URL
-		} else if item.MediaThumb != "" {
-			imageURL = item.MediaThumb
-		}
-
-		items = append(items, RSSFeedItem{
-			Title:       strings.TrimSpace(item.Title),
-			Description: strings.TrimSpace(description),
-			Link:        strings.TrimSpace(item.Link),
-			PubDate:     pubDate,
-			Image:       imageURL,
-		})
-	}
-
-	return items, nil
-}
-
-// cleanHTML removes HTML tags from a string
-func cleanHTML(html string) string {
-	// Simple regex to remove HTML tags
-	re := regexp.MustCompile(`<[^>]*>`)
-	cleaned := re.ReplaceAllString(html, "")
-	// Decode common HTML entities
-	cleaned = strings.ReplaceAll(cleaned, "&lt;", "<")
-	cleaned = strings.ReplaceAll(cleaned, "&gt;", ">")
-	cleaned = strings.ReplaceAll(cleaned, "&amp;", "&")
-	cleaned = strings.ReplaceAll(cleaned, "&quot;", "\"")
-	cleaned = strings.ReplaceAll(cleaned, "&apos;", "'")
-	cleaned = strings.ReplaceAll(cleaned, "&#39;", "'")
-	cleaned = strings.ReplaceAll(cleaned, "&nbsp;", " ")
-	return cleaned
 }
