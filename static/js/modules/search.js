@@ -5,6 +5,7 @@ const engines = [
   {name: "Google", url: "https://www.google.com/search?q=%s", icon: "fab fa-google"},
   {name: "DuckDuckGo", url: "https://duckduckgo.com/?q=%s", icon: "fas fa-duck"},
   {name: "Bing", url: "https://www.bing.com/search?q=%s", icon: "fab fa-microsoft"},
+  {name: "Perplexity", url: "https://www.perplexity.ai/search?q=%s", icon: "fas fa-brain"},
   {name: "GitHub", url: "https://github.com/search?q=%s", icon: "fab fa-github"},
   {name: "Stack Overflow", url: "https://stackoverflow.com/search?q=%s", icon: "fab fa-stack-overflow"},
   {name: "YouTube", url: "https://www.youtube.com/results?search_query=%s", icon: "fab fa-youtube"},
