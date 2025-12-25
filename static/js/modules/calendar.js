@@ -350,51 +350,139 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function moveEventUp(index) {
+  if (index <= 0) return;
+  const temp = calendarEvents[index];
+  calendarEvents[index] = calendarEvents[index - 1];
+  calendarEvents[index - 1] = temp;
+  saveEvents();
+  renderEventsPreferenceList();
+  renderCalendar();
+  renderWeekCalendar();
+  renderUpcomingEvents();
+}
+
+function moveEventDown(index) {
+  if (index >= calendarEvents.length - 1) return;
+  const temp = calendarEvents[index];
+  calendarEvents[index] = calendarEvents[index + 1];
+  calendarEvents[index + 1] = temp;
+  saveEvents();
+  renderEventsPreferenceList();
+  renderCalendar();
+  renderWeekCalendar();
+  renderUpcomingEvents();
+}
+
+function moveEvent(fromIndex, toIndex) {
+  if (fromIndex === toIndex) return;
+  const item = calendarEvents.splice(fromIndex, 1)[0];
+  calendarEvents.splice(toIndex, 0, item);
+  saveEvents();
+  renderEventsPreferenceList();
+  renderCalendar();
+  renderWeekCalendar();
+  renderUpcomingEvents();
+}
+
 // Render events list in preferences
 function renderEventsPreferenceList() {
   const list = document.getElementById('eventsList');
   if (!list) return;
 
+  list.innerHTML = '';
+
   if (calendarEvents.length === 0) {
-    list.innerHTML = '<div class="muted">No events added yet</div>';
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No events yet. Click "Add" to create one.</div>';
     return;
   }
 
-  // Sort by date and time
-  const sorted = [...calendarEvents].sort((a, b) => {
-    if (a.date !== b.date) return a.date.localeCompare(b.date);
-    return (a.time || '').localeCompare(b.time || '');
-  });
+  let draggedIndex = null;
 
-  let html = '';
-  sorted.forEach(evt => {
-    html += `
-      <div class="module-item" data-event-id="${evt.id}">
-        <div class="module-info">
-          <div class="module-name">${escapeHtml(evt.title)}</div>
-          <div class="module-desc">${evt.date} ${evt.time || ''}</div>
-        </div>
-        <div class="module-actions">
-          <button class="btn-small edit-event-btn" title="Edit"><i class="fas fa-edit"></i></button>
-          <button class="btn-small delete-event-btn" title="Delete"><i class="fas fa-trash"></i></button>
-        </div>
+  calendarEvents.forEach((evt, index) => {
+    const item = document.createElement('div');
+    item.className = 'module-item';
+    item.draggable = true;
+    item.dataset.index = index;
+    item.dataset.eventId = evt.id;
+    const canMoveUp = index > 0;
+    const canMoveDown = index < calendarEvents.length - 1;
+    item.innerHTML = `
+      <div class="module-icon drag-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder">
+        <i class="fas fa-grip-vertical"></i>
+      </div>
+      <div class="module-icon"><i class="fas fa-calendar-alt"></i></div>
+      <div class="module-info">
+        <div class="module-name">${escapeHtml(evt.title)}</div>
+        <div class="module-desc">${evt.date} ${evt.time || ''}</div>
+      </div>
+      <div class="module-controls">
+        <button class="btn-small move-event-up-btn" data-index="${index}" ${!canMoveUp ? 'disabled' : ''} title="Move up">
+          <i class="fas fa-arrow-up"></i>
+        </button>
+        <button class="btn-small move-event-down-btn" data-index="${index}" ${!canMoveDown ? 'disabled' : ''} title="Move down">
+          <i class="fas fa-arrow-down"></i>
+        </button>
+        <button class="btn-small edit-event-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
+        <button class="btn-small delete-event-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
       </div>
     `;
-  });
-  list.innerHTML = html;
+    list.appendChild(item);
 
-  // Attach event handlers
-  list.querySelectorAll('.edit-event-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.closest('.module-item').getAttribute('data-event-id');
-      editEvent(id);
+    // Drag and drop handlers
+    item.addEventListener('dragstart', (e) => {
+      draggedIndex = index;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', item.innerHTML);
     });
-  });
 
-  list.querySelectorAll('.delete-event-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.closest('.module-item').getAttribute('data-event-id');
-      deleteEvent(id);
+    item.addEventListener('dragend', (e) => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.module-item').forEach(i => {
+        i.classList.remove('drag-over');
+      });
+      draggedIndex = null;
+    });
+
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (draggedIndex !== null && draggedIndex !== index) {
+        item.classList.add('drag-over');
+      }
+    });
+
+    item.addEventListener('dragleave', (e) => {
+      item.classList.remove('drag-over');
+    });
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      if (draggedIndex !== null && draggedIndex !== index) {
+        moveEvent(draggedIndex, index);
+      }
+    });
+
+    if (canMoveUp) {
+      item.querySelector('.move-event-up-btn').addEventListener('click', () => {
+        moveEventUp(index);
+      });
+    }
+
+    if (canMoveDown) {
+      item.querySelector('.move-event-down-btn').addEventListener('click', () => {
+        moveEventDown(index);
+      });
+    }
+
+    item.querySelector('.edit-event-btn').addEventListener('click', () => {
+      editEvent(evt.id);
+    });
+
+    item.querySelector('.delete-event-btn').addEventListener('click', () => {
+      deleteEvent(evt.id);
     });
   });
 }
@@ -423,6 +511,12 @@ function editEvent(id) {
   const event = calendarEvents.find(e => e.id === id);
   if (event) {
     showEventForm(event);
+  }
+}
+
+function editEventByIndex(index) {
+  if (index >= 0 && index < calendarEvents.length) {
+    showEventForm(calendarEvents[index]);
   }
 }
 

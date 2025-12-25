@@ -141,74 +141,145 @@ function toggleTodo(id) {
   }
 }
 
+function moveTodoUp(index) {
+  if (index <= 0) return;
+  const temp = todos[index];
+  todos[index] = todos[index - 1];
+  todos[index - 1] = temp;
+  saveTodos();
+  renderTodosPreferenceList();
+  renderNextTodos();
+}
+
+function moveTodoDown(index) {
+  if (index >= todos.length - 1) return;
+  const temp = todos[index];
+  todos[index] = todos[index + 1];
+  todos[index + 1] = temp;
+  saveTodos();
+  renderTodosPreferenceList();
+  renderNextTodos();
+}
+
+function moveTodo(fromIndex, toIndex) {
+  if (fromIndex === toIndex) return;
+  const item = todos.splice(fromIndex, 1)[0];
+  todos.splice(toIndex, 0, item);
+  saveTodos();
+  renderTodosPreferenceList();
+  renderNextTodos();
+}
+
 // Render todos list in preferences
 function renderTodosPreferenceList() {
   const list = document.getElementById('todosList');
   if (!list) return;
 
+  list.innerHTML = '';
+
   if (todos.length === 0) {
-    list.innerHTML = '<div class="muted">No todos added yet</div>';
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No todos yet. Click "Add" to create one.</div>';
     return;
   }
 
-  // Sort: incomplete first, then by priority and due date
-  const priorityOrder = { high: 3, medium: 2, low: 1 };
-  const sorted = [...todos].sort((a, b) => {
-    if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    const aPriority = priorityOrder[a.priority] || 0;
-    const bPriority = priorityOrder[b.priority] || 0;
-    if (aPriority !== bPriority) return bPriority - aPriority;
-    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-    if (a.dueDate) return -1;
-    if (b.dueDate) return 1;
-    return 0;
-  });
+  let draggedIndex = null;
 
-  let html = '';
-  sorted.forEach(todo => {
-    const completedClass = todo.completed ? 'completed' : '';
+  todos.forEach((todo, index) => {
+    const item = document.createElement('div');
+    item.className = 'module-item' + (todo.completed ? ' completed' : '');
+    item.draggable = true;
+    item.dataset.index = index;
+    item.dataset.todoId = todo.id;
+    const canMoveUp = index > 0;
+    const canMoveDown = index < todos.length - 1;
     const priorityClass = getPriorityClass(todo.priority);
     const priorityBadge = todo.priority ? `<span class="todo-priority ${priorityClass}">${todo.priority}</span>` : '';
     const dueDateText = todo.dueDate ? ` - ${formatTodoDate(todo.dueDate)}` : '';
 
-    html += `
-      <div class="module-item ${completedClass}" data-todo-id="${todo.id}">
-        <div class="module-info">
-          <div class="module-name" style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" class="todo-list-checkbox" data-todo-id="${todo.id}" ${todo.completed ? 'checked' : ''} style="cursor:pointer;">
-            <span>${escapeHtml(todo.title)}</span>
-            ${priorityBadge}
-          </div>
-          <div class="module-desc">${todo.completed ? 'Completed' : 'Active'}${dueDateText}</div>
+    item.innerHTML = `
+      <div class="module-icon drag-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder">
+        <i class="fas fa-grip-vertical"></i>
+      </div>
+      <div class="module-icon"><i class="fas fa-tasks"></i></div>
+      <div class="module-info">
+        <div class="module-name" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" class="todo-list-checkbox" data-todo-id="${todo.id}" ${todo.completed ? 'checked' : ''} style="cursor:pointer;">
+          <span>${escapeHtml(todo.title)}</span>
+          ${priorityBadge}
         </div>
-        <div class="module-actions">
-          <button class="btn-small edit-todo-btn" title="Edit"><i class="fas fa-edit"></i></button>
-          <button class="btn-small delete-todo-btn" title="Delete"><i class="fas fa-trash"></i></button>
-        </div>
+        <div class="module-desc">${todo.completed ? 'Completed' : 'Active'}${dueDateText}</div>
+      </div>
+      <div class="module-controls">
+        <button class="btn-small move-todo-up-btn" data-index="${index}" ${!canMoveUp ? 'disabled' : ''} title="Move up">
+          <i class="fas fa-arrow-up"></i>
+        </button>
+        <button class="btn-small move-todo-down-btn" data-index="${index}" ${!canMoveDown ? 'disabled' : ''} title="Move down">
+          <i class="fas fa-arrow-down"></i>
+        </button>
+        <button class="btn-small edit-todo-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
+        <button class="btn-small delete-todo-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
       </div>
     `;
-  });
-  list.innerHTML = html;
+    list.appendChild(item);
 
-  // Attach event handlers
-  list.querySelectorAll('.edit-todo-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.closest('.module-item').getAttribute('data-todo-id');
-      editTodo(id);
+    // Drag and drop handlers
+    item.addEventListener('dragstart', (e) => {
+      draggedIndex = index;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', item.innerHTML);
     });
-  });
 
-  list.querySelectorAll('.delete-todo-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.closest('.module-item').getAttribute('data-todo-id');
-      deleteTodo(id);
+    item.addEventListener('dragend', (e) => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.module-item').forEach(i => {
+        i.classList.remove('drag-over');
+      });
+      draggedIndex = null;
     });
-  });
 
-  list.querySelectorAll('.todo-list-checkbox').forEach(checkbox => {
-    checkbox.addEventListener('change', (e) => {
-      const id = e.target.getAttribute('data-todo-id');
-      toggleTodo(id);
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (draggedIndex !== null && draggedIndex !== index) {
+        item.classList.add('drag-over');
+      }
+    });
+
+    item.addEventListener('dragleave', (e) => {
+      item.classList.remove('drag-over');
+    });
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      if (draggedIndex !== null && draggedIndex !== index) {
+        moveTodo(draggedIndex, index);
+      }
+    });
+
+    if (canMoveUp) {
+      item.querySelector('.move-todo-up-btn').addEventListener('click', () => {
+        moveTodoUp(index);
+      });
+    }
+
+    if (canMoveDown) {
+      item.querySelector('.move-todo-down-btn').addEventListener('click', () => {
+        moveTodoDown(index);
+      });
+    }
+
+    item.querySelector('.edit-todo-btn').addEventListener('click', () => {
+      editTodo(todo.id);
+    });
+
+    item.querySelector('.delete-todo-btn').addEventListener('click', () => {
+      deleteTodo(todo.id);
+    });
+
+    item.querySelector('.todo-list-checkbox').addEventListener('change', (e) => {
+      toggleTodo(todo.id);
     });
   });
 }

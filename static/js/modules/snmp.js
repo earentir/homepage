@@ -58,25 +58,130 @@ function renderSnmpQueries() {
   });
 }
 
+function moveSnmpQueryUp(index) {
+  if (index <= 0) return;
+  const temp = snmpQueries[index];
+  snmpQueries[index] = snmpQueries[index - 1];
+  snmpQueries[index - 1] = temp;
+  // Note: snmpLastValues keys are based on host:port:oid, not index, so no update needed
+  saveSnmpQueries();
+  renderSnmpList();
+  renderSnmpQueries();
+  setTimeout(refreshSnmp, 100);
+}
+
+function moveSnmpQueryDown(index) {
+  if (index >= snmpQueries.length - 1) return;
+  const temp = snmpQueries[index];
+  snmpQueries[index] = snmpQueries[index + 1];
+  snmpQueries[index + 1] = temp;
+  // Note: snmpLastValues keys are based on host:port:oid, not index, so no update needed
+  saveSnmpQueries();
+  renderSnmpList();
+  renderSnmpQueries();
+  setTimeout(refreshSnmp, 100);
+}
+
+function moveSnmpQuery(fromIndex, toIndex) {
+  if (fromIndex === toIndex) return;
+  const item = snmpQueries.splice(fromIndex, 1)[0];
+  snmpQueries.splice(toIndex, 0, item);
+  // Note: snmpLastValues keys are based on host:port:oid, not index, so no update needed
+  saveSnmpQueries();
+  renderSnmpList();
+  renderSnmpQueries();
+  setTimeout(refreshSnmp, 100);
+}
+
 function renderSnmpList() {
   const list = document.getElementById('snmpList');
   if (!list) return;
 
   list.innerHTML = '';
+
+  if (snmpQueries.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No queries yet. Click "Add" to create one.</div>';
+    return;
+  }
+
+  let draggedIndex = null;
+
   snmpQueries.forEach((query, index) => {
     const item = document.createElement('div');
     item.className = 'module-item';
+    item.draggable = true;
+    item.dataset.index = index;
+    const canMoveUp = index > 0;
+    const canMoveDown = index < snmpQueries.length - 1;
     item.innerHTML = `
+      <div class="module-icon drag-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder">
+        <i class="fas fa-grip-vertical"></i>
+      </div>
+      <div class="module-icon"><i class="fas fa-network-wired"></i></div>
       <div class="module-info">
         <div class="module-name">${window.escapeHtml(query.title)}</div>
         <div class="module-desc">${window.escapeHtml(query.host)}:${query.port} - ${window.escapeHtml(query.oid)}</div>
       </div>
-      <div style="display:flex; gap:8px;">
-        <button class="btn-small edit-snmp-btn" data-index="${index}"><i class="fas fa-edit"></i> Edit</button>
-        <button class="btn-small delete-snmp-btn" data-index="${index}" style="color:var(--error);"><i class="fas fa-trash"></i> Delete</button>
+      <div class="module-controls">
+        <button class="btn-small move-snmp-up-btn" data-index="${index}" ${!canMoveUp ? 'disabled' : ''} title="Move up">
+          <i class="fas fa-arrow-up"></i>
+        </button>
+        <button class="btn-small move-snmp-down-btn" data-index="${index}" ${!canMoveDown ? 'disabled' : ''} title="Move down">
+          <i class="fas fa-arrow-down"></i>
+        </button>
+        <button class="btn-small edit-snmp-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
+        <button class="btn-small delete-snmp-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
       </div>
     `;
     list.appendChild(item);
+
+    // Drag and drop handlers
+    item.addEventListener('dragstart', (e) => {
+      draggedIndex = index;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', item.innerHTML);
+    });
+
+    item.addEventListener('dragend', (e) => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.module-item').forEach(i => {
+        i.classList.remove('drag-over');
+      });
+      draggedIndex = null;
+    });
+
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (draggedIndex !== null && draggedIndex !== index) {
+        item.classList.add('drag-over');
+      }
+    });
+
+    item.addEventListener('dragleave', (e) => {
+      item.classList.remove('drag-over');
+    });
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      if (draggedIndex !== null && draggedIndex !== index) {
+        moveSnmpQuery(draggedIndex, index);
+      }
+    });
+
+    if (canMoveUp) {
+      item.querySelector('.move-snmp-up-btn').addEventListener('click', () => {
+        moveSnmpQueryUp(index);
+      });
+    }
+
+    if (canMoveDown) {
+      item.querySelector('.move-snmp-down-btn').addEventListener('click', () => {
+        moveSnmpQueryDown(index);
+      });
+    }
 
     item.querySelector('.edit-snmp-btn').addEventListener('click', () => editSnmpQuery(index));
     item.querySelector('.delete-snmp-btn').addEventListener('click', () => deleteSnmpQuery(index));
@@ -329,6 +434,7 @@ function initSnmp() {
 // Export to window
 window.snmpQueries = snmpQueries;
 window.renderSnmpQueries = renderSnmpQueries;
+window.renderSnmpList = renderSnmpList;
 window.refreshSnmp = refreshSnmp;
 window.editSnmpQuery = editSnmpQuery;
 window.deleteSnmpQuery = deleteSnmpQuery;
