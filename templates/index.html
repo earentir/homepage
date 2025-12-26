@@ -25,15 +25,15 @@
   fetch('/api/theme?template=' + encodeURIComponent(savedTemplate) + '&scheme=' + encodeURIComponent(savedScheme), {
     signal: themeController.signal
   })
-    .then(function(res) { 
+    .then(function(res) {
       clearTimeout(themeTimeout);
-      return res.text(); 
+      return res.text();
     })
     .then(function(css) {
       var style = document.getElementById('theme-css');
       if (style) style.textContent = css;
     })
-    .catch(function(err) { 
+    .catch(function(err) {
       clearTimeout(themeTimeout);
       if (err.name !== 'AbortError') {
         console.error('Failed to load theme:', err);
@@ -45,6 +45,16 @@
     hiddenMenus.style.display = 'none';
     hiddenMenus.innerHTML = '<div id="schemeMenu">{{.SchemeMenuHTML}}</div>';
     document.body.appendChild(hiddenMenus);
+
+    // Load saved page title
+    var savedTitle = localStorage.getItem('pageTitle');
+    if (savedTitle) {
+      document.title = savedTitle;
+      var headerTitle = document.querySelector('.h-title');
+      if (headerTitle) {
+        headerTitle.textContent = savedTitle;
+      }
+    }
   });
 })();
 </script>
@@ -56,7 +66,7 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js', { scope: '/' })
       .then(function(registration) {
         console.log('[Service Worker] Registration successful:', registration.scope);
-        
+
         // Check for updates
         registration.addEventListener('updatefound', function() {
           const newWorker = registration.installing;
@@ -328,6 +338,13 @@ if ('serviceWorker' in navigator) {
                 <div class="pref-row">
                   <label>Color Scheme</label>
                   <select id="pref-scheme"></select>
+                </div>
+                <div class="pref-row">
+                  <label>Title</label>
+                  <div class="location-input">
+                    <input type="text" id="pref-title" placeholder="LAN Index" style="flex:1;">
+                    <button class="btn-small" id="resetTitleBtn" title="Reset to LAN Index"><i class="fas fa-undo"></i></button>
+                  </div>
                 </div>
                 <h3>Timers</h3>
                 <div class="pref-row">

@@ -99,7 +99,7 @@ function setupIntervals() {
       if (window.refresh) window.refresh();
     }
   }, 30000);
-  
+
   // CPU and RAM - only if WebSocket is not connected (WebSocket handles these in real-time)
   setInterval(() => {
     if (!window.wsIsConnected || !window.wsIsConnected()) {
@@ -107,7 +107,7 @@ function setupIntervals() {
       if (window.refreshRAM) window.refreshRAM();
     }
   }, window.timers.cpu.interval);
-  
+
   // Other modules continue to use HTTP polling
   setInterval(() => window.refreshAllDisks && window.refreshAllDisks(), window.timers.disk.interval);
   setInterval(() => window.refreshGitHub && window.refreshGitHub(), window.timers.github.interval);
@@ -129,7 +129,7 @@ function initialLoad() {
   } else {
     console.log('[App] window.refresh() not available');
   }
-  
+
   console.log('[App] Loading other modules');
   // Load other data - these are independent
   if (window.refreshCPU) { console.log('[App] Calling refreshCPU'); window.refreshCPU(); }
@@ -151,6 +151,12 @@ function initApp() {
   console.log('[App] initApp() called, readyState:', document.readyState);
   loadModulePrefs();
   applyModuleVisibility();
+
+  // Load saved page title
+  const savedTitle = localStorage.getItem('pageTitle');
+  if (savedTitle && window.applyPageTitle) {
+    window.applyPageTitle(savedTitle);
+  }
 
   // Init search
   if (window.initSearch) window.initSearch();

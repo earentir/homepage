@@ -160,6 +160,65 @@ function populateSchemeDropdown() {
 }
 
 function initGeneralSettings() {
+  // Page title
+  const titleInput = document.getElementById('pref-title');
+  const resetTitleBtn = document.getElementById('resetTitleBtn');
+  const defaultTitle = 'LAN Index';
+
+  if (titleInput) {
+    // Load saved title or use default
+    const savedTitle = localStorage.getItem('pageTitle');
+    titleInput.value = savedTitle || defaultTitle;
+
+    // Helper function to apply title
+    const applyTitle = (title) => {
+      if (!title) title = defaultTitle;
+      document.title = title;
+      const headerTitle = document.querySelector('.h-title');
+      if (headerTitle) {
+        headerTitle.textContent = title;
+      }
+      // Also update window function if available
+      if (window.applyPageTitle) {
+        window.applyPageTitle(title);
+      }
+    };
+
+    // Apply title on load
+    applyTitle(savedTitle || defaultTitle);
+
+    // Save on change
+    titleInput.addEventListener('change', () => {
+      const title = titleInput.value.trim() || defaultTitle;
+      titleInput.value = title;
+      localStorage.setItem('pageTitle', title);
+      applyTitle(title);
+    });
+
+    // Also update on input (for real-time preview)
+    titleInput.addEventListener('input', () => {
+      const title = titleInput.value.trim() || defaultTitle;
+      applyTitle(title);
+    });
+  }
+
+  if (resetTitleBtn) {
+    resetTitleBtn.addEventListener('click', () => {
+      if (titleInput) {
+        titleInput.value = defaultTitle;
+        localStorage.setItem('pageTitle', defaultTitle);
+        document.title = defaultTitle;
+        const headerTitle = document.querySelector('.h-title');
+        if (headerTitle) {
+          headerTitle.textContent = defaultTitle;
+        }
+        if (window.applyPageTitle) {
+          window.applyPageTitle(defaultTitle);
+        }
+      }
+    });
+  }
+
   // Min bar width
   const minBarWidthInput = document.getElementById('pref-min-bar-width');
   if (minBarWidthInput) {
@@ -381,7 +440,7 @@ function initWeatherSettings() {
 
       // Handle array response (API returns array directly)
       const results = Array.isArray(data) ? data : (data.results || []);
-      
+
       if (results.length > 0) {
         locationResults.innerHTML = '';
         // Add a default empty option
@@ -389,7 +448,7 @@ function initWeatherSettings() {
         emptyOption.value = '';
         emptyOption.textContent = '-- Select a location --';
         locationResults.appendChild(emptyOption);
-        
+
         results.slice(0, 5).forEach(result => {
           const option = document.createElement('option');
           option.value = JSON.stringify({
@@ -415,7 +474,7 @@ function initWeatherSettings() {
 
   if (searchLocationBtn && weatherLocationInput && locationResults) {
     searchLocationBtn.addEventListener('click', performSearch);
-    
+
     // Allow Enter key to trigger search
     weatherLocationInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -432,18 +491,18 @@ function initWeatherSettings() {
         alert('Please select a location from the dropdown');
         return;
       }
-      
+
       try {
         localStorage.setItem('weatherLocation', selected);
         const loc = JSON.parse(selected);
         currentLocationDisplay.textContent = loc.name;
-        
+
         // Hide the results row
         if (locationResultsRow) locationResultsRow.style.display = 'none';
-        
+
         // Clear the search input
         if (weatherLocationInput) weatherLocationInput.value = '';
-        
+
         // Refresh weather data
         if (window.refreshWeather) {
           window.refreshWeather();
@@ -453,7 +512,7 @@ function initWeatherSettings() {
         alert('Error setting location: ' + e.message);
       }
     });
-    
+
     // Also allow double-click on select option to set it
     locationResults.addEventListener('dblclick', () => {
       if (setLocationBtn && locationResults.value) {
@@ -521,6 +580,21 @@ if (document.readyState === 'loading') {
   initPreferencesModal();
 }
 
+// Apply page title to both document title and header
+function applyPageTitle(title) {
+  if (!title) title = 'LAN Index';
+
+  // Update document title
+  document.title = title;
+
+  // Update header title
+  const headerTitle = document.querySelector('.h-title');
+  if (headerTitle) {
+    headerTitle.textContent = title;
+  }
+}
+
 // Export
 window.initPreferencesModal = initPreferencesModal;
 window.renderModuleList = renderModuleList;
+window.applyPageTitle = applyPageTitle;
