@@ -22,6 +22,10 @@
 - [ ] Add inoreader support
 - [ ] Add TTRSS
 - [ ] Add module that gets a json and builds a ui
+- [ ] Add paypal payment notification
+- [ ] Add gumroad payment notification
+- [ ] Add stripe payment notification
+
 
 ## IP Address Module
 - [x] Add PTR of public IP addresses
