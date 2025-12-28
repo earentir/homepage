@@ -133,14 +133,13 @@ function renderLayout() {
         const topWrapper = document.createElement('div');
         topWrapper.className = 'split-slot split-slot-top';
         topWrapper.dataset.splitPosition = 'top';
-        topWrapper.style.flex = '1';
-        topWrapper.style.minHeight = '0';
+        topWrapper.style.flex = '0 1 auto';
         topWrapper.style.overflow = 'hidden';
 
         if (moduleSlot[0]) {
           const topCard = cardsMap.get(moduleSlot[0]);
           if (topCard) {
-            topCard.style.height = '100%';
+            topCard.style.height = 'auto';
             topCard.style.overflow = 'hidden';
             topWrapper.appendChild(topCard);
             cardsMap.delete(moduleSlot[0]);
@@ -154,14 +153,13 @@ function renderLayout() {
         const bottomWrapper = document.createElement('div');
         bottomWrapper.className = 'split-slot split-slot-bottom';
         bottomWrapper.dataset.splitPosition = 'bottom';
-        bottomWrapper.style.flex = '1';
-        bottomWrapper.style.minHeight = '0';
+        bottomWrapper.style.flex = '0 1 auto';
         bottomWrapper.style.overflow = 'hidden';
 
         if (moduleSlot[1]) {
           const bottomCard = cardsMap.get(moduleSlot[1]);
           if (bottomCard) {
-            bottomCard.style.height = '100%';
+            bottomCard.style.height = 'auto';
             bottomCard.style.overflow = 'hidden';
             bottomWrapper.appendChild(bottomCard);
             cardsMap.delete(moduleSlot[1]);
