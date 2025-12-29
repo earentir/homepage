@@ -43,7 +43,7 @@ function saveGitHubCache(cache) {
   try {
     localStorage.setItem('githubDataCache', JSON.stringify(cache));
   } catch (e) {
-    console.error('Error saving GitHub cache:', e);
+    if (window.debugError) window.debugError('github', 'Error saving GitHub cache:', e);
   }
 }
 
@@ -282,7 +282,7 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
     setCachedGitHubData(mod.id, displayType, data);
     renderGitHubContent(mod.id, displayType, data, maxItems);
   } catch(err) {
-    console.error("Error refreshing GitHub module " + mod.id + ":", err);
+    if (window.debugError) window.debugError('github', "Error refreshing GitHub module " + mod.id + ":", err);
     // Try to use cached data on error
     const cachedData = getCachedGitHubData(mod.id, displayType);
     if (cachedData) {
@@ -300,7 +300,7 @@ async function refreshGitHub(forceRefresh = false) {
     await Promise.all(promises);
     window.startTimer("github");
   } catch(err) {
-    console.error("Error refreshing GitHub:", err);
+    if (window.debugError) window.debugError('github', "Error refreshing GitHub:", err);
   }
 }
 

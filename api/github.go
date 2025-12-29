@@ -12,6 +12,11 @@ import (
 
 var githubCache = &GitHubCache{}
 
+// githubHTTPClient is an HTTP client with proper timeouts for GitHub API requests
+var githubHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
+}
+
 // FetchGitHubRepos fetches repos from hardcoded user and org.
 func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, error) {
 	githubCache.mu.RLock()
@@ -41,7 +46,7 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 			nil
 	}
 
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var userRepos GitHubUserRepos
@@ -86,7 +91,7 @@ func fetchUserRepos(ctx context.Context, username string) GitHubUserRepos {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	res, err := http.DefaultClient.Do(req)
+	res, err := githubHTTPClient.Do(req)
 	if err != nil {
 		log.Printf("GitHub API error (user repos): %v", err)
 		userRepos.Error = "Failed to fetch user repos: " + err.Error()
@@ -143,7 +148,7 @@ func fetchOrgRepos(ctx context.Context, orgName string) GitHubOrgRepos {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	res, err := http.DefaultClient.Do(req)
+	res, err := githubHTTPClient.Do(req)
 	if err != nil {
 		orgRepos.Error = "Failed to fetch org repos: " + err.Error()
 		return orgRepos
@@ -194,7 +199,7 @@ func fetchOrgRepos(ctx context.Context, orgName string) GitHubOrgRepos {
 
 // FetchGitHubReposForName fetches repos for a specific user or org.
 func FetchGitHubReposForName(ctx context.Context, name, repoType, token string) (GitHubReposResponse, error) {
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubReposResponse
@@ -215,7 +220,7 @@ func FetchGitHubReposForName(ctx context.Context, name, repoType, token string) 
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := githubHTTPClient.Do(req)
 	if err != nil {
 		resp.Error = "Failed to fetch repos: " + err.Error()
 		return resp, nil
@@ -269,7 +274,7 @@ func FetchGitHubReposForName(ctx context.Context, name, repoType, token string) 
 	if token != "" {
 		req2.Header.Set("Authorization", "Bearer "+token)
 	}
-	res2, err := http.DefaultClient.Do(req2)
+	res2, err := githubHTTPClient.Do(req2)
 	if err == nil && res2.StatusCode >= 200 && res2.StatusCode <= 299 {
 		var profile struct {
 			PublicRepos int `json:"public_repos"`
@@ -309,7 +314,7 @@ func FetchGitHubIssues(ctx context.Context, name, accountType, token string) (Gi
 
 // FetchGitHubStats fetches stats for a repo.
 func FetchGitHubStats(ctx context.Context, name, token string) (GitHubStatsResponse, error) {
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubStatsResponse
@@ -321,7 +326,7 @@ func FetchGitHubStats(ctx context.Context, name, token string) (GitHubStatsRespo
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := githubHTTPClient.Do(req)
 	if err != nil {
 		resp.Error = "Failed to fetch stats: " + err.Error()
 		return resp, nil

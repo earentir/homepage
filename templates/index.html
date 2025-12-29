@@ -320,6 +320,7 @@ if ('serviceWorker' in navigator) {
         <button class="modal-tab" data-tab="todo"><i class="fas fa-tasks"></i> Todo</button>
         <button class="modal-tab" data-tab="search"><i class="fas fa-search"></i> Search</button>
         <button class="modal-tab" data-tab="weather"><i class="fas fa-cloud-sun"></i> Weather</button>
+        <button class="modal-tab" data-tab="debug"><i class="fas fa-bug"></i> Debug</button>
         <button class="modal-tab" data-tab="about"><i class="fas fa-info-circle"></i> About</button>
       </div>
       <div class="modal-content">
@@ -820,6 +821,112 @@ if ('serviceWorker' in navigator) {
                 <p>• Open-Meteo: Free, no API key required (default)</p>
                 <p>• OpenWeatherMap: Get key at <a href="https://openweathermap.org/api" target="_blank">openweathermap.org/api</a></p>
                 <p>• WeatherAPI.com: Get key at <a href="https://www.weatherapi.com/" target="_blank">weatherapi.com</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Debug Tab -->
+        <div class="tab-content" id="tab-debug">
+          <div class="pref-section">
+            <h3>Console Logging</h3>
+            <p class="small" style="color:var(--muted); margin-bottom:16px;">Enable console logging for specific modules to debug issues. Logs will only appear in the browser console when enabled.</p>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-sw">
+                  <span>Service Worker</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-network">
+                  <span>Network</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-websocket">
+                  <span>WebSocket</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-search">
+                  <span>Search</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-app">
+                  <span>App</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-core">
+                  <span>Core</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-system">
+                  <span>System</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-weather">
+                  <span>Weather</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-github">
+                  <span>GitHub</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-rss">
+                  <span>RSS</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-layout">
+                  <span>Layout</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-preferences">
+                  <span>Preferences</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-config">
+                  <span>Config</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-calendar">
+                  <span>Calendar</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-todo">
+                  <span>Todo</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-quicklinks">
+                  <span>Quicklinks</span>
+                </label>
               </div>
             </div>
           </div>

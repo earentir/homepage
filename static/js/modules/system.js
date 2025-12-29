@@ -32,7 +32,7 @@ async function refreshCPU() {
       window.updateCpuGraph(parseFloat(usage));
     }
   } catch(err) {
-    console.error("Error refreshing CPU:", err);
+    if (window.debugError) window.debugError('system', "Error refreshing CPU:", err);
     // Ensure timer is still running even on error
     if (window.startTimer) window.startTimer("cpu");
   }
@@ -55,7 +55,7 @@ async function refreshRAM() {
       window.updateRamGraph(percent);
     }
   } catch(err) {
-    console.error("Error refreshing RAM:", err);
+    if (window.debugError) window.debugError('system', "Error refreshing RAM:", err);
     // Ensure timer is still running even on error
     if (window.startTimer) window.startTimer("ram");
   }
@@ -94,7 +94,7 @@ async function refreshDiskSingle(mountPoint) {
       }
     }
   } catch(err) {
-    console.error("Error refreshing Disk:", err);
+    if (window.debugError) window.debugError('system', "Error refreshing Disk:", err);
     const safeMount = (mountPoint || "/").replace(/[^a-zA-Z0-9]/g, '_');
     const errEl = document.getElementById("diskErr_" + safeMount);
     if (errEl) errEl.textContent = "Error loading disk";
@@ -122,7 +122,7 @@ async function refreshCPUInfo() {
     // Update vendor icon/logo in title
     const titleEl = document.querySelector('[data-module="cpuid"] h3');
     if (!titleEl) {
-      console.error('CPU Info: Title element not found');
+      if (window.debugError) window.debugError('system', 'CPU Info: Title element not found');
       return;
     }
 
@@ -133,12 +133,12 @@ async function refreshCPUInfo() {
     // Find the header-icons div
     const headerIcons = titleEl.querySelector('.header-icons');
     if (!headerIcons) {
-      console.error('CPU Info: Header icons element not found');
+      if (window.debugError) window.debugError('system', 'CPU Info: Header icons element not found');
       return;
     }
 
     if (!j.vendor) {
-      console.error('CPU Info: No vendor in response', j);
+      if (window.debugError) window.debugError('system', 'CPU Info: No vendor in response', j);
       return;
     }
 
@@ -164,7 +164,7 @@ async function refreshCPUInfo() {
       iconEl.style.color = 'var(--txt)';
       iconEl.style.verticalAlign = 'middle';
       titleEl.insertBefore(iconEl, headerIcons);
-      console.log('CPU Info: Added vendor icon', vendorIcon, iconClass);
+        if (window.debugLog) window.debugLog('system', 'CPU Info: Added vendor icon', vendorIcon, iconClass);
     } else {
       // Show vendor name as text (for AMD, Intel, RISC-V, etc.)
       const textEl = document.createElement('span');
@@ -176,7 +176,7 @@ async function refreshCPUInfo() {
       textEl.style.fontWeight = '500';
       textEl.style.verticalAlign = 'middle';
       titleEl.insertBefore(textEl, headerIcons);
-      console.log('CPU Info: Added vendor text', j.vendor);
+        if (window.debugLog) window.debugLog('system', 'CPU Info: Added vendor text', j.vendor);
     }
 
     let html = '';
@@ -260,7 +260,7 @@ async function refreshCPUInfo() {
 
     el.innerHTML = html || '<div class="muted">No CPU info available</div>';
   } catch(err) {
-    console.error("Error refreshing CPU Info:", err);
+    if (window.debugError) window.debugError('system', "Error refreshing CPU Info:", err);
   }
 }
 
@@ -309,7 +309,7 @@ async function refreshRAMInfo() {
 
     el.innerHTML = html || '<div class="muted">No RAM info available</div>';
   } catch(err) {
-    console.error("Error refreshing RAM Info:", err);
+    if (window.debugError) window.debugError('system', "Error refreshing RAM Info:", err);
     const el = document.getElementById("raminfoContent");
     if (el) {
       el.innerHTML = '<div class="small" style="color:var(--muted);">Error loading RAM info</div>';
@@ -349,7 +349,7 @@ async function refreshFirmwareInfo() {
 
     el.innerHTML = html || '<div class="muted">No firmware info available</div>';
   } catch(err) {
-    console.error("Error refreshing Firmware Info:", err);
+    if (window.debugError) window.debugError('system', "Error refreshing Firmware Info:", err);
     const el = document.getElementById("firmwareContent");
     if (el) {
       el.innerHTML = '<div class="small" style="color:var(--muted);">Error loading firmware info</div>';
@@ -414,7 +414,7 @@ async function refreshSystemInfo() {
 
     el.innerHTML = html || '<div class="muted">No system info available</div>';
   } catch(err) {
-    console.error("Error refreshing System Info:", err);
+    if (window.debugError) window.debugError('system', "Error refreshing System Info:", err);
     const el = document.getElementById("systeminfoContent");
     if (el) {
       el.innerHTML = '<div class="small" style="color:var(--muted);">Error loading system info</div>';
@@ -479,7 +479,7 @@ async function refreshBaseboardInfo() {
 
     el.innerHTML = html || '<div class="muted">No baseboard info available</div>';
   } catch(err) {
-    console.error("Error refreshing Baseboard Info:", err);
+    if (window.debugError) window.debugError('system', "Error refreshing Baseboard Info:", err);
     const el = document.getElementById("baseboardContent");
     if (el) {
       el.innerHTML = '<div class="small" style="color:var(--muted);">Error loading baseboard info</div>';
@@ -707,7 +707,7 @@ function showDiskEditDialog(index) {
       });
     })
     .catch(err => {
-      console.error('Error fetching disks:', err);
+      if (window.debugError) window.debugError('system', 'Error fetching disks:', err);
       alert('Error loading disks');
     });
 }

@@ -216,7 +216,7 @@ async function refreshWeather() {
 
     window.startTimer("weather");
   } catch(err) {
-    console.error("Error refreshing weather:", err);
+    if (window.debugError) window.debugError('weather', "Error refreshing weather:", err);
   }
 }
 

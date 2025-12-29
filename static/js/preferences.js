@@ -23,6 +23,8 @@ function initPreferencesModal() {
     if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
     if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
     renderModuleList();
+    // Initialize debug settings when modal opens
+    initDebugSettings();
   });
 
   // Close modal
@@ -75,6 +77,11 @@ function initPreferencesModal() {
       if (tabName === 'modules' && window.renderDiskModuleList) {
         window.renderDiskModuleList();
       }
+
+      // Initialize debug settings when debug tab is opened
+      if (tabName === 'debug') {
+        initDebugSettings();
+      }
     });
   });
 
@@ -89,6 +96,8 @@ function initPreferencesModal() {
 
   // Search settings
   initSearchSettings();
+
+  // Debug settings will be initialized when debug tab is opened
 }
 
 function initThemeSelection() {
@@ -464,7 +473,7 @@ function initWeatherSettings() {
         alert('No locations found for "' + query + '"');
       }
     } catch (e) {
-      console.error('Error searching location:', e);
+      if (window.debugError) window.debugError('preferences', 'Error searching location:', e);
       alert('Error searching location: ' + e.message);
     } finally {
       searchLocationBtn.disabled = false;
@@ -508,7 +517,7 @@ function initWeatherSettings() {
           window.refreshWeather();
         }
       } catch (e) {
-        console.error('Error setting location:', e);
+        if (window.debugError) window.debugError('preferences', 'Error setting location:', e);
         alert('Error setting location: ' + e.message);
       }
     });
@@ -572,6 +581,57 @@ function initSearchSettings() {
   }
 }
 
+let debugSettingsInitialized = false;
+
+function initDebugSettings() {
+  const debugModules = ['sw', 'network', 'websocket', 'search', 'app', 'core', 'system', 'weather', 'github', 'rss', 'layout', 'preferences', 'config', 'calendar', 'todo', 'quicklinks'];
+
+  // Load saved debug preferences
+  try {
+    const saved = localStorage.getItem('debugPrefs');
+    const prefs = saved ? JSON.parse(saved) : {};
+    debugModules.forEach(module => {
+      const checkbox = document.getElementById(`debug-${module}`);
+      if (checkbox) {
+        checkbox.checked = prefs[module] === true;
+      }
+    });
+  } catch (e) {
+    // Don't use debugError here - it would create a circular dependency
+    // console.error('Failed to load debug preferences:', e);
+  }
+
+  // Set up event listeners only once
+  if (!debugSettingsInitialized) {
+    debugSettingsInitialized = true;
+    debugModules.forEach(module => {
+      const checkbox = document.getElementById(`debug-${module}`);
+      if (checkbox) {
+      checkbox.addEventListener('change', () => {
+        try {
+          const prefs = JSON.parse(localStorage.getItem('debugPrefs') || '{}');
+          prefs[module] = checkbox.checked;
+          localStorage.setItem('debugPrefs', JSON.stringify(prefs));
+          // Sync to IndexedDB for service worker
+          if (window.syncDebugPrefsToIndexedDB) {
+            window.syncDebugPrefsToIndexedDB();
+          }
+          // Notify service worker
+          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+              type: 'DEBUG_PREFS_UPDATE',
+              prefs: prefs
+            });
+          }
+        } catch (e) {
+          // Don't use debugError here - it would create a circular dependency
+          // console.error('Failed to save debug preferences:', e);
+        }
+      });
+      }
+    });
+  }
+}
 
 // Run when DOM is ready
 if (document.readyState === 'loading') {

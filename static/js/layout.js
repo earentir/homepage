@@ -36,7 +36,7 @@ function loadLayoutConfig() {
       initializeDefaultLayout();
     }
   } catch (e) {
-    console.error('Failed to load layout config:', e);
+    if (window.debugError) window.debugError('layout', 'Failed to load layout config:', e);
     initializeDefaultLayout();
   }
 }
@@ -76,7 +76,7 @@ function saveLayoutConfig() {
   try {
     localStorage.setItem('layoutConfig', JSON.stringify(layoutConfig));
   } catch (e) {
-    console.error('Failed to save layout config:', e);
+    if (window.debugError) window.debugError('layout', 'Failed to save layout config:', e);
   }
 }
 
@@ -854,7 +854,7 @@ function loadModuleOrder() {
       }
     });
   } catch (e) {
-    console.error('Failed to load module order:', e);
+    if (window.debugError) window.debugError('layout', 'Failed to load module order:', e);
   }
 }
 
@@ -1206,7 +1206,7 @@ function initDragAndDrop() {
 function initLayout() {
   grid = document.getElementById('moduleGrid');
   if (!grid) {
-    console.error('moduleGrid not found');
+    if (window.debugError) window.debugError('layout', 'moduleGrid not found');
     return;
   }
 

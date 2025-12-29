@@ -86,7 +86,7 @@ async function fetchAndCacheFavicon(url) {
       return data.favicon;
     }
   } catch (e) {
-    console.error('Error fetching favicon:', e);
+    if (window.debugError) window.debugError('quicklinks', 'Error fetching favicon:', e);
   }
 
   return null;

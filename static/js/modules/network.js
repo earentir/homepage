@@ -77,7 +77,7 @@ async function refreshIP() {
 
     window.startTimer("ip");
   } catch(err) {
-    console.error("Error refreshing IP:", err);
+    if (window.debugError) window.debugError('network', "Error refreshing IP:", err);
   }
 }
 
@@ -86,19 +86,19 @@ let isOffline = false;
 
 // Initialize WebSocket connection for status detection
 function initWebSocket() {
-  console.log('[Network] Initializing WebSocket connection');
+  if (window.debugLog) window.debugLog('network', 'Initializing WebSocket connection');
 
   // Set up status change handler
   if (window.wsOnStatusChange) {
     window.wsOnStatusChange(function(status, data) {
-      console.log('[Network] WebSocket status changed:', status, 'isOffline was:', isOffline);
+      if (window.debugLog) window.debugLog('network', 'WebSocket status changed:', status, 'isOffline was:', isOffline);
       const statusTextEl = document.getElementById("statusText");
       const pulseEl = document.querySelector(".pulse");
 
       if (status === 'online') {
         const wasOffline = isOffline;
         isOffline = false;
-        console.log('[Network] Setting online status, wasOffline:', wasOffline);
+        if (window.debugLog) window.debugLog('network', 'Setting online status, wasOffline:', wasOffline);
         setOnlineStatus(statusTextEl, pulseEl);
 
         // If we have server data from WebSocket, update it immediately
@@ -108,15 +108,15 @@ function initWebSocket() {
 
         // Refresh full data when server comes back online (only if we were offline)
         if (wasOffline) {
-          console.log('[Network] Server is back online, refreshing data');
+          if (window.debugLog) window.debugLog('network', 'Server is back online, refreshing data');
           refresh();
         }
       } else if (status === 'offline') {
         isOffline = true;
-        console.log('[Network] Setting offline status');
+        if (window.debugLog) window.debugLog('network', 'Setting offline status');
         setOfflineStatus(statusTextEl, pulseEl);
         // Still try to refresh - WebSocket might reconnect soon
-        console.log('[Network] Server is offline, but will keep trying to refresh');
+        if (window.debugLog) window.debugLog('network', 'Server is offline, but will keep trying to refresh');
       }
     });
   }
@@ -124,7 +124,7 @@ function initWebSocket() {
   // Set up WebSocket data update handler
   if (window.wsOnUpdate) {
     window.wsOnUpdate(function(type, data) {
-      console.log('[Network] WebSocket update received:', type);
+      if (window.debugLog) window.debugLog('network', 'WebSocket update received:', type);
       if (type === 'system') {
         // Update system metrics in real-time
         if (data.system) {
@@ -140,7 +140,7 @@ function initWebSocket() {
   // Set up connect handler to refresh immediately on reconnect
   if (window.wsOnConnect) {
     window.wsOnConnect(function() {
-      console.log('[Network] WebSocket connected, refreshing data');
+      if (window.debugLog) window.debugLog('network', 'WebSocket connected, refreshing data');
       refresh();
     });
   }
@@ -152,41 +152,41 @@ function initWebSocket() {
 }
 
 async function refresh() {
-  console.log('[Network] refresh() called, isOffline:', isOffline);
+  if (window.debugLog) window.debugLog('network', 'refresh() called, isOffline:', isOffline);
   const statusTextEl = document.getElementById("statusText");
   const pulseEl = document.querySelector(".pulse");
 
   // If WebSocket is connected, skip HTTP polling - WebSocket handles real-time updates
   if (window.wsIsConnected && window.wsIsConnected()) {
-    console.log('[Network] WebSocket is connected, skipping HTTP refresh');
+    if (window.debugLog) window.debugLog('network', 'WebSocket is connected, skipping HTTP refresh');
     return;
   }
 
   // Only use HTTP as fallback when WebSocket is disconnected
-  console.log('[Network] WebSocket not connected, using HTTP fallback');
+  if (window.debugLog) window.debugLog('network', 'WebSocket not connected, using HTTP fallback');
 
   try {
-    console.log('[Network] Starting fetch to /api/summary');
+    if (window.debugLog) window.debugLog('network', 'Starting fetch to /api/summary');
     // Use fetchWithTimeout if available, otherwise use regular fetch
     let res;
     if (window.fetchWithTimeout) {
-      console.log('[Network] Using fetchWithTimeout');
+      if (window.debugLog) window.debugLog('network', 'Using fetchWithTimeout');
       res = await window.fetchWithTimeout("/api/summary", {cache:"no-store"}, 10000); // Increased timeout to 10s
     } else {
-      console.log('[Network] Using AbortController fallback');
+      if (window.debugLog) window.debugLog('network', 'Using AbortController fallback');
       // Fallback: use AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.log('[Network] Timeout triggered, aborting');
+        if (window.debugLog) window.debugLog('network', 'Timeout triggered, aborting');
         controller.abort();
       }, 10000); // Increased timeout to 10s
       try {
         res = await fetch("/api/summary", {cache:"no-store", signal: controller.signal});
         clearTimeout(timeoutId);
-        console.log('[Network] Fetch completed:', res.status);
+        if (window.debugLog) window.debugLog('network', 'Fetch completed:', res.status);
       } catch (err) {
         clearTimeout(timeoutId);
-        console.log('[Network] Fetch error:', err.message);
+        if (window.debugLog) window.debugLog('network', 'Fetch error:', err.message);
         throw err;
       }
     }
@@ -194,13 +194,13 @@ async function refresh() {
     // Check if response is successful
     if (!res.ok) {
       // Server returned an error status
-      console.log('[Network] Server returned error status:', res.status);
+      if (window.debugLog) window.debugLog('network', 'Server returned error status:', res.status);
       // WebSocket will detect this and update status
       return;
     }
 
     const j = await res.json();
-    console.log('[Network] Successfully fetched status, server is online, isOffline:', isOffline);
+    if (window.debugLog) window.debugLog('network', 'Successfully fetched status, server is online, isOffline:', isOffline);
 
     const isLocal = j.client && j.client.isLocal;
 
@@ -259,7 +259,7 @@ async function refresh() {
 
   } catch(err) {
     // Network error, timeout, or fetch failed (server is down/unreachable)
-    console.log('[Network] Fetch failed:', err.name, err.message);
+    if (window.debugLog) window.debugLog('network', 'Fetch failed:', err.name, err.message);
     // WebSocket will detect disconnection and update status automatically
     // No need for retry mechanism - WebSocket handles reconnection
   }
@@ -300,7 +300,7 @@ function updateServerInfo(server) {
           utcTimeEl.textContent = serverTime.toISOString();
         }
       } catch(e) {
-        console.error('[Network] Error updating server time:', e);
+        if (window.debugError) window.debugError('network', 'Error updating server time:', e);
       }
     }
   }

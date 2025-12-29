@@ -42,7 +42,7 @@ function loadModulePrefs() {
       });
     }
   } catch (e) {
-    console.error('Failed to load module prefs:', e);
+    if (window.debugError) window.debugError('app', 'Failed to load module prefs:', e);
   }
 }
 
@@ -59,7 +59,7 @@ function saveModulePrefs() {
     }
     localStorage.setItem('modulePrefs', JSON.stringify(prefs));
   } catch (e) {
-    console.error('Failed to save module prefs:', e);
+    if (window.debugError) window.debugError('app', 'Failed to save module prefs:', e);
   }
 }
 
@@ -118,37 +118,37 @@ function setupIntervals() {
 
 // Initial data load
 function initialLoad() {
-  console.log('[App] initialLoad() called');
+  if (window.debugLog) window.debugLog('app', 'initialLoad() called');
   // Start status check first but don't block on it
   if (window.refresh) {
-    console.log('[App] Calling window.refresh()');
+    if (window.debugLog) window.debugLog('app', 'Calling window.refresh()');
     window.refresh().catch(err => {
       // Status check failed - will be handled by refresh() itself
-      console.log("[App] Initial status check failed, will retry:", err);
+      if (window.debugLog) window.debugLog('app', "Initial status check failed, will retry:", err);
     });
   } else {
-    console.log('[App] window.refresh() not available');
+    if (window.debugLog) window.debugLog('app', 'window.refresh() not available');
   }
 
-  console.log('[App] Loading other modules');
+  if (window.debugLog) window.debugLog('app', 'Loading other modules');
   // Load other data - these are independent
-  if (window.refreshCPU) { console.log('[App] Calling refreshCPU'); window.refreshCPU(); }
-  if (window.refreshRAM) { console.log('[App] Calling refreshRAM'); window.refreshRAM(); }
-  if (window.renderDiskModules) { console.log('[App] Calling renderDiskModules'); window.renderDiskModules(); }
-  if (window.refreshCPUInfo) { console.log('[App] Calling refreshCPUInfo'); window.refreshCPUInfo(); }
-  if (window.refreshRAMInfo) { console.log('[App] Calling refreshRAMInfo'); window.refreshRAMInfo(); }
-  if (window.refreshFirmwareInfo) { console.log('[App] Calling refreshFirmwareInfo'); window.refreshFirmwareInfo(); }
-  if (window.refreshSystemInfo) { console.log('[App] Calling refreshSystemInfo'); window.refreshSystemInfo(); }
-  if (window.refreshBaseboardInfo) { console.log('[App] Calling refreshBaseboardInfo'); window.refreshBaseboardInfo(); }
-  if (window.refreshWeather) { console.log('[App] Calling refreshWeather'); window.refreshWeather(); }
-  if (window.refreshIP) { console.log('[App] Calling refreshIP'); window.refreshIP(); }
-  if (window.refreshGitHub) { console.log('[App] Calling refreshGitHub'); window.refreshGitHub(); }
-  console.log('[App] initialLoad() completed');
+  if (window.refreshCPU) { if (window.debugLog) window.debugLog('app', 'Calling refreshCPU'); window.refreshCPU(); }
+  if (window.refreshRAM) { if (window.debugLog) window.debugLog('app', 'Calling refreshRAM'); window.refreshRAM(); }
+  if (window.renderDiskModules) { if (window.debugLog) window.debugLog('app', 'Calling renderDiskModules'); window.renderDiskModules(); }
+  if (window.refreshCPUInfo) { if (window.debugLog) window.debugLog('app', 'Calling refreshCPUInfo'); window.refreshCPUInfo(); }
+  if (window.refreshRAMInfo) { if (window.debugLog) window.debugLog('app', 'Calling refreshRAMInfo'); window.refreshRAMInfo(); }
+  if (window.refreshFirmwareInfo) { if (window.debugLog) window.debugLog('app', 'Calling refreshFirmwareInfo'); window.refreshFirmwareInfo(); }
+  if (window.refreshSystemInfo) { if (window.debugLog) window.debugLog('app', 'Calling refreshSystemInfo'); window.refreshSystemInfo(); }
+  if (window.refreshBaseboardInfo) { if (window.debugLog) window.debugLog('app', 'Calling refreshBaseboardInfo'); window.refreshBaseboardInfo(); }
+  if (window.refreshWeather) { if (window.debugLog) window.debugLog('app', 'Calling refreshWeather'); window.refreshWeather(); }
+  if (window.refreshIP) { if (window.debugLog) window.debugLog('app', 'Calling refreshIP'); window.refreshIP(); }
+  if (window.refreshGitHub) { if (window.debugLog) window.debugLog('app', 'Calling refreshGitHub'); window.refreshGitHub(); }
+  if (window.debugLog) window.debugLog('app', 'initialLoad() completed');
 }
 
 // Main initialization
 function initApp() {
-  console.log('[App] initApp() called, readyState:', document.readyState);
+  if (window.debugLog) window.debugLog('app', 'initApp() called, readyState:', document.readyState);
   loadModulePrefs();
   applyModuleVisibility();
 
@@ -193,15 +193,15 @@ function initApp() {
 }
 
 // Run when DOM is ready
-console.log('[App] Script loaded, readyState:', document.readyState);
+if (window.debugLog) window.debugLog('app', 'Script loaded, readyState:', document.readyState);
 if (document.readyState === 'loading') {
-  console.log('[App] Waiting for DOMContentLoaded');
+  if (window.debugLog) window.debugLog('app', 'Waiting for DOMContentLoaded');
   document.addEventListener('DOMContentLoaded', function() {
-    console.log('[App] DOMContentLoaded fired');
+    if (window.debugLog) window.debugLog('app', 'DOMContentLoaded fired');
     initApp();
   });
 } else {
-  console.log('[App] DOM already ready, calling initApp immediately');
+  if (window.debugLog) window.debugLog('app', 'DOM already ready, calling initApp immediately');
   initApp();
 }
 

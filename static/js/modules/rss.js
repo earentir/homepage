@@ -32,7 +32,7 @@ function saveRssCache(cache) {
   try {
     localStorage.setItem('rssFeedCache', JSON.stringify(cache));
   } catch (e) {
-    console.error('Error saving RSS cache:', e);
+    if (window.debugError) window.debugError('rss', 'Error saving RSS cache:', e);
   }
 }
 
@@ -199,7 +199,7 @@ async function refreshRssModule(mod) {
         contentEl.innerHTML = `<div class="error">Error loading feed</div>`;
       }
     }
-    console.error("Error refreshing RSS module:", err);
+    if (window.debugError) window.debugError('rss', "Error refreshing RSS module:", err);
   }
 }
 
@@ -209,7 +209,7 @@ async function refreshRss() {
     await Promise.all(promises);
     window.startTimer("rss");
   } catch(err) {
-    console.error("Error refreshing RSS:", err);
+    if (window.debugError) window.debugError('rss', "Error refreshing RSS:", err);
   }
 }
 

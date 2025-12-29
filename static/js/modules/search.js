@@ -32,7 +32,9 @@ function loadSearchHistory() {
       searchHistory = JSON.parse(stored);
     }
   } catch (e) {
-    console.error("Error loading search history:", e);
+    if (window.debugError) {
+      window.debugError('search', "Error loading search history:", e);
+    }
     searchHistory = [];
   }
 }
@@ -152,6 +154,97 @@ function goSearch() {
   q.value = "";
 }
 
+// Global keyboard shortcuts handler (only add once)
+let keyboardShortcutsInitialized = false;
+
+function handleKeyboardShortcut(e) {
+  // Ignore if modifier keys are pressed (Ctrl, Alt, Meta)
+  if (e.ctrlKey || e.altKey || e.metaKey) {
+    return;
+  }
+
+  // Don't capture keys when modal is open (preferences)
+  if (window.isModalOpen && window.isModalOpen()) {
+    return;
+  }
+
+  // Check if we're in an input field
+  const activeElement = document.activeElement;
+  if (activeElement) {
+    const tag = activeElement.tagName.toLowerCase();
+    const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
+    const isContentEditable = activeElement.isContentEditable || activeElement.getAttribute('contenteditable') === 'true';
+    
+    // Don't capture when in any input field or contentEditable element
+    if (isInput || isContentEditable) {
+      return;
+    }
+  }
+
+  // Handle "/" key to focus search
+  if (e.key === "/") {
+    e.preventDefault();
+    e.stopPropagation();
+    const q = document.getElementById("q");
+    if (q) {
+      q.focus();
+      q.select();
+    }
+    return;
+  }
+
+  // Handle "E" key to open engine menu
+  if (e.key.toLowerCase() === "e") {
+    e.preventDefault();
+    e.stopPropagation();
+    const engineMenu = document.getElementById("engineMenu");
+    if (engineMenu) {
+      engineMenu.style.display = engineMenu.style.display === "block" ? "none" : "block";
+    }
+    return;
+  }
+}
+
+function initKeyboardShortcuts() {
+  if (keyboardShortcutsInitialized) return;
+  
+  // Ensure DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initKeyboardShortcuts, { once: true });
+    return;
+  }
+  
+  keyboardShortcutsInitialized = true;
+  
+  // Add listener to window - use capture phase to catch early
+  // Also try without capture as fallback for better compatibility
+  window.addEventListener('keydown', handleKeyboardShortcut, true);
+  
+  if (window.debugLog) {
+    window.debugLog('search', 'Keyboard shortcuts initialized');
+  }
+}
+
+// Force initialization on multiple events to ensure it works on all platforms
+(function() {
+  function tryInit() {
+    if (!keyboardShortcutsInitialized) {
+      initKeyboardShortcuts();
+    }
+  }
+  
+  // Try on various events to ensure it initializes
+  if (document.readyState === 'complete') {
+    tryInit();
+  } else {
+    window.addEventListener('load', tryInit, { once: true });
+    document.addEventListener('DOMContentLoaded', tryInit, { once: true });
+  }
+  
+  // Final fallback - try after a short delay
+  setTimeout(tryInit, 100);
+})();
+
 function initSearch() {
   loadSearchHistory();
 
@@ -176,6 +269,14 @@ function initSearch() {
         engineMenu.style.display = "none";
       }
     });
+  }
+
+  // Initialize keyboard shortcuts
+  initKeyboardShortcuts();
+  
+  // Fallback: ensure it's initialized after DOM is fully ready
+  if (document.readyState !== 'complete') {
+    window.addEventListener('load', initKeyboardShortcuts, { once: true });
   }
 
   renderEngines();

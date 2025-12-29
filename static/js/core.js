@@ -88,7 +88,7 @@ function isModalOpen() {
 function fetchWithTimeout(url, options = {}, timeout = 5000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    console.log('[Core] fetchWithTimeout: Aborting request to', url, 'after', timeout, 'ms');
+    if (window.debugLog) window.debugLog('core', 'fetchWithTimeout: Aborting request to', url, 'after', timeout, 'ms');
     controller.abort();
   }, timeout);
 
@@ -98,12 +98,12 @@ function fetchWithTimeout(url, options = {}, timeout = 5000) {
   })
     .then((response) => {
       clearTimeout(timeoutId);
-      console.log('[Core] fetchWithTimeout: Request succeeded to', url);
+      if (window.debugLog) window.debugLog('core', 'fetchWithTimeout: Request succeeded to', url);
       return response;
     })
     .catch((error) => {
       clearTimeout(timeoutId);
-      console.log('[Core] fetchWithTimeout: Request failed to', url, error.name, error.message);
+      if (window.debugLog) window.debugLog('core', 'fetchWithTimeout: Request failed to', url, error.name, error.message);
       throw error;
     });
 }
@@ -117,7 +117,7 @@ function saveToStorage(key, value) {
       localStorage.setItem(key, value);
     }
   } catch (e) {
-    console.error('[Core] Error saving to localStorage:', key, e);
+    if (window.debugError) window.debugError('core', 'Error saving to localStorage:', key, e);
   }
 }
 
@@ -132,7 +132,7 @@ function loadFromStorage(key, defaultValue = null) {
       return value;
     }
   } catch (e) {
-    console.error('[Core] Error loading from localStorage:', key, e);
+    if (window.debugError) window.debugError('core', 'Error loading from localStorage:', key, e);
     return defaultValue;
   }
 }
@@ -277,6 +277,63 @@ function createModuleListItem(config) {
   `;
 }
 
+// Debug logging utility
+function isDebugEnabled(module) {
+  try {
+    const debugPrefs = JSON.parse(localStorage.getItem('debugPrefs') || '{}');
+    return debugPrefs[module] === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function debugLog(module, ...args) {
+  if (isDebugEnabled(module)) {
+    console.log(`[${module}]`, ...args);
+  }
+}
+
+function debugError(module, ...args) {
+  if (isDebugEnabled(module)) {
+    console.error(`[${module}]`, ...args);
+  }
+}
+
+// Sync debug preferences to IndexedDB for service worker access
+function syncDebugPrefsToIndexedDB() {
+  try {
+    const debugPrefs = JSON.parse(localStorage.getItem('debugPrefs') || '{}');
+    const request = indexedDB.open('homepage-debug', 1);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('prefs')) {
+        db.createObjectStore('prefs');
+      }
+    };
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      const transaction = db.transaction(['prefs'], 'readwrite');
+      const store = transaction.objectStore('prefs');
+      store.put(debugPrefs, 'debugPrefs');
+    };
+  } catch (e) {
+    // Ignore errors
+  }
+}
+
+// Initialize IndexedDB and sync on load
+if (typeof indexedDB !== 'undefined') {
+  syncDebugPrefsToIndexedDB();
+  // Also sync when debug preferences change
+  const originalSetItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function(key, value) {
+    originalSetItem.call(this, key, value);
+    if (key === 'debugPrefs') {
+      syncDebugPrefsToIndexedDB();
+    }
+  };
+}
+
 // Export to window
 window.timers = timers;
 window.updateTimer = updateTimer;
@@ -294,3 +351,7 @@ window.moveArrayItem = moveArrayItem;
 window.setupDragAndDrop = setupDragAndDrop;
 window.setupMoveButtons = setupMoveButtons;
 window.createModuleListItem = createModuleListItem;
+window.isDebugEnabled = isDebugEnabled;
+window.debugLog = debugLog;
+window.debugError = debugError;
+window.syncDebugPrefsToIndexedDB = syncDebugPrefsToIndexedDB;

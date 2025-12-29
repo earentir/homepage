@@ -20,13 +20,13 @@ function connect() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}/ws`;
   
-  console.log('[WebSocket] Connecting to:', wsUrl);
+  if (window.debugLog) window.debugLog('websocket', 'Connecting to:', wsUrl);
   
   try {
     ws = new WebSocket(wsUrl);
     
     ws.onopen = function() {
-      console.log('[WebSocket] Connected');
+      if (window.debugLog) window.debugLog('websocket', 'Connected');
       reconnectAttempts = 0;
       // Clear any pending reconnect
       if (reconnectInterval) {
@@ -40,7 +40,7 @@ function connect() {
     ws.onmessage = function(event) {
       try {
         const data = JSON.parse(event.data);
-        console.log('[WebSocket] Message received:', data.type || 'unknown');
+        if (window.debugLog) window.debugLog('websocket', 'Message received:', data.type || 'unknown');
         
         if (data.type === 'status' && data.status === 'online') {
           if (onStatusChange) onStatusChange('online', data);
@@ -54,18 +54,18 @@ function connect() {
           }
         }
       } catch (err) {
-        console.error('[WebSocket] Error parsing message:', err);
+        if (window.debugError) window.debugError('websocket', 'Error parsing message:', err);
       }
     };
     
     ws.onerror = function(error) {
-      console.error('[WebSocket] Error:', error);
+      if (window.debugError) window.debugError('websocket', 'Error:', error);
       // Error doesn't necessarily mean disconnect, but if connection fails immediately
       // we should still try to reconnect
     };
     
     ws.onclose = function(event) {
-      console.log('[WebSocket] Disconnected, code:', event.code, 'reason:', event.reason);
+      if (window.debugLog) window.debugLog('websocket', 'Disconnected, code:', event.code, 'reason:', event.reason);
       ws = null;
       
       if (onDisconnect) onDisconnect();
@@ -73,10 +73,10 @@ function connect() {
       
       // Always attempt to reconnect - every 2 seconds
       reconnectAttempts++;
-      console.log(`[WebSocket] Scheduling reconnect in ${RECONNECT_DELAY}ms (attempt ${reconnectAttempts})`);
+      if (window.debugLog) window.debugLog('websocket', `Scheduling reconnect in ${RECONNECT_DELAY}ms (attempt ${reconnectAttempts})`);
       
       reconnectInterval = setTimeout(() => {
-        console.log(`[WebSocket] Executing reconnect attempt ${reconnectAttempts}`);
+        if (window.debugLog) window.debugLog('websocket', `Executing reconnect attempt ${reconnectAttempts}`);
         connect();
       }, RECONNECT_DELAY);
     };
@@ -85,7 +85,7 @@ function connect() {
     // If connection doesn't open or close within 5 seconds, force close and retry
     const connectionTimeout = setTimeout(() => {
       if (ws && ws.readyState === WebSocket.CONNECTING) {
-        console.log('[WebSocket] Connection timeout - connection stuck in CONNECTING state');
+        if (window.debugLog) window.debugLog('websocket', 'Connection timeout - connection stuck in CONNECTING state');
         ws.close();
       }
     }, 5000);
@@ -98,14 +98,14 @@ function connect() {
     };
     
   } catch (err) {
-    console.error('[WebSocket] Failed to create connection:', err);
+    if (window.debugError) window.debugError('websocket', 'Failed to create connection:', err);
     if (onStatusChange) onStatusChange('offline');
     
     // Retry connection after delay
     reconnectAttempts++;
-    console.log(`[WebSocket] Scheduling retry in ${RECONNECT_DELAY}ms (attempt ${reconnectAttempts})`);
+    if (window.debugLog) window.debugLog('websocket', `Scheduling retry in ${RECONNECT_DELAY}ms (attempt ${reconnectAttempts})`);
     reconnectInterval = setTimeout(() => {
-      console.log(`[WebSocket] Executing retry attempt ${reconnectAttempts}`);
+      if (window.debugLog) window.debugLog('websocket', `Executing retry attempt ${reconnectAttempts}`);
       connect();
     }, RECONNECT_DELAY);
   }

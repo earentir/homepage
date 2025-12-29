@@ -16,7 +16,7 @@ function collectAllConfig() {
           config[key] = value;
         }
       } catch (e) {
-        console.error('Error reading localStorage key:', key, e);
+        if (window.debugError) window.debugError('config', 'Error reading localStorage key:', key, e);
       }
     }
   }
@@ -37,7 +37,7 @@ function importConfig(configData) {
       }
       imported++;
     } catch (e) {
-      console.error('Error importing key:', key, e);
+      if (window.debugError) window.debugError('config', 'Error importing key:', key, e);
       errors++;
     }
   }

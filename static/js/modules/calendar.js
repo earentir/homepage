@@ -21,7 +21,7 @@ function loadCalendarSettings() {
       calendarSettings = { ...calendarSettings, ...JSON.parse(saved) };
     }
   } catch (e) {
-    console.error('Failed to load calendar settings:', e);
+    if (window.debugError) window.debugError('calendar', 'Failed to load calendar settings:', e);
   }
 }
 
@@ -37,7 +37,7 @@ function loadEvents() {
       calendarEvents = JSON.parse(saved);
     }
   } catch (e) {
-    console.error('Failed to load calendar events:', e);
+    if (window.debugError) window.debugError('calendar', 'Failed to load calendar events:', e);
     calendarEvents = [];
   }
 }

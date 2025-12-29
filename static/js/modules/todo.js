@@ -14,7 +14,7 @@ function loadTodos() {
       todos = JSON.parse(saved);
     }
   } catch (e) {
-    console.error('Failed to load todos:', e);
+    if (window.debugError) window.debugError('todo', 'Failed to load todos:', e);
     todos = [];
   }
 }
