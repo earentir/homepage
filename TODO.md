@@ -63,7 +63,7 @@
 
 ## WiKi
 - [ ] Add custom simple markdown wiki
-- [ ] Integrate with search
+- [ ] Integrate wiki with search
 
 ## Quicklinks
 - [ ] Add a favicon or icon only mode
@@ -116,3 +116,9 @@
 - [x] Add BIOS information
 - [x] Add Baseboard information
 - [x] Add System information
+
+## plane modules
+- [ ] Add a module to show dhcp status and last 5 leases
+- [ ] Add a module to show dns status and last 5 dns requests
+- [ ] Add a module to show ntp status and last 5 ntp requests
+- [ ] Add a module to show proxy status and last 5 proxy requests
