@@ -40,6 +40,9 @@ body{
   background:radial-gradient(ellipse at top, rgba(255,107,157,.08), transparent 50%),
              radial-gradient(ellipse at bottom right, rgba(78,205,196,.06), transparent 50%),
              var(--bg);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
   color:var(--txt);
   transition:background 0.3s ease, color 0.3s ease;
 }

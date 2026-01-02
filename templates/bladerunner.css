@@ -122,6 +122,9 @@ body{
              radial-gradient(ellipse at bottom right, rgba(0,255,255,.06), transparent 50%),
              linear-gradient(135deg, rgba(26,26,46,.3), transparent),
              var(--bg);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
   color:var(--txt);
   transition:background 0.3s ease, color 0.3s ease;
 }
