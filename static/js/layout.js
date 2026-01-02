@@ -854,6 +854,10 @@ function pinModule(element) {
     if (grid) {
       const emptyColumns = grid.querySelectorAll('.layout-column');
       emptyColumns.forEach(col => col.classList.add('dragging-active'));
+      
+      // Also highlight empty split slots
+      const emptySplitSlots = grid.querySelectorAll('.split-slot.empty-split');
+      emptySplitSlots.forEach(slot => slot.classList.add('dragging-active'));
     }
   });
 
@@ -867,6 +871,13 @@ function pinModule(element) {
       allColumns.forEach(c => {
         c.classList.remove('drag-over');
         c.classList.remove('dragging-active');
+      });
+      
+      // Also remove from empty split slots
+      const emptySplitSlots = grid.querySelectorAll('.split-slot.empty-split');
+      emptySplitSlots.forEach(slot => {
+        slot.classList.remove('drag-over');
+        slot.classList.remove('dragging-active');
       });
     }
 
@@ -1025,6 +1036,10 @@ function initDragAndDrop() {
 
       const emptyColumns = grid.querySelectorAll('.layout-column.empty-column');
       emptyColumns.forEach(col => col.classList.add('dragging-active'));
+      
+      // Also highlight empty split slots
+      const emptySplitSlots = grid.querySelectorAll('.split-slot.empty-split');
+      emptySplitSlots.forEach(slot => slot.classList.add('dragging-active'));
 
       // Show drop zones for disable/pin
       showDropZones();
@@ -1227,21 +1242,18 @@ function initDragAndDrop() {
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'move';
       if (draggedElement) {
-        this.style.background = 'rgba(100, 160, 120, 0.3)';
-        this.style.outline = '2px dashed rgba(100, 160, 120, 0.8)';
+        this.classList.add('drag-over');
       }
     });
 
     slot.addEventListener('dragleave', function() {
-      this.style.background = '';
-      this.style.outline = '';
+      this.classList.remove('drag-over');
     });
 
     slot.addEventListener('drop', function(e) {
       e.preventDefault();
       e.stopPropagation();
-      this.style.background = '';
-      this.style.outline = '';
+      this.classList.remove('drag-over');
 
       if (draggedElement) {
         const column = this.closest('.layout-column');

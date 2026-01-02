@@ -1327,15 +1327,25 @@ if ('serviceWorker' in navigator) {
   min-height: 0;
 }
 .split-slot.empty-split {
-  border: 1px dashed var(--border);
-  background: var(--panel2);
+  border: 1px solid transparent;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 60px;
+  transition: all 0.2s;
 }
-.split-slot.empty-split:hover {
+.split-slot.empty-split.dragging-active {
+  border: 2px dashed var(--border);
+  background: var(--panel2);
+}
+.split-slot.empty-split.dragging-active:hover,
+.split-slot.empty-split.drag-over {
   border-color: var(--accent);
+  background: var(--panel);
+}
+.split-slot.empty-split.dragging-active .empty-column-hint {
+  display: block !important;
 }
 .layout-row-editor {
   padding: 12px;
