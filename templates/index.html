@@ -122,7 +122,7 @@ if ('serviceWorker' in navigator) {
 
       <div class="card span-4" data-module="network" draggable="true">
         <h3><i class="fas fa-network-wired"></i> Network<div class="header-icons"><div class="timer-circle" id="ipTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-        <div class="kv"><div class="k"><span id="lanIpLabel">LAN IPs</span></div><div class="v mono"><span id="lanIps">—</span><div class="small ptr" id="lanPtr"></div></div></div>
+        <div class="kv"><div class="k" id="lanIpLabel">LAN IPs</div><div class="v mono" style="text-align: right;"><span id="lanIps">—</span><div class="small ptr" id="lanPtr"></div></div></div>
         <div class="kv"><div class="k">Public IP</div><div class="v mono" style="text-align: right;"><span id="pubIp">—</span><div class="small ptr" id="pubPtr"></div></div></div>
         <div class="small" id="pubIpErr"></div>
         <div class="small" id="networkNote" style="margin-top:8px; color:var(--muted);"></div>
