@@ -1312,14 +1312,19 @@ if ('serviceWorker' in navigator) {
 }
 .split-column {
   position: relative;
+  align-items: stretch;
 }
 .split-slot {
   border-radius: 8px;
   transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
 }
 .split-slot .card {
-  height: auto !important;
+  height: 100%;
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 .split-slot.empty-split {
   border: 1px dashed var(--border);

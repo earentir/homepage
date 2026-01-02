@@ -247,6 +247,110 @@ function renderLayout() {
   if (mainContainer) {
     mainContainer.style.maxWidth = layoutConfig.maxWidth + '%';
   }
+
+  // Adjust row heights after rendering
+  requestAnimationFrame(() => {
+    adjustRowHeights();
+    // Also adjust after content loads
+    setTimeout(() => adjustRowHeights(), 200);
+  });
+}
+
+function adjustRowHeights() {
+  const rows = document.querySelectorAll('.layout-row');
+  rows.forEach(row => {
+    const columns = row.querySelectorAll('.layout-column');
+    let maxHeight = 0;
+
+    // First pass: find the tallest column
+    columns.forEach(col => {
+      if (col.classList.contains('split-column')) {
+        // For split columns, measure total height needed
+        const topSlot = col.querySelector('.split-slot-top');
+        const bottomSlot = col.querySelector('.split-slot-bottom');
+        let splitHeight = 0;
+        
+        // Temporarily set to auto to measure natural height
+        const originalHeight = col.style.height;
+        col.style.height = 'auto';
+        
+        if (topSlot) {
+          const topCard = topSlot.querySelector('.card');
+          if (topCard) {
+            splitHeight += topCard.scrollHeight;
+          } else if (topSlot.classList.contains('empty-split')) {
+            splitHeight += 60; // min-height for empty split
+          }
+        }
+        if (bottomSlot) {
+          const bottomCard = bottomSlot.querySelector('.card');
+          if (bottomCard) {
+            splitHeight += bottomCard.scrollHeight;
+          } else if (bottomSlot.classList.contains('empty-split')) {
+            splitHeight += 60; // min-height for empty split
+          }
+        }
+        if (topSlot && bottomSlot && (topSlot.querySelector('.card') || topSlot.classList.contains('empty-split')) && 
+            (bottomSlot.querySelector('.card') || bottomSlot.classList.contains('empty-split'))) {
+          splitHeight += 8; // gap
+        }
+        
+        col.style.height = originalHeight;
+        maxHeight = Math.max(maxHeight, splitHeight);
+      } else {
+        // Regular column - measure card height
+        const card = col.querySelector('.card');
+        if (card) {
+          const originalHeight = col.style.height;
+          col.style.height = 'auto';
+          maxHeight = Math.max(maxHeight, card.scrollHeight);
+          col.style.height = originalHeight;
+        }
+      }
+    });
+
+    // Second pass: set all columns to max height and adjust split slots
+    if (maxHeight > 0) {
+      columns.forEach(col => {
+        if (col.classList.contains('split-column')) {
+          // Set column to max height
+          col.style.height = maxHeight + 'px';
+          col.style.minHeight = maxHeight + 'px';
+          
+          const topSlot = col.querySelector('.split-slot-top');
+          const bottomSlot = col.querySelector('.split-slot-bottom');
+          const gap = 8;
+          const availableHeight = maxHeight - gap;
+          
+          // Each slot should take at least 50% of available height
+          // Use flex: 1 1 0 to make them equal by default, but allow growth
+          if (topSlot && bottomSlot) {
+            const halfHeight = availableHeight / 2;
+            topSlot.style.flex = '1 1 0';
+            topSlot.style.minHeight = `${halfHeight}px`;
+            bottomSlot.style.flex = '1 1 0';
+            bottomSlot.style.minHeight = `${halfHeight}px`;
+            topSlot.style.overflow = 'hidden';
+            bottomSlot.style.overflow = 'hidden';
+          } else if (topSlot) {
+            topSlot.style.flex = '1 1 auto';
+            topSlot.style.overflow = 'hidden';
+          } else if (bottomSlot) {
+            bottomSlot.style.flex = '1 1 auto';
+            bottomSlot.style.overflow = 'hidden';
+          }
+        } else {
+          // Regular column - set to max height
+          col.style.height = maxHeight + 'px';
+          col.style.minHeight = maxHeight + 'px';
+          const card = col.querySelector('.card');
+          if (card) {
+            card.style.height = '100%';
+          }
+        }
+      });
+    }
+  });
 }
 
 function getModuleName(moduleId) {
