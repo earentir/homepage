@@ -360,28 +360,23 @@ function updateSystemMetrics(system) {
 
   // Update disk usage (root filesystem)
   if (system.disk && system.disk.percent !== undefined) {
-    // Find the root disk module and update it
-    const diskModules = document.querySelectorAll('[data-disk-mount="/"]');
-    diskModules.forEach(function(module) {
-      const usageEl = module.querySelector('.disk-usage');
-      if (usageEl && window.formatBytes) {
-        const used = system.disk.used || 0;
-        const total = system.disk.total || 0;
-        const free = system.disk.free || 0;
-        usageEl.textContent =
-          window.formatBytes(used) + ' / ' +
-          window.formatBytes(total) + ' (' +
-          window.formatBytes(free) + ' free)';
-      }
-      const percentEl = module.querySelector('.disk-percent');
-      if (percentEl) {
-        percentEl.textContent = system.disk.percent.toFixed(1) + '%';
-      }
-      // Update disk graph if available
-      if (window.updateDiskGraph) {
-        window.updateDiskGraph(system.disk.percent, '/');
-      }
-    });
+    const safeMount = '/'.replace(/[^a-zA-Z0-9]/g, '_');
+    const summaryEl = document.getElementById("diskSummary_" + safeMount);
+    if (summaryEl && window.formatBytes) {
+      const total = window.formatBytes(system.disk.total || 0);
+      const used = window.formatBytes(system.disk.used || 0);
+      const free = window.formatBytes(system.disk.free || 0);
+      const usedPercent = system.disk.percent;
+      const freePercent = 100 - usedPercent;
+      
+      // Format: "31.1GB / 19.52(62%)GB / 11.56(38%)GB"
+      summaryEl.textContent = 
+        total + ' / ' + used + '(' + usedPercent.toFixed(0) + '%) / ' + free + '(' + freePercent.toFixed(0) + '%)';
+    }
+    // Update disk graph if available
+    if (window.updateDiskGraph) {
+      window.updateDiskGraph(system.disk.percent, safeMount);
+    }
   }
 }
 

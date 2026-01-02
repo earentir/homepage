@@ -1017,7 +1017,8 @@ if ('serviceWorker' in navigator) {
 }
 .card[data-module="cpu"],
 .card[data-module="ram"],
-.card[data-module="disk"] {
+.card[data-module="disk"],
+.card[data-module^="disk-"] {
   display: flex;
   flex-direction: column;
 }

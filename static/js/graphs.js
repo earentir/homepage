@@ -117,6 +117,13 @@ function trimHistoryArrays() {
 function renderGraphBars(graph, history) {
   if (!graph || history.length === 0) return;
 
+  // Ensure full-bars class is on the graph container
+  if (showFullBars) {
+    graph.classList.add('full-bars');
+  } else {
+    graph.classList.remove('full-bars');
+  }
+
   while (graph.children.length < history.length) {
     const bar = document.createElement("div");
     bar.className = "bar";
@@ -172,6 +179,13 @@ function updateGraph(graphId, history, saveFunc, usage) {
     graph.removeChild(graph.firstChild);
   }
 
+  // Ensure full-bars class is on the graph container
+  if (showFullBars) {
+    graph.classList.add('full-bars');
+  } else {
+    graph.classList.remove('full-bars');
+  }
+
   for (let i = 0; i < history.length; i++) {
     const pct = history[i] / 100;
     const bar = graph.children[i];
@@ -205,8 +219,16 @@ function updateRamGraph(usage) {
 function renderDiskGraph(mountKey) {
   const key = mountKey || "default";
   const graphId = "diskGraph_" + key;
+  const graph = document.getElementById(graphId);
+  if (!graph) return;
   const history = diskHistory[key] || [];
-  renderGraphBars(document.getElementById(graphId), history);
+  renderGraphBars(graph, history);
+  // Ensure full-bars class is applied if needed
+  if (showFullBars) {
+    graph.classList.add('full-bars');
+  } else {
+    graph.classList.remove('full-bars');
+  }
 }
 
 function updateDiskGraph(usage, mountKey) {
@@ -245,6 +267,9 @@ function initGraphs() {
       }
     });
   }
+
+  // Apply full-bars class to all graphs (including disk graphs)
+  applyFullBarsClass();
 
   const hasDiskHistory = Object.keys(diskHistory).length > 0 && Object.values(diskHistory).some(h => h.length > 0);
   if (!graphsReady && (cpuHistory.length > 0 || ramHistory.length > 0 || hasDiskHistory)) {

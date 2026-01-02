@@ -71,14 +71,12 @@ async function refreshDiskSingle(mountPoint) {
 
     const safeMount = mount.replace(/[^a-zA-Z0-9]/g, '_');
     const summaryEl = document.getElementById("diskSummary_" + safeMount);
-    const percentEl = document.getElementById("diskPercent_" + safeMount);
     const errEl = document.getElementById("diskErr_" + safeMount);
     const graphEl = document.getElementById("diskGraph_" + safeMount);
 
     if (j.error) {
       if (errEl) errEl.textContent = j.error;
       if (summaryEl) summaryEl.textContent = "—";
-      if (percentEl) percentEl.textContent = "—";
       return;
     }
 
@@ -86,13 +84,17 @@ async function refreshDiskSingle(mountPoint) {
       const total = window.formatBytes(j.total);
       const used = window.formatBytes(j.used);
       const free = window.formatBytes(j.free);
-      const percent = j.percent;
+      const usedPercent = j.percent;
+      const freePercent = 100 - usedPercent;
 
-      if (summaryEl) summaryEl.textContent = total + " / " + used + " / " + free;
-      if (percentEl) percentEl.textContent = percent.toFixed(1) + "%";
+      // Format: "31.1GB / 19.52(62%)GB / 11.56(38%)GB"
+      if (summaryEl) {
+        summaryEl.textContent = 
+          total + " / " + used + "(" + usedPercent.toFixed(0) + "%) / " + free + "(" + freePercent.toFixed(0) + "%)";
+      }
       if (errEl) errEl.textContent = "";
       if (graphEl && window.updateDiskGraph) {
-        window.updateDiskGraph(percent, safeMount);
+        window.updateDiskGraph(usedPercent, safeMount);
       }
     }
   } catch(err) {
@@ -528,12 +530,8 @@ function renderDiskModules() {
     card.innerHTML = `
       <h3><i class="fas fa-hdd"></i> ${displayName}<div class="header-icons">${timerHtml}<i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
       <div class="kv-vertical">
-        <div class="k-small">Total / Used / Free</div>
+        <div class="k-small">Total / Used (%) / Free (%)</div>
         <div class="v mono" id="diskSummary_${safeMount}">—</div>
-      </div>
-      <div class="kv-vertical">
-        <div class="k-small">Usage</div>
-        <div class="v" id="diskPercent_${safeMount}">—</div>
       </div>
       <div class="small" id="diskErr_${safeMount}"></div>
       <div class="usage-graph" id="diskGraph_${safeMount}"></div>
@@ -544,6 +542,10 @@ function renderDiskModules() {
     // Initialize graph for this disk
     if (window.initGraphs) {
       window.initGraphs();
+    }
+    // Ensure full-bars class is applied to the new graph
+    if (window.applyFullBarsClass) {
+      window.applyFullBarsClass();
     }
 
     // Add double-click handler for the timer (first module only)
