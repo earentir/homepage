@@ -1,5 +1,71 @@
 // Network module: IP refresh, client detection
 
+// Helper function to copy text to clipboard
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    // Fallback for older browsers
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+}
+
+// Helper function to create a clickable element that copies to clipboard
+function createClickableElement(text, className = '') {
+  const span = document.createElement('span');
+  span.textContent = text;
+  span.className = className;
+  span.style.cursor = 'pointer';
+  span.title = 'Click to copy';
+  span.addEventListener('click', async () => {
+    if (await copyToClipboard(text)) {
+      // Visual feedback - briefly change opacity
+      const originalOpacity = span.style.opacity;
+      span.style.opacity = '0.6';
+      setTimeout(() => {
+        span.style.opacity = originalOpacity || '';
+      }, 200);
+    }
+  });
+  return span;
+}
+
+// Helper function to render comma-separated list of clickable items
+function renderClickableList(container, items, separator = ', ') {
+  if (!container) return;
+  
+  // Clear container
+  container.innerHTML = '';
+  
+  if (!items || items.length === 0) {
+    container.textContent = '—';
+    return;
+  }
+  
+  items.forEach((item, index) => {
+    if (item) {
+      const clickable = createClickableElement(item);
+      container.appendChild(clickable);
+      if (index < items.length - 1) {
+        container.appendChild(document.createTextNode(separator));
+      }
+    }
+  });
+}
+
 function detectClientInfo() {
   const ua = navigator.userAgent;
   let os = 'Unknown';
@@ -57,21 +123,37 @@ async function refreshIP() {
     if (j.network && j.network.hostIps && j.network.hostIps.length > 0) {
       const ips = j.network.hostIps.map(ipInfo => ipInfo.ip);
       const ptrs = j.network.hostIps.map(ipInfo => ipInfo.ptr).filter(p => p);
-      if (lanIpsEl) lanIpsEl.textContent = ips.join(", ");
-      if (lanPtrEl) lanPtrEl.textContent = ptrs.length > 0 ? ptrs.join(", ") : "";
+      renderClickableList(lanIpsEl, ips);
+      if (ptrs.length > 0) {
+        renderClickableList(lanPtrEl, ptrs);
+      } else {
+        if (lanPtrEl) lanPtrEl.textContent = "";
+      }
     } else {
       if (lanIpsEl) lanIpsEl.textContent = "—";
       if (lanPtrEl) lanPtrEl.textContent = "";
     }
 
     // Display Public IP with PTR
+    const pubIpEl = document.getElementById("pubIp");
+    const pubPtrEl = document.getElementById("pubPtr");
     if (j.public && j.public.ip) {
-      document.getElementById("pubIp").textContent = j.public.ip;
-      document.getElementById("pubPtr").textContent = j.public.ptr || "";
+      if (pubIpEl) {
+        pubIpEl.innerHTML = '';
+        pubIpEl.appendChild(createClickableElement(j.public.ip));
+      }
+      if (pubPtrEl) {
+        if (j.public.ptr) {
+          pubPtrEl.innerHTML = '';
+          pubPtrEl.appendChild(createClickableElement(j.public.ptr));
+        } else {
+          pubPtrEl.textContent = "";
+        }
+      }
       document.getElementById("pubIpErr").textContent = "";
     } else {
-      document.getElementById("pubIp").textContent = "—";
-      document.getElementById("pubPtr").textContent = "";
+      if (pubIpEl) pubIpEl.textContent = "—";
+      if (pubPtrEl) pubPtrEl.textContent = "";
       document.getElementById("pubIpErr").textContent = (j.public && j.public.error) || "";
     }
 
@@ -241,8 +323,22 @@ async function refresh() {
       if (j.client) {
         const clientIPEl = document.getElementById("clientIP");
         const clientHostnameEl = document.getElementById("clientHostname");
-        if (clientIPEl) clientIPEl.textContent = j.client.ip || "—";
-        if (clientHostnameEl) clientHostnameEl.textContent = j.client.hostname || "—";
+        if (clientIPEl) {
+          if (j.client.ip) {
+            clientIPEl.innerHTML = '';
+            clientIPEl.appendChild(createClickableElement(j.client.ip));
+          } else {
+            clientIPEl.textContent = "—";
+          }
+        }
+        if (clientHostnameEl) {
+          if (j.client.hostname) {
+            clientHostnameEl.innerHTML = '';
+            clientHostnameEl.appendChild(createClickableElement(j.client.hostname));
+          } else {
+            clientHostnameEl.textContent = "—";
+          }
+        }
       }
 
       const client = detectClientInfo();
