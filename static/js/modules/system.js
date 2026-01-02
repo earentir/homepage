@@ -286,25 +286,35 @@ async function refreshRAMInfo() {
       html += `<div class="kv"><div class="k">Total Size</div><div class="v mono">${j.totalSizeString}</div></div>`;
     }
 
-    // Manufacturer
-    if (j.manufacturer) {
-      html += `<div class="kv"><div class="k">Manufacturer</div><div class="v mono">${j.manufacturer}</div></div>`;
-    }
-
     // Modules
     if (j.modules && j.modules.length > 0) {
       html += `<div class="kv" style="border-top:1px solid var(--border); padding-top:12px;"><div class="k">Modules</div><div class="v mono" style="font-size:0.9em;">`;
       j.modules.forEach((module, idx) => {
-        const parts = [];
-        if (module.deviceLocator) parts.push(module.deviceLocator);
-        if (module.sizeString) parts.push(module.sizeString);
-        if (module.speedString) parts.push(module.speedString);
-        if (module.type) parts.push(module.type);
-        if (module.manufacturer) parts.push(module.manufacturer);
-        if (module.partNumber) parts.push(module.partNumber);
+        // First line: Size, Type, Form Factor, Max Speed/Current Speed
+        const line1Parts = [];
+        if (module.sizeString) line1Parts.push(module.sizeString);
+        if (module.type) line1Parts.push(module.type);
+        if (module.formFactor) line1Parts.push(module.formFactor);
+        // Format speed: Always show both "Max/Current MHz" if both are available
+        if (module.speed && module.configuredSpeed) {
+          line1Parts.push(`${module.speed}/${module.configuredSpeed} MHz`);
+        } else if (module.speedString) {
+          line1Parts.push(module.speedString);
+        } else if (module.speed) {
+          line1Parts.push(`${module.speed} MHz`);
+        } else if (module.configuredSpeed) {
+          line1Parts.push(`${module.configuredSpeed} MHz`);
+        }
 
-        const moduleText = parts.length > 0 ? parts.join(' • ') : 'Unknown module';
-        html += `<div style="margin-bottom:${idx < j.modules.length - 1 ? '6px' : '0'}; word-break:break-word;">${moduleText}</div>`;
+        // Second line: Manufacturer, Part Number
+        const line2Parts = [];
+        if (module.manufacturer) line2Parts.push(module.manufacturer);
+        if (module.partNumber) line2Parts.push(module.partNumber);
+
+        const line1 = line1Parts.length > 0 ? line1Parts.join(' • ') : 'Unknown module';
+        const line2 = line2Parts.length > 0 ? line2Parts.join(' • ') : '';
+
+        html += `<div style="margin-bottom:${idx < j.modules.length - 1 ? '6px' : '0'}; word-break:break-word;">${line1}${line2 ? '<br>' + line2 : ''}</div>`;
       });
       html += `</div></div>`;
     }

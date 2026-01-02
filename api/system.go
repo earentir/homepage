@@ -160,7 +160,17 @@ func GetSMBIOSRAMInfo(_ context.Context) SMBIOSRAMInfo {
 
 		if dev.Speed > 0 {
 			module.Speed = dev.Speed
-			module.SpeedString = fmt.Sprintf("%d MHz", dev.Speed)
+		}
+		if dev.ConfiguredMemorySpeed > 0 {
+			module.ConfiguredSpeed = dev.ConfiguredMemorySpeed
+		}
+		// Format speed string: Always show both "Max/Current" if both are available
+		if module.Speed > 0 && module.ConfiguredSpeed > 0 {
+			module.SpeedString = fmt.Sprintf("%d/%d MHz", module.Speed, module.ConfiguredSpeed)
+		} else if module.Speed > 0 {
+			module.SpeedString = fmt.Sprintf("%d MHz", module.Speed)
+		} else if module.ConfiguredSpeed > 0 {
+			module.SpeedString = fmt.Sprintf("%d MHz", module.ConfiguredSpeed)
 		}
 
 		if dev.MemoryType > 0 {

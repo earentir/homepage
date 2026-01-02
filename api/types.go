@@ -174,19 +174,20 @@ type CPUCacheInfo struct {
 
 // RAMModuleInfo contains information about a single RAM module.
 type RAMModuleInfo struct {
-	Size          uint64 `json:"size"`
-	DeviceLocator string `json:"deviceLocator,omitempty"`
-	BankLocator   string `json:"bankLocator,omitempty"`
-	Manufacturer  string `json:"manufacturer,omitempty"`
-	PartNumber    string `json:"partNumber,omitempty"`
-	SerialNumber  string `json:"serialNumber,omitempty"`
-	SizeString    string `json:"sizeString"`
-	SpeedString   string `json:"speedString,omitempty"`
-	Type          string `json:"type,omitempty"`
-	FormFactor    string `json:"formFactor,omitempty"`
-	VoltageString string `json:"voltageString,omitempty"`
-	Speed         uint16 `json:"speed,omitempty"`
-	Voltage       uint16 `json:"voltage,omitempty"`
+	Size             uint64 `json:"size"`
+	DeviceLocator   string `json:"deviceLocator,omitempty"`
+	BankLocator     string `json:"bankLocator,omitempty"`
+	Manufacturer    string `json:"manufacturer,omitempty"`
+	PartNumber      string `json:"partNumber,omitempty"`
+	SerialNumber    string `json:"serialNumber,omitempty"`
+	SizeString      string `json:"sizeString"`
+	SpeedString     string `json:"speedString,omitempty"`
+	Type            string `json:"type,omitempty"`
+	FormFactor      string `json:"formFactor,omitempty"`
+	VoltageString   string `json:"voltageString,omitempty"`
+	Speed           uint16 `json:"speed,omitempty"`           // Max speed
+	ConfiguredSpeed uint16 `json:"configuredSpeed,omitempty"`  // Current/configured speed
+	Voltage         uint16 `json:"voltage,omitempty"`
 }
 
 // SMBIOSRAMInfo contains SMBIOS RAM information.
