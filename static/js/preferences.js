@@ -352,6 +352,19 @@ function initGeneralSettings() {
 
   // Full bars toggle
   const fullBarsCheckbox = document.getElementById('pref-full-bars');
+  const colorizeBgCheckbox = document.getElementById('pref-colorize-bg');
+  
+  function updateColorizeCheckboxState() {
+    if (colorizeBgCheckbox) {
+      colorizeBgCheckbox.disabled = !fullBarsCheckbox.checked;
+      if (!fullBarsCheckbox.checked && colorizeBgCheckbox.checked) {
+        colorizeBgCheckbox.checked = false;
+        if (window.setColorizeBackground) window.setColorizeBackground(false);
+        if (window.saveColorizeBackgroundPreference) window.saveColorizeBackgroundPreference();
+      }
+    }
+  }
+  
   if (fullBarsCheckbox) {
     const saved = localStorage.getItem('showFullBars');
     fullBarsCheckbox.checked = saved === 'true';
@@ -360,9 +373,30 @@ function initGeneralSettings() {
       if (window.setShowFullBars) window.setShowFullBars(fullBarsCheckbox.checked);
       // Save to localStorage
       if (window.saveFullBarsPreference) window.saveFullBarsPreference();
+      // Update colorize checkbox state
+      updateColorizeCheckboxState();
       // Apply the class
       if (window.applyFullBarsClass) window.applyFullBarsClass();
     });
+  }
+
+  // Colorize background toggle
+  if (colorizeBgCheckbox) {
+    const saved = localStorage.getItem('colorizeBackground');
+    colorizeBgCheckbox.checked = saved === 'true';
+    colorizeBgCheckbox.disabled = !fullBarsCheckbox || !fullBarsCheckbox.checked;
+    colorizeBgCheckbox.addEventListener('change', () => {
+      if (fullBarsCheckbox && fullBarsCheckbox.checked) {
+        // Update the variable in graphs.js
+        if (window.setColorizeBackground) window.setColorizeBackground(colorizeBgCheckbox.checked);
+        // Save to localStorage
+        if (window.saveColorizeBackgroundPreference) window.saveColorizeBackgroundPreference();
+        // Apply the class
+        if (window.applyFullBarsClass) window.applyFullBarsClass();
+      }
+    });
+    // Initial state update
+    updateColorizeCheckboxState();
   }
 
   // GitHub token

@@ -7,6 +7,7 @@ const graphMaxHeight = 26;
 
 // Full bars preference
 let showFullBars = false;
+let colorizeBackground = false;
 
 // History arrays
 let cpuHistory = [];
@@ -27,6 +28,10 @@ let diskHistory = {};
 
   try {
     showFullBars = localStorage.getItem('showFullBars') === 'true';
+  } catch (e) {}
+
+  try {
+    colorizeBackground = localStorage.getItem('colorizeBackground') === 'true';
   } catch (e) {}
 
   try {
@@ -57,6 +62,12 @@ function saveFullBarsPreference() {
   } catch (e) {}
 }
 
+function saveColorizeBackgroundPreference() {
+  try {
+    localStorage.setItem('colorizeBackground', colorizeBackground.toString());
+  } catch (e) {}
+}
+
 function applyFullBarsClass() {
   const graphs = document.querySelectorAll('.cpu-graph, .usage-graph');
   graphs.forEach(g => {
@@ -64,6 +75,11 @@ function applyFullBarsClass() {
       g.classList.add('full-bars');
     } else {
       g.classList.remove('full-bars');
+    }
+    if (colorizeBackground && showFullBars) {
+      g.classList.add('colorize-bg');
+    } else {
+      g.classList.remove('colorize-bg');
     }
   });
 }
@@ -133,14 +149,9 @@ function renderGraphBars(graph, history) {
   for (let i = 0; i < history.length; i++) {
     const pct = history[i] / 100;
     const bar = graph.children[i];
-    if (showFullBars) {
-      bar.style.height = graphMaxHeight + "px";
-      bar.style.setProperty('--fill-pct', (pct * 100) + '%');
-    } else {
-      const height = Math.max(2, pct * graphMaxHeight);
-      bar.style.height = height + "px";
-      bar.style.removeProperty('--fill-pct');
-    }
+    // Always use full height
+    bar.style.height = graphMaxHeight + "px";
+    bar.style.setProperty('--fill-pct', (pct * 100) + '%');
   }
 }
 
@@ -185,18 +196,18 @@ function updateGraph(graphId, history, saveFunc, usage) {
   } else {
     graph.classList.remove('full-bars');
   }
+  if (colorizeBackground && showFullBars) {
+    graph.classList.add('colorize-bg');
+  } else {
+    graph.classList.remove('colorize-bg');
+  }
 
   for (let i = 0; i < history.length; i++) {
     const pct = history[i] / 100;
     const bar = graph.children[i];
-    if (showFullBars) {
-      bar.style.height = graphMaxHeight + "px";
-      bar.style.setProperty('--fill-pct', (pct * 100) + '%');
-    } else {
-      const height = Math.max(2, pct * graphMaxHeight);
-      bar.style.height = height + "px";
-      bar.style.removeProperty('--fill-pct');
-    }
+    // Always use full height
+    bar.style.height = graphMaxHeight + "px";
+    bar.style.setProperty('--fill-pct', (pct * 100) + '%');
   }
 }
 
@@ -228,6 +239,11 @@ function renderDiskGraph(mountKey) {
     graph.classList.add('full-bars');
   } else {
     graph.classList.remove('full-bars');
+  }
+  if (colorizeBackground && showFullBars) {
+    graph.classList.add('colorize-bg');
+  } else {
+    graph.classList.remove('colorize-bg');
   }
 }
 
@@ -280,11 +296,13 @@ function initGraphs() {
 // Export to window
 window.minBarWidth = minBarWidth;
 window.showFullBars = showFullBars;
+window.colorizeBackground = colorizeBackground;
 window.cpuHistory = cpuHistory;
 window.ramHistory = ramHistory;
 window.diskHistory = diskHistory;
 window.saveMinBarWidth = saveMinBarWidth;
 window.saveFullBarsPreference = saveFullBarsPreference;
+window.saveColorizeBackgroundPreference = saveColorizeBackgroundPreference;
 window.applyFullBarsClass = applyFullBarsClass;
 window.trimHistoryArrays = trimHistoryArrays;
 window.renderCpuGraph = renderCpuGraph;
@@ -298,3 +316,4 @@ window.initGraphs = initGraphs;
 // Make setters for preferences
 window.setMinBarWidth = function(val) { minBarWidth = val; window.minBarWidth = val; };
 window.setShowFullBars = function(val) { showFullBars = val; window.showFullBars = val; };
+window.setColorizeBackground = function(val) { colorizeBackground = val; window.colorizeBackground = val; };

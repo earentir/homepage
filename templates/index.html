@@ -368,6 +368,10 @@ if ('serviceWorker' in navigator) {
                   <input type="checkbox" id="pref-full-bars" title="Show the unused portion of bars in a dimmed color">
                 </div>
                 <div class="pref-row">
+                  <label>Colourize background</label>
+                  <input type="checkbox" id="pref-colorize-bg" title="Use accent color for the background (requires 'Show full bar height' to be enabled)">
+                </div>
+                <div class="pref-row">
                   <label>Minimum bar width</label>
                   <div class="location-input">
                     <input type="number" id="pref-min-bar-width" value="10" min="2" max="50" style="width:80px;">
@@ -1048,12 +1052,31 @@ if ('serviceWorker' in navigator) {
 .usage-graph .bar:last-child {
   opacity: 1;
 }
-.full-bars .bar {
+.cpu-graph .bar,
+.usage-graph .bar {
   --fill-pct: 0%;
+  background: linear-gradient(to top, var(--accent) 0%, var(--accent) var(--fill-pct), var(--panel) var(--fill-pct), var(--panel) 100%);
+  position: relative;
+}
+.full-bars .bar {
   background: linear-gradient(to top, var(--accent) 0%, var(--accent) var(--fill-pct), rgba(255,255,255,0.08) var(--fill-pct), rgba(255,255,255,0.08) 100%);
 }
 .full-bars .bar:last-child {
   background: linear-gradient(to top, var(--accent) 0%, var(--accent) var(--fill-pct), rgba(255,255,255,0.12) var(--fill-pct), rgba(255,255,255,0.12) 100%);
+}
+.full-bars.colorize-bg .bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to top, transparent 0%, transparent var(--fill-pct), var(--accent) var(--fill-pct), var(--accent) 100%);
+  opacity: 0.15;
+  pointer-events: none;
+}
+.full-bars.colorize-bg .bar:last-child::after {
+  opacity: 0.2;
 }
 .modal-overlay {
   position: fixed;
