@@ -292,8 +292,10 @@ type GitHubPRItem struct {
 	URL       string `json:"url"`
 	Repo      string `json:"repo"`
 	State     string `json:"state"`
-	Author    string `json:"author"`
-	CreatedAt string `json:"createdAt"`
+	User      string `json:"user"`
+	Author    string `json:"author"` // Keep for backwards compatibility
+	Created   string `json:"created"`
+	CreatedAt string `json:"createdAt"` // Keep for backwards compatibility
 	UpdatedAt string `json:"updatedAt"`
 }
 
@@ -335,23 +337,31 @@ type GitHubIssueItem struct {
 	URL       string   `json:"url"`
 	Repo      string   `json:"repo"`
 	State     string   `json:"state"`
-	Author    string   `json:"author"`
+	User      string   `json:"user"`
+	Author    string   `json:"author"` // Keep for backwards compatibility
 	Labels    []string `json:"labels,omitempty"`
-	CreatedAt string   `json:"createdAt"`
+	Created   string   `json:"created"`
+	CreatedAt string   `json:"createdAt"` // Keep for backwards compatibility
 	UpdatedAt string   `json:"updatedAt"`
 }
 
 // GitHubStatsResponse is the response for the stats endpoint.
 type GitHubStatsResponse struct {
-	Stars          int    `json:"stars"`
-	Forks          int    `json:"forks"`
-	Watchers       int    `json:"watchers"`
-	OpenIssues     int    `json:"openIssues"`
-	Error          string `json:"error,omitempty"`
-	RateLimitError string `json:"rateLimitError,omitempty"`
-	RateLimitReset string `json:"rateLimitReset,omitempty"`
-	RetryAfter     int    `json:"retryAfter,omitempty"`
-	RemainingCalls int    `json:"remainingCalls,omitempty"`
+	Stats          *GitHubStats `json:"stats,omitempty"`
+	Error          string       `json:"error,omitempty"`
+	RateLimitError string       `json:"rateLimitError,omitempty"`
+	RateLimitReset string       `json:"rateLimitReset,omitempty"`
+	RetryAfter     int          `json:"retryAfter,omitempty"`
+	RemainingCalls int          `json:"remainingCalls,omitempty"`
+}
+
+// GitHubStats represents repository statistics.
+type GitHubStats struct {
+	Stars      int    `json:"stars"`
+	Forks      int    `json:"forks"`
+	Watchers   int    `json:"watchers"`
+	OpenIssues int    `json:"openIssues"`
+	Language   string `json:"language,omitempty"`
 }
 
 // GitHubCache provides thread-safe caching for GitHub repository data.

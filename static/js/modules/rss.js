@@ -128,7 +128,14 @@ function renderRssModules() {
   if (layoutConfig) {
     layoutConfig.rows.forEach(row => {
       row.modules.forEach(moduleId => {
-        if (moduleId && moduleId.startsWith('rss-')) {
+        if (Array.isArray(moduleId)) {
+          // Handle split modules (array of two module IDs)
+          moduleId.forEach(id => {
+            if (id && id.startsWith('rss-')) {
+              modulesInLayout.add(id);
+            }
+          });
+        } else if (moduleId && moduleId.startsWith('rss-')) {
           modulesInLayout.add(moduleId);
         }
       });

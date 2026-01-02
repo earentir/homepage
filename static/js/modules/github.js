@@ -263,9 +263,17 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
 
       if (shouldUseCache) {
         const cachedData = getCachedGitHubData(mod.id, displayType);
-        if (cachedData) {
+        // Don't use cached data if it contains an error (especially old "not implemented" errors)
+        if (cachedData && !cachedData.error) {
           renderGitHubContent(mod.id, displayType, cachedData, mod.maxItems || 5);
           return;
+        }
+        // If cached data has an error, clear it and fetch fresh
+        if (cachedData && cachedData.error) {
+          const cacheKey = `${mod.id}-${displayType}`;
+          const cache = getGitHubCache();
+          delete cache[cacheKey];
+          saveGitHubCache(cache);
         }
       }
     }
@@ -314,7 +322,14 @@ function renderGitHubModules() {
   if (layoutConfig) {
     layoutConfig.rows.forEach(row => {
       row.modules.forEach(moduleId => {
-        if (moduleId && (moduleId.startsWith('github-') || moduleId.startsWith('rss-'))) {
+        if (Array.isArray(moduleId)) {
+          // Handle split modules (array of two module IDs)
+          moduleId.forEach(id => {
+            if (id && (id.startsWith('github-') || id.startsWith('rss-'))) {
+              modulesInLayout.add(id);
+            }
+          });
+        } else if (moduleId && (moduleId.startsWith('github-') || moduleId.startsWith('rss-'))) {
           modulesInLayout.add(moduleId);
         }
       });
