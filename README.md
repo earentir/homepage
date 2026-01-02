@@ -51,6 +51,18 @@ go build -o homepage
 ./homepage
 ```
 
+### SMBIOS Access (Linux)
+
+To access SMBIOS data (BIOS, System, Baseboard, RAM modules) without running as root, set the required capabilities on the binary:
+
+```bash
+sudo setcap cap_sys_rawio,cap_dac_read_search=ep homepage
+```
+
+This grants the binary the necessary permissions to read SMBIOS data from `/dev/mem` and `/sys/firmware/dmi/tables/DMI` without requiring root privileges.
+
+**Note**: You need to run this command after each build, as the capabilities are lost when the binary is rebuilt.
+
 On startup, the dashboard displays all accessible addresses:
 
 ```
