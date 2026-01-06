@@ -56,9 +56,12 @@
 - [x] Add searching of search history
 - [ ] Add auto complete for history
 - [ ] Add history replay from preferences
-- [ ] Add search in search history
+- [x] Add search in search history
 - [ ] Add bookmark support (read from filesystem?)
-- [ ] Add amazon and skroutz support
+- [x] Add skroutz support
+- [ ] Add amazon support
+- [x] preferences for selecting search engines
+- [ ] Add custom engine
 
 ## Calendar & Todo
 - [ ] Sync with ics calendart (read only for now)
