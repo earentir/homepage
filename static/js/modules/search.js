@@ -40,7 +40,7 @@ try {
     } catch (e) {
       enabledEngines = engines.map(e => e.name);
     }
-    
+
     // If saved engine is enabled, use it
     if (enabledEngines.includes(saved)) {
       const idx = engines.findIndex(e => e.name === saved);
@@ -155,7 +155,7 @@ function renderEngines() {
   const menu = document.getElementById("engineMenu");
   if (!menu) return;
   menu.innerHTML = "";
-  
+
   // Always get enabled engines from localStorage (single source of truth)
   let enabledEngines = [];
   try {
@@ -172,17 +172,17 @@ function renderEngines() {
     enabledEngines = engines.map(e => e.name);
     localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
   }
-  
+
   // Filter engines to only show enabled ones
   const enabledEnginesList = engines.filter(e => enabledEngines.includes(e.name));
-  
+
   if (enabledEnginesList.length === 0) {
     // Fallback: if no engines enabled, show all and save to localStorage
     enabledEnginesList.push(...engines);
     enabledEngines = engines.map(e => e.name);
     localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
   }
-  
+
   enabledEnginesList.forEach((e) => {
     const originalIndex = engines.findIndex(eng => eng.name === e.name);
     const btn = document.createElement("button");
@@ -209,7 +209,7 @@ function updateEngineBtn() {
 function isValidUrlOrIp(input) {
   const trimmed = input.trim();
   if (!trimmed) return false;
-  
+
   // Check for IPv4 address (with optional port)
   const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/;
   if (ipv4Regex.test(trimmed)) {
@@ -227,7 +227,7 @@ function isValidUrlOrIp(input) {
     }
     return isValidIp;
   }
-  
+
   // Check for URL (with or without protocol)
   // Match domain patterns: domain.tld, subdomain.domain.tld, etc.
   // Also match localhost
@@ -235,13 +235,13 @@ function isValidUrlOrIp(input) {
   if (urlPattern.test(trimmed)) {
     return true;
   }
-  
+
   // Check for URLs with IP and port
   const urlWithIpPattern = /^https?:\/\/(\d{1,3}\.){3}\d{1,3}(:\d+)?(\/.*)?$/;
   if (urlWithIpPattern.test(trimmed)) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -249,17 +249,17 @@ function isValidUrlOrIp(input) {
 function normalizeUrl(input) {
   const trimmed = input.trim();
   if (!trimmed) return trimmed;
-  
+
   // If it already has a protocol, return as is
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed;
   }
-  
+
   // If it starts with //, add http:
   if (trimmed.startsWith('//')) {
     return 'http:' + trimmed;
   }
-  
+
   // Otherwise, add http://
   return 'http://' + trimmed;
 }
@@ -268,22 +268,39 @@ function goSearch() {
   const q = document.getElementById("q");
   const term = (q.value || "").trim();
   if (!term) return;
-  
+
+  // Get same tab preference (default: true)
+  let sameTab = true;
+  try {
+    const saved = localStorage.getItem('sameTabOnSearch');
+    sameTab = saved === null ? true : saved === 'true';
+  } catch (e) {
+    sameTab = true;
+  }
+
   // Check if the input is a valid URL or IP address
   if (isValidUrlOrIp(term)) {
     // Navigate directly to the URL/IP
     const url = normalizeUrl(term);
     addToSearchHistory(term, "Direct URL");
-    window.open(url, "_blank", "noreferrer");
+    if (sameTab) {
+      window.location.href = url;
+    } else {
+      window.open(url, "_blank", "noreferrer");
+    }
     q.value = "";
     return;
   }
-  
+
   // Otherwise, perform normal search
   const engine = engines[currentEngineIndex];
   addToSearchHistory(term, engine.name);
   const u = engine.url.replace("%s", encodeURIComponent(term));
-  window.open(u, "_blank", "noreferrer");
+  if (sameTab) {
+    window.location.href = u;
+  } else {
+    window.open(u, "_blank", "noreferrer");
+  }
   q.value = "";
 }
 
@@ -307,7 +324,7 @@ function handleKeyboardShortcut(e) {
     const tag = activeElement.tagName.toLowerCase();
     const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
     const isContentEditable = activeElement.isContentEditable || activeElement.getAttribute('contenteditable') === 'true';
-    
+
     // Don't capture when in any input field or contentEditable element
     if (isInput || isContentEditable) {
       return;
@@ -340,19 +357,19 @@ function handleKeyboardShortcut(e) {
 
 function initKeyboardShortcuts() {
   if (keyboardShortcutsInitialized) return;
-  
+
   // Ensure DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initKeyboardShortcuts, { once: true });
     return;
   }
-  
+
   keyboardShortcutsInitialized = true;
-  
+
   // Add listener to window - use capture phase to catch early
   // Also try without capture as fallback for better compatibility
   window.addEventListener('keydown', handleKeyboardShortcut, true);
-  
+
   if (window.debugLog) {
     window.debugLog('search', 'Keyboard shortcuts initialized');
   }
@@ -365,7 +382,7 @@ function initKeyboardShortcuts() {
       initKeyboardShortcuts();
     }
   }
-  
+
   // Try on various events to ensure it initializes
   if (document.readyState === 'complete') {
     tryInit();
@@ -373,7 +390,7 @@ function initKeyboardShortcuts() {
     window.addEventListener('load', tryInit, { once: true });
     document.addEventListener('DOMContentLoaded', tryInit, { once: true });
   }
-  
+
   // Final fallback - try after a short delay
   setTimeout(tryInit, 100);
 })();
@@ -411,7 +428,7 @@ function initSearch() {
 
   // Initialize keyboard shortcuts
   initKeyboardShortcuts();
-  
+
   // Fallback: ensure it's initialized after DOM is fully ready
   if (document.readyState !== 'complete') {
     window.addEventListener('load', initKeyboardShortcuts, { once: true });
@@ -419,7 +436,7 @@ function initSearch() {
 
   renderEngines();
   updateEngineBtn();
-  
+
   // Validate current engine is still enabled
   try {
     const saved = localStorage.getItem('searchEngine');
@@ -435,7 +452,7 @@ function initSearch() {
       } catch (e) {
         enabledEngines = engines.map(e => e.name);
       }
-      
+
       if (!enabledEngines.includes(saved) && enabledEngines.length > 0) {
         // Current engine is disabled, switch to first enabled
         const firstEnabled = engines.findIndex(e => e.name === enabledEngines[0]);

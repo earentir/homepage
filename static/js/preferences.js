@@ -696,6 +696,7 @@ function initWeatherSettings() {
 function initSearchSettings() {
   const searchFilterInput = document.getElementById('searchHistoryFilter');
   const clearHistoryBtn = document.getElementById('clearSearchHistoryBtn');
+  const sameTabCheckbox = document.getElementById('pref-same-tab-search');
 
   if (searchFilterInput) {
     searchFilterInput.addEventListener('input', () => {
@@ -708,6 +709,17 @@ function initSearchSettings() {
   if (clearHistoryBtn) {
     clearHistoryBtn.addEventListener('click', () => {
       if (window.clearSearchHistory) window.clearSearchHistory();
+    });
+  }
+
+  // Same tab preference
+  if (sameTabCheckbox) {
+    // Load saved preference (default: true)
+    const saved = localStorage.getItem('sameTabOnSearch');
+    sameTabCheckbox.checked = saved === null ? true : saved === 'true';
+    
+    sameTabCheckbox.addEventListener('change', () => {
+      localStorage.setItem('sameTabOnSearch', sameTabCheckbox.checked.toString());
     });
   }
 

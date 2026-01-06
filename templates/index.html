@@ -493,6 +493,18 @@ if ('serviceWorker' in navigator) {
         <!-- Search Tab -->
         <div class="tab-content" id="tab-search">
           <div class="pref-section">
+            <h3>Search Settings</h3>
+            <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px;">
+              <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
+                <input type="checkbox" id="pref-same-tab-search" checked style="cursor:pointer; flex-shrink:0;">
+                <label for="pref-same-tab-search" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Open In Current Tab on Search</label>
+              </div>
+              <div style="min-width:0;"></div>
+              <div style="min-width:0;"></div>
+              <div style="min-width:0;"></div>
+            </div>
+          </div>
+          <div class="pref-section">
             <h3>Search Engines</h3>
             <p class="small" style="color:var(--muted); margin-bottom:16px;">Enable or disable search engines. Only enabled engines will appear in the search dropdown.</p>
             <div id="searchEnginesList" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px;"></div>
