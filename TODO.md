@@ -72,7 +72,7 @@
 - [ ] Integrate wiki with search
 
 ## Quicklinks
-- [ ] Add a favicon or icon only mode
+- [x] Add a favicon or icon only mode
 
 ## Quick Links Enhancements
 - [x] Make links editable via UI

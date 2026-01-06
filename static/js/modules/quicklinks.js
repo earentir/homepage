@@ -6,6 +6,8 @@ const defaultQuicklinks = [
 
 let quicklinks = [];
 let quicklinksLayout = 1;
+let quicklinksIconsOnly = false;
+let quicklinksEqualSize = false;
 
 // Load from localStorage
 (function() {
@@ -24,6 +26,20 @@ let quicklinksLayout = 1;
     const savedLayout = localStorage.getItem('quicklinksLayout');
     if (savedLayout) {
       quicklinksLayout = parseInt(savedLayout) || 1;
+    }
+  } catch (e) {}
+
+  try {
+    const savedIconsOnly = localStorage.getItem('quicklinksIconsOnly');
+    if (savedIconsOnly !== null) {
+      quicklinksIconsOnly = savedIconsOnly === 'true';
+    }
+  } catch (e) {}
+
+  try {
+    const savedEqualSize = localStorage.getItem('quicklinksEqualSize');
+    if (savedEqualSize !== null) {
+      quicklinksEqualSize = savedEqualSize === 'true';
     }
   } catch (e) {}
 })();
@@ -104,6 +120,12 @@ function renderQuicklinks() {
   container.innerHTML = '';
   const grid = document.createElement('div');
   grid.className = 'quicklinks-grid cols-' + quicklinksLayout;
+  if (quicklinksIconsOnly) {
+    grid.classList.add('icons-only');
+    if (quicklinksEqualSize) {
+      grid.classList.add('equal-size');
+    }
+  }
 
   quicklinks.forEach(link => {
     const item = document.createElement('div');
@@ -113,24 +135,29 @@ function renderQuicklinks() {
     a.href = link.url;
     a.target = '_blank';
     a.rel = 'noreferrer';
+    if (quicklinksIconsOnly) {
+      a.title = link.title; // Use title as tooltip when icons only
+    }
 
     if (link.icon) {
-      a.innerHTML = '<span class="ql-icon"><i class="fas ' + link.icon + '"></i></span><span class="ql-title">' + link.title + '</span>';
+      a.innerHTML = '<span class="ql-icon"><i class="fas ' + link.icon + '"></i></span>' + (quicklinksIconsOnly ? '' : '<span class="ql-title">' + link.title + '</span>');
     } else {
       const cache = getFaviconCache();
       try {
         const cacheKey = new URL(link.url).origin;
         if (cache[cacheKey] && cache[cacheKey].expires > Date.now()) {
-          a.innerHTML = '<span class="ql-icon"><img src="' + cache[cacheKey].data + '" width="14" height="14"></span><span class="ql-title">' + link.title + '</span>';
+          a.innerHTML = '<span class="ql-icon"><img src="' + cache[cacheKey].data + '" width="14" height="14"></span>' + (quicklinksIconsOnly ? '' : '<span class="ql-title">' + link.title + '</span>');
         } else {
           const iconSpan = document.createElement('span');
           iconSpan.className = 'ql-icon';
           iconSpan.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-          const titleSpan = document.createElement('span');
-          titleSpan.className = 'ql-title';
-          titleSpan.textContent = link.title;
+          if (!quicklinksIconsOnly) {
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'ql-title';
+            titleSpan.textContent = link.title;
+            a.appendChild(titleSpan);
+          }
           a.appendChild(iconSpan);
-          a.appendChild(titleSpan);
 
           fetchAndCacheFavicon(link.url).then(favicon => {
             if (favicon) {
@@ -141,7 +168,7 @@ function renderQuicklinks() {
           });
         }
       } catch (e) {
-        a.innerHTML = '<span class="ql-icon"><i class="fas fa-link"></i></span><span class="ql-title">' + link.title + '</span>';
+        a.innerHTML = '<span class="ql-icon"><i class="fas fa-link"></i></span>' + (quicklinksIconsOnly ? '' : '<span class="ql-title">' + link.title + '</span>');
       }
     }
 
@@ -185,6 +212,13 @@ function renderQuicklinksList() {
     list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No quicklinks yet. Click "Add" to create one.</div>';
     return;
   }
+
+  // Create a grid container for 3-column layout
+  const grid = document.createElement('div');
+  grid.className = 'quicklinks-list-grid';
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+  grid.style.gap = '12px';
 
   quicklinks.forEach((link, index) => {
     const item = document.createElement('div');
@@ -247,7 +281,11 @@ function renderQuicklinksList() {
         renderQuicklinks();
       }
     });
+    
+    grid.appendChild(item);
   });
+  
+  list.appendChild(grid);
 }
 
 function editQuicklink(index) {
@@ -268,7 +306,65 @@ function editQuicklink(index) {
   }
 }
 
+function saveQuicklinksIconsOnly(enabled) {
+  quicklinksIconsOnly = enabled;
+  try {
+    localStorage.setItem('quicklinksIconsOnly', enabled.toString());
+  } catch (e) {}
+  // Update equal size checkbox state
+  updateEqualSizeCheckboxState();
+}
+
+function saveQuicklinksEqualSize(enabled) {
+  quicklinksEqualSize = enabled;
+  try {
+    localStorage.setItem('quicklinksEqualSize', enabled.toString());
+  } catch (e) {}
+}
+
+function updateEqualSizeCheckboxState() {
+  const equalSizeCheckbox = document.getElementById('quicklinksEqualSize');
+  const equalSizeLabel = document.getElementById('quicklinksEqualSizeLabel');
+  if (equalSizeCheckbox && equalSizeLabel) {
+    if (quicklinksIconsOnly) {
+      equalSizeCheckbox.disabled = false;
+      equalSizeLabel.style.opacity = '1';
+      equalSizeLabel.style.pointerEvents = 'auto';
+    } else {
+      equalSizeCheckbox.disabled = true;
+      equalSizeCheckbox.checked = false;
+      quicklinksEqualSize = false;
+      saveQuicklinksEqualSize(false);
+      equalSizeLabel.style.opacity = '0.5';
+      equalSizeLabel.style.pointerEvents = 'none';
+    }
+  }
+}
+
 function initQuicklinks() {
+  // Icons Only checkbox
+  const iconsOnlyCheckbox = document.getElementById('quicklinksIconsOnly');
+  if (iconsOnlyCheckbox) {
+    iconsOnlyCheckbox.checked = quicklinksIconsOnly;
+    iconsOnlyCheckbox.addEventListener('change', () => {
+      saveQuicklinksIconsOnly(iconsOnlyCheckbox.checked);
+      renderQuicklinks();
+    });
+  }
+
+  // Equal Size checkbox
+  const equalSizeCheckbox = document.getElementById('quicklinksEqualSize');
+  if (equalSizeCheckbox) {
+    equalSizeCheckbox.checked = quicklinksEqualSize;
+    equalSizeCheckbox.addEventListener('change', () => {
+      saveQuicklinksEqualSize(equalSizeCheckbox.checked);
+      renderQuicklinks();
+    });
+  }
+
+  // Update equal size checkbox state on init
+  updateEqualSizeCheckboxState();
+
   // Layout buttons
   document.querySelectorAll('.layout-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -285,6 +381,13 @@ function initQuicklinks() {
     const observer = new MutationObserver(() => {
       if (prefsModal.classList.contains('active')) {
         updateLayoutButtons();
+        if (iconsOnlyCheckbox) {
+          iconsOnlyCheckbox.checked = quicklinksIconsOnly;
+        }
+        if (equalSizeCheckbox) {
+          equalSizeCheckbox.checked = quicklinksEqualSize;
+        }
+        updateEqualSizeCheckboxState();
       }
     });
     observer.observe(prefsModal, { attributes: true, attributeFilter: ['class'] });
