@@ -34,6 +34,7 @@
 - [x] Add PTR on the second line of the public and local IP addresses
 - [ ] add status indicator for the public and local IP addresses
 - [ ] add indicator for next hop in both local and public IP addresses
+- [x] add copy of the ip/ptr on click
 
 
 ## GitHub Enhancements
@@ -56,6 +57,8 @@
 - [ ] Add auto complete for history
 - [ ] Add history replay from preferences
 - [ ] Add search in search history
+- [ ] Add bookmark support (read from filesystem?)
+- [ ] Add amazon and skroutz support
 
 ## Calendar & Todo
 - [ ] Sync with ics calendart (read only for now)

@@ -54,8 +54,9 @@ function initPreferencesModal() {
       if (content) content.classList.add('active');
 
       // Render search history when search tab is opened
-      if (tabName === 'search' && window.renderSearchHistory) {
-        window.renderSearchHistory();
+      if (tabName === 'search') {
+        if (window.renderSearchHistory) window.renderSearchHistory();
+        if (window.renderSearchEngines) window.renderSearchEngines();
       }
 
       // Render layout editor when layout tab is opened
@@ -709,7 +710,121 @@ function initSearchSettings() {
       if (window.clearSearchHistory) window.clearSearchHistory();
     });
   }
+
+  // Initialize search engines list
+  if (window.renderSearchEngines) {
+    window.renderSearchEngines();
+  }
 }
+
+function renderSearchEngines() {
+  const container = document.getElementById('searchEnginesList');
+  if (!container) {
+    if (window.debugError) window.debugError('preferences', 'Missing searchEnginesList container');
+    return;
+  }
+
+  // Wait a bit if window.engines is not yet available (script loading timing)
+  if (!window.engines || !Array.isArray(window.engines) || window.engines.length === 0) {
+    if (window.debugError) window.debugError('preferences', 'window.engines not available, retrying...', { engines: window.engines });
+    setTimeout(renderSearchEngines, 100);
+    return;
+  }
+
+  container.innerHTML = '';
+
+  // Load enabled engines from localStorage - DO NOT auto-add new ones
+  let enabledEngines = [];
+  try {
+    const saved = localStorage.getItem('enabledSearchEngines');
+    if (saved) {
+      enabledEngines = JSON.parse(saved);
+    } else {
+      // Only set default if nothing is saved
+      enabledEngines = window.engines.map(e => e.name);
+      localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+    }
+  } catch (e) {
+    // If error, default to all enabled
+    enabledEngines = window.engines.map(e => e.name);
+    localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+  }
+
+  // Render ALL engines - log the count for debugging
+  const engineCount = window.engines ? window.engines.length : 0;
+  if (window.debugLog) window.debugLog('preferences', `Rendering ${engineCount} search engines:`, window.engines ? window.engines.map(e => e.name) : []);
+  
+  if (!window.engines || engineCount === 0) {
+    container.innerHTML = '<div class="small" style="color:var(--muted);">No search engines available</div>';
+    return;
+  }
+  
+  // Render each engine - iterate over ALL engines in the array
+  window.engines.forEach((engine, index) => {
+    if (!engine || !engine.name) return; // Skip invalid entries
+    const isEnabled = enabledEngines.includes(engine.name);
+    const item = document.createElement('div');
+    item.style.display = 'flex';
+    item.style.alignItems = 'center';
+    item.style.gap = '8px';
+    item.style.padding = '8px';
+    item.style.border = '1px solid var(--border)';
+    item.style.borderRadius = '6px';
+    item.innerHTML = `
+      <input type="checkbox" id="engine-${engine.name}" data-engine="${engine.name}" ${isEnabled ? 'checked' : ''} style="cursor:pointer;">
+      <label for="engine-${engine.name}" style="cursor:pointer; flex:1; display:flex; align-items:center; gap:8px; margin:0;">
+        <i class="${engine.icon}" style="color:var(--accent);"></i>
+        <span>${window.escapeHtml ? window.escapeHtml(engine.name) : engine.name}</span>
+      </label>
+    `;
+    container.appendChild(item);
+
+    // Add event listener - find checkbox by data attribute instead of ID to avoid issues with special characters
+    const checkbox = item.querySelector(`input[data-engine="${engine.name}"]`);
+    if (!checkbox) {
+      if (window.debugError) window.debugError('preferences', `Could not find checkbox for engine: ${engine.name}`);
+      return;
+    }
+    checkbox.addEventListener('change', () => {
+      // Get current enabled engines from all checkboxes
+      let enabled = [];
+      const allCheckboxes = container.querySelectorAll('input[type="checkbox"][data-engine]');
+      allCheckboxes.forEach(cb => {
+        if (cb.checked) {
+          enabled.push(cb.dataset.engine);
+        }
+      });
+
+      // Ensure at least one engine is enabled
+      if (enabled.length === 0) {
+        checkbox.checked = true;
+        enabled.push(engine.name);
+      }
+
+      // Save all engine statuses to localStorage
+      localStorage.setItem('enabledSearchEngines', JSON.stringify(enabled));
+      
+      // Update the engines dropdown immediately
+      if (window.renderEngines) {
+        window.renderEngines();
+      }
+      
+      // If current engine was disabled, switch to first enabled engine
+      const currentEngine = localStorage.getItem('searchEngine');
+      if (!enabled.includes(currentEngine)) {
+        if (enabled.length > 0) {
+          localStorage.setItem('searchEngine', enabled[0]);
+          if (window.updateEngineBtn) {
+            window.updateEngineBtn();
+          }
+        }
+      }
+    });
+  });
+}
+
+// Export
+window.renderSearchEngines = renderSearchEngines;
 
 let debugSettingsInitialized = false;
 

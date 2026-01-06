@@ -5,12 +5,19 @@ const engines = [
   {name: "Google", url: "https://www.google.com/search?q=%s", icon: "fab fa-google"},
   {name: "DuckDuckGo", url: "https://duckduckgo.com/?q=%s", icon: "fas fa-duck"},
   {name: "Bing", url: "https://www.bing.com/search?q=%s", icon: "fab fa-microsoft"},
+  {name: "Brave", url: "https://search.brave.com/search?q=%s", icon: "fas fa-shield-alt"},
+  {name: "Yandex", url: "https://yandex.com/search/?text=%s", icon: "fab fa-yandex"},
+  {name: "Startpage", url: "https://www.startpage.com/sp/search?query=%s", icon: "fas fa-search"},
+  {name: "Ecosia", url: "https://www.ecosia.org/search?q=%s", icon: "fas fa-leaf"},
+  {name: "Qwant", url: "https://www.qwant.com/?q=%s", icon: "fas fa-search"},
+  {name: "SearXNG", url: "https://searx.org/search?q=%s", icon: "fas fa-search"},
   {name: "Perplexity", url: "https://www.perplexity.ai/search?q=%s", icon: "fas fa-brain"},
   {name: "GitHub", url: "https://github.com/search?q=%s", icon: "fab fa-github"},
   {name: "Stack Overflow", url: "https://stackoverflow.com/search?q=%s", icon: "fab fa-stack-overflow"},
   {name: "YouTube", url: "https://www.youtube.com/results?search_query=%s", icon: "fab fa-youtube"},
   {name: "Reddit", url: "https://www.reddit.com/search/?q=%s", icon: "fab fa-reddit"},
-  {name: "Wikipedia", url: "https://en.wikipedia.org/w/index.php?search=%s", icon: "fab fa-wikipedia-w"}
+  {name: "Wikipedia", url: "https://en.wikipedia.org/w/index.php?search=%s", icon: "fab fa-wikipedia-w"},
+  {name: "Skroutz", url: "https://www.skroutz.gr/search?keyphrase=%s", icon: "fas fa-shopping-bag"}
 ];
 
 let currentEngineIndex = 0;
@@ -20,8 +27,34 @@ let searchHistory = [];
 try {
   const saved = localStorage.getItem('searchEngine');
   if (saved) {
-    const idx = engines.findIndex(e => e.name === saved);
-    if (idx >= 0) currentEngineIndex = idx;
+    // Check if saved engine is enabled
+    let enabledEngines = [];
+    try {
+      const enabledSaved = localStorage.getItem('enabledSearchEngines');
+      if (enabledSaved) {
+        enabledEngines = JSON.parse(enabledSaved);
+      } else {
+        // Default: all engines enabled
+        enabledEngines = engines.map(e => e.name);
+      }
+    } catch (e) {
+      enabledEngines = engines.map(e => e.name);
+    }
+    
+    // If saved engine is enabled, use it
+    if (enabledEngines.includes(saved)) {
+      const idx = engines.findIndex(e => e.name === saved);
+      if (idx >= 0) currentEngineIndex = idx;
+    } else {
+      // Otherwise, use first enabled engine
+      if (enabledEngines.length > 0) {
+        const firstEnabled = engines.findIndex(e => e.name === enabledEngines[0]);
+        if (firstEnabled >= 0) {
+          currentEngineIndex = firstEnabled;
+          localStorage.setItem('searchEngine', enabledEngines[0]);
+        }
+      }
+    }
   }
 } catch (e) {}
 
@@ -122,11 +155,40 @@ function renderEngines() {
   const menu = document.getElementById("engineMenu");
   if (!menu) return;
   menu.innerHTML = "";
-  engines.forEach((e, i) => {
+  
+  // Always get enabled engines from localStorage (single source of truth)
+  let enabledEngines = [];
+  try {
+    const saved = localStorage.getItem('enabledSearchEngines');
+    if (saved) {
+      enabledEngines = JSON.parse(saved);
+    } else {
+      // Default: all engines enabled - save this to localStorage
+      enabledEngines = engines.map(e => e.name);
+      localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+    }
+  } catch (e) {
+    // If error, default to all enabled
+    enabledEngines = engines.map(e => e.name);
+    localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+  }
+  
+  // Filter engines to only show enabled ones
+  const enabledEnginesList = engines.filter(e => enabledEngines.includes(e.name));
+  
+  if (enabledEnginesList.length === 0) {
+    // Fallback: if no engines enabled, show all and save to localStorage
+    enabledEnginesList.push(...engines);
+    enabledEngines = engines.map(e => e.name);
+    localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+  }
+  
+  enabledEnginesList.forEach((e) => {
+    const originalIndex = engines.findIndex(eng => eng.name === e.name);
     const btn = document.createElement("button");
     btn.textContent = e.name;
     btn.onclick = function() {
-      currentEngineIndex = i;
+      currentEngineIndex = originalIndex;
       updateEngineBtn();
       menu.style.display = "none";
       localStorage.setItem('searchEngine', e.name);
@@ -286,6 +348,34 @@ function initSearch() {
 
   renderEngines();
   updateEngineBtn();
+  
+  // Validate current engine is still enabled
+  try {
+    const saved = localStorage.getItem('searchEngine');
+    if (saved) {
+      let enabledEngines = [];
+      try {
+        const enabledSaved = localStorage.getItem('enabledSearchEngines');
+        if (enabledSaved) {
+          enabledEngines = JSON.parse(enabledSaved);
+        } else {
+          enabledEngines = engines.map(e => e.name);
+        }
+      } catch (e) {
+        enabledEngines = engines.map(e => e.name);
+      }
+      
+      if (!enabledEngines.includes(saved) && enabledEngines.length > 0) {
+        // Current engine is disabled, switch to first enabled
+        const firstEnabled = engines.findIndex(e => e.name === enabledEngines[0]);
+        if (firstEnabled >= 0) {
+          currentEngineIndex = firstEnabled;
+          localStorage.setItem('searchEngine', enabledEngines[0]);
+          updateEngineBtn();
+        }
+      }
+    }
+  } catch (e) {}
 }
 
 // Export to window
