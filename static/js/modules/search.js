@@ -205,10 +205,81 @@ function updateEngineBtn() {
   }
 }
 
+// Check if a string is a valid URL or IP address
+function isValidUrlOrIp(input) {
+  const trimmed = input.trim();
+  if (!trimmed) return false;
+  
+  // Check for IPv4 address (with optional port)
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/;
+  if (ipv4Regex.test(trimmed)) {
+    const parts = trimmed.split(':');
+    const ipParts = parts[0].split('.');
+    // Validate IP range (0-255)
+    const isValidIp = ipParts.every(part => {
+      const num = parseInt(part, 10);
+      return num >= 0 && num <= 255;
+    });
+    // Validate port if present (1-65535)
+    if (parts.length > 1) {
+      const port = parseInt(parts[1], 10);
+      if (port < 1 || port > 65535) return false;
+    }
+    return isValidIp;
+  }
+  
+  // Check for URL (with or without protocol)
+  // Match domain patterns: domain.tld, subdomain.domain.tld, etc.
+  // Also match localhost
+  const urlPattern = /^(https?:\/\/)?([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(:\d+)?(\/.*)?$|^localhost(:\d+)?(\/.*)?$/i;
+  if (urlPattern.test(trimmed)) {
+    return true;
+  }
+  
+  // Check for URLs with IP and port
+  const urlWithIpPattern = /^https?:\/\/(\d{1,3}\.){3}\d{1,3}(:\d+)?(\/.*)?$/;
+  if (urlWithIpPattern.test(trimmed)) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Normalize URL - add http:// if no protocol is present
+function normalizeUrl(input) {
+  const trimmed = input.trim();
+  if (!trimmed) return trimmed;
+  
+  // If it already has a protocol, return as is
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  
+  // If it starts with //, add http:
+  if (trimmed.startsWith('//')) {
+    return 'http:' + trimmed;
+  }
+  
+  // Otherwise, add http://
+  return 'http://' + trimmed;
+}
+
 function goSearch() {
   const q = document.getElementById("q");
   const term = (q.value || "").trim();
   if (!term) return;
+  
+  // Check if the input is a valid URL or IP address
+  if (isValidUrlOrIp(term)) {
+    // Navigate directly to the URL/IP
+    const url = normalizeUrl(term);
+    addToSearchHistory(term, "Direct URL");
+    window.open(url, "_blank", "noreferrer");
+    q.value = "";
+    return;
+  }
+  
+  // Otherwise, perform normal search
   const engine = engines[currentEngineIndex];
   addToSearchHistory(term, engine.name);
   const u = engine.url.replace("%s", encodeURIComponent(term));
