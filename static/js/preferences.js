@@ -22,6 +22,8 @@ function initPreferencesModal() {
     if (window.renderSnmpList) window.renderSnmpList();
     if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
     if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
+    if (window.renderCalendarModuleList) window.renderCalendarModuleList();
+    if (window.renderTodoModuleList) window.renderTodoModuleList();
     renderModuleList();
     // Initialize debug settings when modal opens
     initDebugSettings();
@@ -74,9 +76,11 @@ function initPreferencesModal() {
         window.renderTodosPreferenceList();
       }
 
-      // Render disk module list when modules tab is opened
-      if (tabName === 'modules' && window.renderDiskModuleList) {
-        window.renderDiskModuleList();
+      // Render module lists when modules tab is opened
+      if (tabName === 'modules') {
+        if (window.renderDiskModuleList) window.renderDiskModuleList();
+        if (window.renderCalendarModuleList) window.renderCalendarModuleList();
+        if (window.renderTodoModuleList) window.renderTodoModuleList();
       }
 
       // Initialize debug settings when debug tab is opened
@@ -493,7 +497,13 @@ function renderModuleList() {
 
   moduleList.innerHTML = '';
 
+  // Exclude calendar and todo modules from the main module list (they have their own sections)
+  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo'];
+
   Object.keys(window.moduleConfig).forEach(key => {
+    // Skip excluded modules
+    if (excludedModules.includes(key)) return;
+
     const mod = window.moduleConfig[key];
     const item = document.createElement('div');
     item.className = 'module-item';
@@ -835,8 +845,199 @@ function renderSearchEngines() {
   });
 }
 
+// Render calendar modules list in preferences
+function renderCalendarModuleList() {
+  const list = document.getElementById('calendarModuleList');
+  if (!list || !window.moduleConfig) return;
+
+  list.innerHTML = '';
+
+  // Filter calendar-related modules
+  const calendarModules = ['calendar', 'events', 'weekcalendar'];
+  const foundModules = [];
+
+  calendarModules.forEach(key => {
+    if (window.moduleConfig[key]) {
+      foundModules.push({ key, mod: window.moduleConfig[key] });
+    }
+  });
+
+  if (foundModules.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No calendar modules available</div>';
+    return;
+  }
+
+  foundModules.forEach(({ key, mod }) => {
+    const item = document.createElement('div');
+    item.className = 'module-item';
+    item.innerHTML = `
+      <div class="module-icon"><i class="fas ${mod.icon}"></i></div>
+      <div class="module-info">
+        <div class="module-name">${mod.name}</div>
+        <div class="module-desc">${mod.desc}</div>
+      </div>
+      <div class="module-controls">
+        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
+        <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
+      </div>
+    `;
+    list.appendChild(item);
+
+    // Handle toggle changes
+    const toggle = item.querySelector('.module-toggle');
+    toggle.addEventListener('change', () => {
+      if (window.moduleConfig[key]) {
+        window.moduleConfig[key].enabled = toggle.checked;
+        if (window.saveModulePrefs) window.saveModulePrefs();
+        if (window.applyModuleVisibility) window.applyModuleVisibility();
+      }
+    });
+
+    // Handle interval changes
+    const intervalInput = item.querySelector('.interval-input');
+    if (intervalInput) {
+      intervalInput.addEventListener('change', () => {
+        if (window.moduleConfig[key] && window.moduleConfig[key].hasTimer && window.timers && window.timers[mod.timerKey]) {
+          const val = Math.max(1, parseInt(intervalInput.value) || mod.defaultInterval);
+          intervalInput.value = val;
+          window.timers[mod.timerKey].interval = val * 1000;
+          if (window.saveModulePrefs) window.saveModulePrefs();
+        }
+      });
+    }
+  });
+}
+
+// Render calendar modules list in preferences
+function renderCalendarModuleList() {
+  const list = document.getElementById('calendarModuleList');
+  if (!list || !window.moduleConfig) return;
+
+  list.innerHTML = '';
+
+  // Filter calendar-related modules
+  const calendarModules = ['calendar', 'events', 'weekcalendar'];
+  const foundModules = [];
+
+  calendarModules.forEach(key => {
+    if (window.moduleConfig[key]) {
+      foundModules.push({ key, mod: window.moduleConfig[key] });
+    }
+  });
+
+  if (foundModules.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No calendar modules available</div>';
+    return;
+  }
+
+  foundModules.forEach(({ key, mod }) => {
+    const item = document.createElement('div');
+    item.className = 'module-item';
+    item.innerHTML = `
+      <div class="module-icon"><i class="fas ${mod.icon}"></i></div>
+      <div class="module-info">
+        <div class="module-name">${mod.name}</div>
+        <div class="module-desc">${mod.desc}</div>
+      </div>
+      <div class="module-controls">
+        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
+        <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
+      </div>
+    `;
+    list.appendChild(item);
+
+    // Handle toggle changes
+    const toggle = item.querySelector('.module-toggle');
+    toggle.addEventListener('change', () => {
+      if (window.moduleConfig[key]) {
+        window.moduleConfig[key].enabled = toggle.checked;
+        if (window.saveModulePrefs) window.saveModulePrefs();
+        if (window.applyModuleVisibility) window.applyModuleVisibility();
+      }
+    });
+
+    // Handle interval changes
+    const intervalInput = item.querySelector('.interval-input');
+    if (intervalInput) {
+      intervalInput.addEventListener('change', () => {
+        if (window.moduleConfig[key] && window.moduleConfig[key].hasTimer && window.timers && window.timers[mod.timerKey]) {
+          const val = Math.max(1, parseInt(intervalInput.value) || mod.defaultInterval);
+          intervalInput.value = val;
+          window.timers[mod.timerKey].interval = val * 1000;
+          if (window.saveModulePrefs) window.saveModulePrefs();
+        }
+      });
+    }
+  });
+}
+
+// Render todo modules list in preferences
+function renderTodoModuleList() {
+  const list = document.getElementById('todoModuleList');
+  if (!list || !window.moduleConfig) return;
+
+  list.innerHTML = '';
+
+  // Filter todo-related modules
+  const todoModules = ['todo'];
+  const foundModules = [];
+
+  todoModules.forEach(key => {
+    if (window.moduleConfig[key]) {
+      foundModules.push({ key, mod: window.moduleConfig[key] });
+    }
+  });
+
+  if (foundModules.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No todo modules available</div>';
+    return;
+  }
+
+  foundModules.forEach(({ key, mod }) => {
+    const item = document.createElement('div');
+    item.className = 'module-item';
+    item.innerHTML = `
+      <div class="module-icon"><i class="fas ${mod.icon}"></i></div>
+      <div class="module-info">
+        <div class="module-name">${mod.name}</div>
+        <div class="module-desc">${mod.desc}</div>
+      </div>
+      <div class="module-controls">
+        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
+        <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
+      </div>
+    `;
+    list.appendChild(item);
+
+    // Handle toggle changes
+    const toggle = item.querySelector('.module-toggle');
+    toggle.addEventListener('change', () => {
+      if (window.moduleConfig[key]) {
+        window.moduleConfig[key].enabled = toggle.checked;
+        if (window.saveModulePrefs) window.saveModulePrefs();
+        if (window.applyModuleVisibility) window.applyModuleVisibility();
+      }
+    });
+
+    // Handle interval changes
+    const intervalInput = item.querySelector('.interval-input');
+    if (intervalInput) {
+      intervalInput.addEventListener('change', () => {
+        if (window.moduleConfig[key] && window.moduleConfig[key].hasTimer && window.timers && window.timers[mod.timerKey]) {
+          const val = Math.max(1, parseInt(intervalInput.value) || mod.defaultInterval);
+          intervalInput.value = val;
+          window.timers[mod.timerKey].interval = val * 1000;
+          if (window.saveModulePrefs) window.saveModulePrefs();
+        }
+      });
+    }
+  });
+}
+
 // Export
 window.renderSearchEngines = renderSearchEngines;
+window.renderCalendarModuleList = renderCalendarModuleList;
+window.renderTodoModuleList = renderTodoModuleList;
 
 let debugSettingsInitialized = false;
 
