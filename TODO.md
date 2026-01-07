@@ -54,8 +54,9 @@
 ## Search Improvements
 - [x] Add search history
 - [x] Add searching of search history
-- [ ] Add auto complete for history
-- [ ] Add history replay from preferences
+- [x] Add auto complete for history
+- [x] Add preference to use the last search engine used for the search history item
+- [x] Add preference to visit links directly from search history (shift always does that)
 - [x] Add search in search history
 - [ ] Add bookmark support (read from filesystem?)
 - [x] Add skroutz support

@@ -100,6 +100,7 @@ if ('serviceWorker' in navigator) {
           <div class="menu" id="engineMenu"></div>
         </div>
       </div>
+      <div id="searchAutocomplete" class="search-autocomplete" style="display: none;"></div>
     </div>
   </div>
 
@@ -499,8 +500,14 @@ if ('serviceWorker' in navigator) {
                 <input type="checkbox" id="pref-same-tab-search" checked style="cursor:pointer; flex-shrink:0;">
                 <label for="pref-same-tab-search" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Open In Current Tab on Search</label>
               </div>
-              <div style="min-width:0;"></div>
-              <div style="min-width:0;"></div>
+              <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
+                <input type="checkbox" id="pref-switch-engine" checked style="cursor:pointer; flex-shrink:0;">
+                <label for="pref-switch-engine" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Switch to Search Engine</label>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
+                <input type="checkbox" id="pref-direct-visit-urls" checked style="cursor:pointer; flex-shrink:0;">
+                <label for="pref-direct-visit-urls" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Direct Visit URLs from Search</label>
+              </div>
               <div style="min-width:0;"></div>
             </div>
           </div>
@@ -1705,6 +1712,57 @@ if ('serviceWorker' in navigator) {
 .about-copyright {
   color: var(--muted);
   font-size: 11px;
+}
+.search {
+  position: relative;
+}
+.search-autocomplete {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  margin-top: 8px;
+  background: var(--panel, rgba(59, 66, 82, 0.98));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 10000 !important;
+  max-height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+[data-scheme="dark"] .search-autocomplete {
+  background: rgba(10, 10, 10, 0.98);
+}
+.autocomplete-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s ease;
+  gap: 8px;
+}
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+  background: rgba(255, 255, 255, 0.06);
+}
+.autocomplete-term {
+  flex: 1;
+  color: var(--txt);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.autocomplete-engine {
+  color: var(--muted);
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 </style>
 </body>

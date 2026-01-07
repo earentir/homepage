@@ -707,6 +707,8 @@ function initSearchSettings() {
   const searchFilterInput = document.getElementById('searchHistoryFilter');
   const clearHistoryBtn = document.getElementById('clearSearchHistoryBtn');
   const sameTabCheckbox = document.getElementById('pref-same-tab-search');
+  const switchEngineCheckbox = document.getElementById('pref-switch-engine');
+  const directVisitUrlsCheckbox = document.getElementById('pref-direct-visit-urls');
 
   if (searchFilterInput) {
     searchFilterInput.addEventListener('input', () => {
@@ -730,6 +732,28 @@ function initSearchSettings() {
     
     sameTabCheckbox.addEventListener('change', () => {
       localStorage.setItem('sameTabOnSearch', sameTabCheckbox.checked.toString());
+    });
+  }
+
+  // Switch engine preference
+  if (switchEngineCheckbox) {
+    // Load saved preference (default: true)
+    const saved = localStorage.getItem('switchEngineOnSelect');
+    switchEngineCheckbox.checked = saved === null ? true : saved === 'true';
+    
+    switchEngineCheckbox.addEventListener('change', () => {
+      localStorage.setItem('switchEngineOnSelect', switchEngineCheckbox.checked.toString());
+    });
+  }
+
+  // Direct visit URLs preference
+  if (directVisitUrlsCheckbox) {
+    // Load saved preference (default: true)
+    const saved = localStorage.getItem('directVisitUrlsFromSearch');
+    directVisitUrlsCheckbox.checked = saved === null ? true : saved === 'true';
+    
+    directVisitUrlsCheckbox.addEventListener('change', () => {
+      localStorage.setItem('directVisitUrlsFromSearch', directVisitUrlsCheckbox.checked.toString());
     });
   }
 

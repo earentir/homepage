@@ -22,6 +22,8 @@ const engines = [
 
 let currentEngineIndex = 0;
 let searchHistory = [];
+let autocompleteItems = [];
+let selectedAutocompleteIndex = -1;
 
 // Load saved engine
 try {
@@ -264,10 +266,212 @@ function normalizeUrl(input) {
   return 'http://' + trimmed;
 }
 
+function hideAutocomplete() {
+  const autocomplete = document.getElementById("searchAutocomplete");
+  if (autocomplete) {
+    autocomplete.style.display = "none";
+  }
+  selectedAutocompleteIndex = -1;
+}
+
+function showAutocomplete() {
+  const autocomplete = document.getElementById("searchAutocomplete");
+  if (autocomplete && autocompleteItems.length > 0) {
+    autocomplete.style.display = "block";
+    // Ensure it's visible
+    autocomplete.style.visibility = "visible";
+    autocomplete.style.opacity = "1";
+  }
+}
+
+function renderAutocomplete(filter = '') {
+  const autocomplete = document.getElementById("searchAutocomplete");
+  if (!autocomplete) return;
+
+  const q = document.getElementById("q");
+  if (!q) return;
+
+  const term = (q.value || "").trim();
+  
+  if (!term) {
+    hideAutocomplete();
+    return;
+  }
+
+  // Reload search history to ensure it's up to date
+  loadSearchHistory();
+
+  if (!searchHistory || searchHistory.length === 0) {
+    hideAutocomplete();
+    return;
+  }
+
+  const filterLower = term.toLowerCase();
+  autocompleteItems = searchHistory.filter(item => 
+    item && item.term && item.term.toLowerCase().includes(filterLower)
+  );
+
+  // Remove duplicates and reverse to show newest first
+  const uniqueItems = [];
+  const seen = new Set();
+  for (let i = autocompleteItems.length - 1; i >= 0; i--) {
+    const item = autocompleteItems[i];
+    if (!item || !item.term) continue;
+    const key = item.term.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueItems.push(item);
+    }
+  }
+  autocompleteItems = uniqueItems.slice(0, 10); // Limit to 10 items
+
+  if (autocompleteItems.length === 0) {
+    hideAutocomplete();
+    return;
+  }
+
+  autocomplete.innerHTML = '';
+  autocompleteItems.forEach((item, index) => {
+    if (!item || !item.term) return;
+    
+    const isDirectUrl = item.engine === "Direct URL" || isValidUrlOrIp(item.term);
+    const iconClass = isDirectUrl ? 'fas fa-link' : 'fas fa-history';
+    
+    const div = document.createElement('div');
+    div.className = 'autocomplete-item';
+    div.setAttribute('data-index', index);
+    div.innerHTML = `
+      <i class="${iconClass}" style="margin-right: 8px; color: var(--muted);"></i>
+      <span class="autocomplete-term">${window.escapeHtml ? window.escapeHtml(item.term) : item.term}</span>
+      <span class="autocomplete-engine">${window.escapeHtml ? window.escapeHtml(item.engine || '') : (item.engine || '')}</span>
+    `;
+    div.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      selectAutocompleteItem(index, e);
+    });
+    div.addEventListener('mouseenter', () => {
+      selectedAutocompleteIndex = index;
+      updateAutocompleteSelection();
+    });
+    div.addEventListener('mousedown', (e) => {
+      // Don't prevent default on Shift+Click for direct URLs
+      if (!(e.shiftKey && (item.engine === "Direct URL" || isValidUrlOrIp(item.term)))) {
+        e.preventDefault(); // Prevent input from losing focus
+      }
+    });
+    autocomplete.appendChild(div);
+  });
+
+  selectedAutocompleteIndex = -1;
+  showAutocomplete();
+  
+  // Force a reflow to ensure visibility
+  autocomplete.offsetHeight;
+}
+
+function updateAutocompleteSelection() {
+  const autocomplete = document.getElementById("searchAutocomplete");
+  if (!autocomplete) return;
+
+  const items = autocomplete.querySelectorAll('.autocomplete-item');
+  items.forEach((item, index) => {
+    if (index === selectedAutocompleteIndex) {
+      item.classList.add('selected');
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+}
+
+function selectAutocompleteItem(index, event = null) {
+  if (index < 0 || index >= autocompleteItems.length) return;
+
+  const item = autocompleteItems[index];
+  if (!item || !item.term) return;
+
+  const q = document.getElementById("q");
+  if (!q) return;
+
+  const term = item.term;
+  const isDirectUrl = item.engine === "Direct URL" || isValidUrlOrIp(term);
+  const shiftPressed = event && event.shiftKey;
+
+  // Get preferences
+  let directVisitUrls = true;
+  let switchEngine = true;
+  try {
+    const directVisitSaved = localStorage.getItem('directVisitUrlsFromSearch');
+    directVisitUrls = directVisitSaved === null ? true : directVisitSaved === 'true';
+    const switchEngineSaved = localStorage.getItem('switchEngineOnSelect');
+    switchEngine = switchEngineSaved === null ? true : switchEngineSaved === 'true';
+  } catch (e) {
+    // Use defaults
+  }
+
+  // Handle direct URLs
+  if (isDirectUrl) {
+    // If preference is enabled OR Shift is pressed, visit directly
+    if (directVisitUrls || shiftPressed) {
+      hideAutocomplete();
+      
+      // Get same tab preference
+      let sameTab = true;
+      try {
+        const saved = localStorage.getItem('sameTabOnSearch');
+        sameTab = saved === null ? true : saved === 'true';
+      } catch (e) {
+        sameTab = true;
+      }
+
+      const url = normalizeUrl(term);
+      if (sameTab) {
+        window.location.href = url;
+      } else {
+        window.open(url, "_blank", "noreferrer");
+      }
+      return;
+    }
+    // Otherwise, just fill the search box (default behavior)
+  } else {
+    // For regular searches, switch engine if preference is enabled
+    if (switchEngine && item.engine && item.engine !== "Direct URL") {
+      const engineIndex = engines.findIndex(e => e.name === item.engine);
+      if (engineIndex >= 0) {
+        // Check if engine is enabled
+        let enabledEngines = [];
+        try {
+          const enabledSaved = localStorage.getItem('enabledSearchEngines');
+          if (enabledSaved) {
+            enabledEngines = JSON.parse(enabledSaved);
+          } else {
+            enabledEngines = engines.map(e => e.name);
+          }
+        } catch (e) {
+          enabledEngines = engines.map(e => e.name);
+        }
+
+        if (enabledEngines.includes(item.engine)) {
+          currentEngineIndex = engineIndex;
+          updateEngineBtn();
+          localStorage.setItem('searchEngine', item.engine);
+        }
+      }
+    }
+  }
+
+  // Fill the search box
+  q.value = term;
+  hideAutocomplete();
+  q.focus();
+}
+
 function goSearch() {
   const q = document.getElementById("q");
   const term = (q.value || "").trim();
   if (!term) return;
+
+  hideAutocomplete();
 
   // Get same tab preference (default: true)
   let sameTab = true;
@@ -403,9 +607,101 @@ function initSearch() {
   const engineMenu = document.getElementById("engineMenu");
 
   if (q) {
-    q.addEventListener('keydown', (e) => {
-      if (e.key === "Enter") goSearch();
+    // Handle input changes for autocomplete
+    q.addEventListener('input', (e) => {
+      // Small delay to ensure value is updated
+      setTimeout(() => {
+        renderAutocomplete();
+      }, 0);
     });
+
+    // Show autocomplete on focus if there's text
+    q.addEventListener('focus', (e) => {
+      if (q.value && q.value.trim()) {
+        setTimeout(() => {
+          renderAutocomplete();
+        }, 0);
+      }
+    });
+
+    // Handle keyboard navigation
+    q.addEventListener('keydown', (e) => {
+      const autocomplete = document.getElementById("searchAutocomplete");
+      const isAutocompleteVisible = autocomplete && autocomplete.style.display !== 'none' && autocompleteItems.length > 0;
+
+      if (e.key === "Enter") {
+        if (isAutocompleteVisible && selectedAutocompleteIndex >= 0 && selectedAutocompleteIndex < autocompleteItems.length) {
+          e.preventDefault();
+          const item = autocompleteItems[selectedAutocompleteIndex];
+          const isDirectUrl = item && (item.engine === "Direct URL" || isValidUrlOrIp(item.term));
+          
+          // For direct URLs, check if we should visit directly
+          if (isDirectUrl) {
+            let directVisitUrls = true;
+            try {
+              const directVisitSaved = localStorage.getItem('directVisitUrlsFromSearch');
+              directVisitUrls = directVisitSaved === null ? true : directVisitSaved === 'true';
+            } catch (err) {
+              // Use default
+            }
+            
+            if (directVisitUrls) {
+              selectAutocompleteItem(selectedAutocompleteIndex, e);
+              return;
+            }
+          }
+          
+          // For regular searches or direct URLs with preference disabled
+          selectAutocompleteItem(selectedAutocompleteIndex, e);
+          if (!isDirectUrl) {
+            goSearch();
+          }
+        } else {
+          goSearch();
+        }
+      } else if (e.key === "ArrowDown") {
+        if (isAutocompleteVisible) {
+          e.preventDefault();
+          selectedAutocompleteIndex = (selectedAutocompleteIndex + 1) % autocompleteItems.length;
+          updateAutocompleteSelection();
+          // Scroll into view if needed
+          const items = autocomplete.querySelectorAll('.autocomplete-item');
+          if (items[selectedAutocompleteIndex]) {
+            items[selectedAutocompleteIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        }
+      } else if (e.key === "ArrowUp") {
+        if (isAutocompleteVisible) {
+          e.preventDefault();
+          if (selectedAutocompleteIndex <= 0) {
+            selectedAutocompleteIndex = autocompleteItems.length - 1;
+          } else {
+            selectedAutocompleteIndex--;
+          }
+          updateAutocompleteSelection();
+          // Scroll into view if needed
+          const items = autocomplete.querySelectorAll('.autocomplete-item');
+          if (items[selectedAutocompleteIndex]) {
+            items[selectedAutocompleteIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        }
+      } else if (e.key === "Escape") {
+        if (isAutocompleteVisible) {
+          e.preventDefault();
+          hideAutocomplete();
+        }
+      }
+    });
+
+    // Hide autocomplete when clicking outside
+    document.addEventListener('click', (e) => {
+      const autocomplete = document.getElementById("searchAutocomplete");
+      const searchbox = document.querySelector('.searchbox');
+      if (autocomplete && searchbox && !searchbox.contains(e.target) && !autocomplete.contains(e.target)) {
+        hideAutocomplete();
+      }
+    });
+
     // Focus the search box when page loads
     // Use requestAnimationFrame to ensure it happens after render
     requestAnimationFrame(() => {
@@ -478,3 +774,5 @@ window.renderSearchHistory = renderSearchHistory;
 window.renderEngines = renderEngines;
 window.goSearch = goSearch;
 window.initSearch = initSearch;
+window.renderAutocomplete = renderAutocomplete;
+window.hideAutocomplete = hideAutocomplete;
