@@ -140,6 +140,12 @@ function clearSearchHistory() {
 function renderSearchHistory(filter = '') {
   const list = document.getElementById('searchHistoryList');
   if (!list) return;
+  
+  // Only render if the history tab is active
+  const historyTab = document.getElementById('subtab-search-history');
+  if (!historyTab || !historyTab.classList.contains('active')) {
+    return;
+  }
 
   const filterLower = filter.toLowerCase();
   const filtered = filterLower

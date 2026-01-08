@@ -751,31 +751,35 @@ function initSearchSubTabs() {
     if (targetSubTab === 'search-settings') {
       if (window.renderSearchEngines) window.renderSearchEngines();
     } else if (targetSubTab === 'search-history') {
+      // Set up history listeners
+      const searchFilterInput = document.getElementById('searchHistoryFilter');
+      const clearHistoryBtn = document.getElementById('clearSearchHistoryBtn');
+      
+      if (searchFilterInput && !searchFilterInput.hasAttribute('data-listener-attached')) {
+        searchFilterInput.setAttribute('data-listener-attached', 'true');
+        searchFilterInput.addEventListener('input', () => {
+          if (window.renderSearchHistory) {
+            window.renderSearchHistory(searchFilterInput.value);
+          }
+        });
+      }
+
+      if (clearHistoryBtn && !clearHistoryBtn.hasAttribute('data-listener-attached')) {
+        clearHistoryBtn.setAttribute('data-listener-attached', 'true');
+        clearHistoryBtn.addEventListener('click', () => {
+          if (window.clearSearchHistory) window.clearSearchHistory();
+        });
+      }
+      
       if (window.renderSearchHistory) window.renderSearchHistory();
     }
   }
 }
 
 function initSearchSettings() {
-  const searchFilterInput = document.getElementById('searchHistoryFilter');
-  const clearHistoryBtn = document.getElementById('clearSearchHistoryBtn');
   const sameTabCheckbox = document.getElementById('pref-same-tab-search');
   const switchEngineCheckbox = document.getElementById('pref-switch-engine');
   const directVisitUrlsCheckbox = document.getElementById('pref-direct-visit-urls');
-
-  if (searchFilterInput) {
-    searchFilterInput.addEventListener('input', () => {
-      if (window.renderSearchHistory) {
-        window.renderSearchHistory(searchFilterInput.value);
-      }
-    });
-  }
-
-  if (clearHistoryBtn) {
-    clearHistoryBtn.addEventListener('click', () => {
-      if (window.clearSearchHistory) window.clearSearchHistory();
-    });
-  }
 
   // Same tab preference
   if (sameTabCheckbox) {
