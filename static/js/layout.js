@@ -95,18 +95,64 @@ function renderLayout() {
   const diskCards = diskContainer ? Array.from(diskContainer.querySelectorAll('.card[data-module]')) : [];
 
   // Combine and deduplicate by module ID (use first occurrence)
+  // Also filter out disabled modules
   const allCards = [...gridCards, ...githubCards, ...rssCards, ...diskCards];
   const cardsMap = new Map();
   allCards.forEach(card => {
     const moduleId = card.getAttribute('data-module');
     if (moduleId && !cardsMap.has(moduleId)) {
-      cardsMap.set(moduleId, card);
+      // Only include enabled modules
+      const isEnabled = window.moduleConfig && window.moduleConfig[moduleId] 
+        ? window.moduleConfig[moduleId].enabled !== false 
+        : true; // Default to enabled if not in config
+      if (isEnabled) {
+        cardsMap.set(moduleId, card);
+      }
     }
   });
 
   // Now clear the grid
   grid.innerHTML = '';
   grid.className = 'layout-grid';
+
+  // Helper function to check if module is enabled
+  const isModuleEnabled = (moduleId) => {
+    if (!moduleId) return false;
+    if (window.moduleConfig && window.moduleConfig[moduleId]) {
+      return window.moduleConfig[moduleId].enabled !== false;
+    }
+    return true; // Default to enabled if not in config
+  };
+
+  // Clean up layout config: remove disabled modules from rows
+  let configChanged = false;
+  layoutConfig.rows.forEach((row) => {
+    row.modules.forEach((moduleSlot, colIndex) => {
+      if (Array.isArray(moduleSlot)) {
+        // For split modules, remove disabled ones
+        const enabledModules = moduleSlot.filter(id => id && isModuleEnabled(id));
+        if (enabledModules.length === 0) {
+          row.modules[colIndex] = null;
+          configChanged = true;
+        } else if (enabledModules.length === 1) {
+          row.modules[colIndex] = enabledModules[0];
+          configChanged = true;
+        } else if (enabledModules.length < moduleSlot.length) {
+          row.modules[colIndex] = enabledModules;
+          configChanged = true;
+        }
+      } else if (moduleSlot && !isModuleEnabled(moduleSlot)) {
+        // Remove disabled module
+        row.modules[colIndex] = null;
+        configChanged = true;
+      }
+    });
+  });
+
+  // Save cleaned config if it changed
+  if (configChanged) {
+    saveLayoutConfig();
+  }
 
   layoutConfig.rows.forEach((row, rowIndex) => {
     const rowEl = document.createElement('div');
@@ -122,6 +168,15 @@ function renderLayout() {
 
       const moduleSlot = row.modules[col];
 
+      // Helper function to check if module is enabled
+      const isModuleEnabled = (moduleId) => {
+        if (!moduleId) return false;
+        if (window.moduleConfig && window.moduleConfig[moduleId]) {
+          return window.moduleConfig[moduleId].enabled !== false;
+        }
+        return true; // Default to enabled if not in config
+      };
+
       // Check if this is a split column (array of two module IDs)
       if (Array.isArray(moduleSlot)) {
         colEl.classList.add('split-column');
@@ -136,13 +191,16 @@ function renderLayout() {
         topWrapper.style.flex = '0 1 auto';
         topWrapper.style.overflow = 'hidden';
 
-        if (moduleSlot[0]) {
+        if (moduleSlot[0] && isModuleEnabled(moduleSlot[0])) {
           const topCard = cardsMap.get(moduleSlot[0]);
           if (topCard) {
             topCard.style.height = 'auto';
             topCard.style.overflow = 'hidden';
             topWrapper.appendChild(topCard);
             cardsMap.delete(moduleSlot[0]);
+          } else {
+            topWrapper.classList.add('empty-split');
+            topWrapper.innerHTML = '<div class="empty-column-hint" style="display:none;">Drop here (top)</div>';
           }
         } else {
           topWrapper.classList.add('empty-split');
@@ -156,13 +214,16 @@ function renderLayout() {
         bottomWrapper.style.flex = '0 1 auto';
         bottomWrapper.style.overflow = 'hidden';
 
-        if (moduleSlot[1]) {
+        if (moduleSlot[1] && isModuleEnabled(moduleSlot[1])) {
           const bottomCard = cardsMap.get(moduleSlot[1]);
           if (bottomCard) {
             bottomCard.style.height = 'auto';
             bottomCard.style.overflow = 'hidden';
             bottomWrapper.appendChild(bottomCard);
             cardsMap.delete(moduleSlot[1]);
+          } else {
+            bottomWrapper.classList.add('empty-split');
+            bottomWrapper.innerHTML = '<div class="empty-column-hint" style="display:none;">Drop here (bottom)</div>';
           }
         } else {
           bottomWrapper.classList.add('empty-split');
@@ -175,11 +236,18 @@ function renderLayout() {
         colEl.classList.add('empty-column');
         colEl.innerHTML = '<div class="empty-column-hint" style="display: none;">Drop module here</div>';
       } else {
-        const card = cardsMap.get(moduleSlot);
-        if (card) {
-          colEl.appendChild(card);
-          cardsMap.delete(moduleSlot);
+        // Check if module is enabled before placing it
+        if (isModuleEnabled(moduleSlot)) {
+          const card = cardsMap.get(moduleSlot);
+          if (card) {
+            colEl.appendChild(card);
+            cardsMap.delete(moduleSlot);
+          } else {
+            colEl.classList.add('empty-column');
+            colEl.innerHTML = '<div class="empty-column-hint" style="display: none;">Drop module here</div>';
+          }
         } else {
+          // Module is disabled, treat as empty column
           colEl.classList.add('empty-column');
           colEl.innerHTML = '<div class="empty-column-hint" style="display: none;">Drop module here</div>';
         }
@@ -388,17 +456,26 @@ function renderLayoutEditor() {
 
   editor.innerHTML = '';
 
+  // Helper function to check if module is enabled
+  const isModuleEnabled = (moduleId) => {
+    if (!moduleId) return false;
+    if (window.moduleConfig && window.moduleConfig[moduleId]) {
+      return window.moduleConfig[moduleId].enabled !== false;
+    }
+    return true; // Default to enabled if not in config
+  };
+
   layoutConfig.rows.forEach((row, rowIndex) => {
-    // Handle both regular and split modules
+    // Handle both regular and split modules - only show enabled ones
     const moduleNames = [];
     row.modules.forEach(m => {
       if (Array.isArray(m)) {
-        // Split module - show both names
-        const names = m.filter(id => id).map(id => getModuleName(id));
+        // Split module - show both names, but only if enabled
+        const names = m.filter(id => id && isModuleEnabled(id)).map(id => getModuleName(id));
         if (names.length > 0) {
           moduleNames.push(names.join('/'));
         }
-      } else if (m) {
+      } else if (m && isModuleEnabled(m)) {
         moduleNames.push(getModuleName(m));
       }
     });
