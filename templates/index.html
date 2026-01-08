@@ -493,40 +493,48 @@ if ('serviceWorker' in navigator) {
 
         <!-- Search Tab -->
         <div class="tab-content" id="tab-search">
-          <div class="pref-section">
-            <h3>Search Settings</h3>
-            <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px;">
-              <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
-                <input type="checkbox" id="pref-same-tab-search" checked style="cursor:pointer; flex-shrink:0;">
-                <label for="pref-same-tab-search" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Open In Current Tab on Search</label>
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-subtab="search-settings"><i class="fas fa-cog"></i> Settings & Engines</button>
+            <button class="sub-tab" data-subtab="search-history"><i class="fas fa-history"></i> History</button>
+          </div>
+          <div class="sub-tab-content active" id="subtab-search-settings">
+            <div class="pref-section">
+              <h3>Search Settings</h3>
+              <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px;">
+                <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
+                  <input type="checkbox" id="pref-same-tab-search" checked style="cursor:pointer; flex-shrink:0;">
+                  <label for="pref-same-tab-search" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Open In Current Tab on Search</label>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
+                  <input type="checkbox" id="pref-switch-engine" checked style="cursor:pointer; flex-shrink:0;">
+                  <label for="pref-switch-engine" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Switch to Search Engine</label>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
+                  <input type="checkbox" id="pref-direct-visit-urls" checked style="cursor:pointer; flex-shrink:0;">
+                  <label for="pref-direct-visit-urls" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Direct Visit URLs from Search</label>
+                </div>
+                <div style="min-width:0;"></div>
               </div>
-              <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
-                <input type="checkbox" id="pref-switch-engine" checked style="cursor:pointer; flex-shrink:0;">
-                <label for="pref-switch-engine" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Switch to Search Engine</label>
-              </div>
-              <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:6px; min-width:0; overflow:hidden;">
-                <input type="checkbox" id="pref-direct-visit-urls" checked style="cursor:pointer; flex-shrink:0;">
-                <label for="pref-direct-visit-urls" style="cursor:pointer; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">Direct Visit URLs from Search</label>
-              </div>
-              <div style="min-width:0;"></div>
+            </div>
+            <div class="pref-section">
+              <h3>Search Engines</h3>
+              <p class="small" style="color:var(--muted); margin-bottom:16px;">Enable or disable search engines. Only enabled engines will appear in the search dropdown.</p>
+              <div id="searchEnginesList" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:12px; max-width:100%;"></div>
             </div>
           </div>
-          <div class="pref-section">
-            <h3>Search Engines</h3>
-            <p class="small" style="color:var(--muted); margin-bottom:16px;">Enable or disable search engines. Only enabled engines will appear in the search dropdown.</p>
-            <div id="searchEnginesList" style="display:grid; grid-template-columns: repeat(6, 1fr); gap:12px;"></div>
-          </div>
-          <div class="pref-section">
-            <h3>Search History</h3>
-            <div class="pref-row">
-              <label>Search in history</label>
-              <input type="text" id="searchHistoryFilter" placeholder="Filter searches..." style="flex:1;">
+          <div class="sub-tab-content" id="subtab-search-history" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+            <div class="pref-section" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+              <h3>Search History</h3>
+              <div class="pref-row">
+                <label>Search in history</label>
+                <input type="text" id="searchHistoryFilter" placeholder="Filter searches..." style="flex:1;">
+              </div>
+              <div class="pref-row">
+                <label></label>
+                <button class="btn-small" id="clearSearchHistoryBtn"><i class="fas fa-trash"></i> Clear All</button>
+              </div>
+              <div class="module-list" id="searchHistoryList" style="flex:1; overflow-y:auto; margin-top:12px; min-height:0;"></div>
             </div>
-            <div class="pref-row">
-              <label></label>
-              <button class="btn-small" id="clearSearchHistoryBtn"><i class="fas fa-trash"></i> Clear All</button>
-            </div>
-            <div class="module-list" id="searchHistoryList" style="max-height:500px; overflow-y:auto; margin-top:12px;"></div>
           </div>
         </div>
 
@@ -1139,7 +1147,7 @@ if ('serviceWorker' in navigator) {
   justify-content: center;
   align-items: center;
   z-index: 10000;
-  padding: 20px;
+  padding: 0;
 }
 .modal-overlay.active {
   display: flex;
@@ -1148,12 +1156,16 @@ if ('serviceWorker' in navigator) {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  width: 80%;
-  max-width: 1800px;
-  max-height: 80vh;
+  width: 95vw;
+  min-width: 95vw;
+  max-width: 95vw;
+  height: 95vh;
+  min-height: 95vh;
+  max-height: 95vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  flex-shrink: 0;
 }
 .modal-header {
   display: flex;
@@ -1220,7 +1232,10 @@ if ('serviceWorker' in navigator) {
   display: none;
 }
 .tab-content.active {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 .pref-section {
   margin-bottom: 24px;
@@ -1763,6 +1778,66 @@ if ('serviceWorker' in navigator) {
   font-size: 12px;
   flex-shrink: 0;
   margin-left: auto;
+}
+.engine-category {
+  margin-bottom: 8px;
+}
+.engine-category:last-child {
+  margin-bottom: 0;
+}
+.engine-category-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  padding: 8px 12px 4px 12px;
+  margin-bottom: 4px;
+}
+.menu .engine-category button {
+  padding-left: 20px;
+}
+.header .drop .menu,
+.searchbox .drop .menu {
+  z-index: 10001 !important;
+}
+.sub-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  padding-bottom: 0;
+}
+.sub-tab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sub-tab:hover {
+  color: var(--txt);
+}
+.sub-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.sub-tab-content {
+  display: none;
+}
+.sub-tab-content.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 </style>
 </body>

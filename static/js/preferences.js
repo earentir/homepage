@@ -55,10 +55,17 @@ function initPreferencesModal() {
       const content = document.getElementById('tab-' + tabName);
       if (content) content.classList.add('active');
 
-      // Render search history when search tab is opened
+      // Initialize search tab sub-tabs
       if (tabName === 'search') {
-        if (window.renderSearchHistory) window.renderSearchHistory();
-        if (window.renderSearchEngines) window.renderSearchEngines();
+        // Initialize sub-tabs for search tab
+        initSearchSubTabs();
+        // Render search engines when settings sub-tab is active
+        const activeSubTab = document.querySelector('#tab-search .sub-tab.active');
+        if (activeSubTab && activeSubTab.dataset.subtab === 'search-settings') {
+          if (window.renderSearchEngines) window.renderSearchEngines();
+        } else if (activeSubTab && activeSubTab.dataset.subtab === 'search-history') {
+          if (window.renderSearchHistory) window.renderSearchHistory();
+        }
       }
 
       // Render layout editor when layout tab is opened
@@ -703,6 +710,52 @@ function initWeatherSettings() {
   }
 }
 
+function initSearchSubTabs() {
+  const subTabs = document.querySelectorAll('#tab-search .sub-tab');
+  const subTabContents = document.querySelectorAll('#tab-search .sub-tab-content');
+
+  // Only add event listeners once
+  if (subTabs.length > 0 && !subTabs[0].hasAttribute('data-initialized')) {
+    subTabs.forEach(subTab => {
+      subTab.setAttribute('data-initialized', 'true');
+      subTab.addEventListener('click', () => {
+        const targetSubTab = subTab.dataset.subtab;
+
+        // Remove active class from all sub-tabs and sub-tab contents
+        subTabs.forEach(t => t.classList.remove('active'));
+        subTabContents.forEach(c => c.classList.remove('active'));
+
+        // Add active class to clicked sub-tab
+        subTab.classList.add('active');
+
+        // Show corresponding sub-tab content
+        const targetContent = document.getElementById('subtab-' + targetSubTab);
+        if (targetContent) {
+          targetContent.classList.add('active');
+        }
+
+        // Render content based on which sub-tab is opened
+        if (targetSubTab === 'search-settings') {
+          if (window.renderSearchEngines) window.renderSearchEngines();
+        } else if (targetSubTab === 'search-history') {
+          if (window.renderSearchHistory) window.renderSearchHistory();
+        }
+      });
+    });
+  }
+
+  // Ensure initial state is correct - render content for active sub-tab
+  const activeSubTab = document.querySelector('#tab-search .sub-tab.active');
+  if (activeSubTab) {
+    const targetSubTab = activeSubTab.dataset.subtab;
+    if (targetSubTab === 'search-settings') {
+      if (window.renderSearchEngines) window.renderSearchEngines();
+    } else if (targetSubTab === 'search-history') {
+      if (window.renderSearchHistory) window.renderSearchHistory();
+    }
+  }
+}
+
 function initSearchSettings() {
   const searchFilterInput = document.getElementById('searchHistoryFilter');
   const clearHistoryBtn = document.getElementById('clearSearchHistoryBtn');
@@ -805,67 +858,119 @@ function renderSearchEngines() {
     return;
   }
   
-  // Render each engine - iterate over ALL engines in the array
-  window.engines.forEach((engine, index) => {
-    if (!engine || !engine.name) return; // Skip invalid entries
-    const isEnabled = enabledEngines.includes(engine.name);
-    const item = document.createElement('div');
-    item.style.display = 'flex';
-    item.style.alignItems = 'center';
-    item.style.gap = '8px';
-    item.style.padding = '8px';
-    item.style.border = '1px solid var(--border)';
-    item.style.borderRadius = '6px';
-    item.innerHTML = `
-      <input type="checkbox" id="engine-${engine.name}" data-engine="${engine.name}" ${isEnabled ? 'checked' : ''} style="cursor:pointer;">
-      <label for="engine-${engine.name}" style="cursor:pointer; flex:1; display:flex; align-items:center; gap:8px; margin:0;">
-        <i class="${engine.icon}" style="color:var(--accent);"></i>
-        <span>${window.escapeHtml ? window.escapeHtml(engine.name) : engine.name}</span>
-      </label>
-    `;
-    container.appendChild(item);
+  // Group engines by category
+  const categoryMap = {
+    "general": "General",
+    "llm": "LLM / AI",
+    "social": "Social",
+    "media": "Media",
+    "shopping": "Shopping",
+    "maps": "Maps",
+    "development": "Development"
+  };
 
-    // Add event listener - find checkbox by data attribute instead of ID to avoid issues with special characters
-    const checkbox = item.querySelector(`input[data-engine="${engine.name}"]`);
-    if (!checkbox) {
-      if (window.debugError) window.debugError('preferences', `Could not find checkbox for engine: ${engine.name}`);
+  const enginesByCategory = {};
+  window.engines.forEach((engine) => {
+    if (!engine || !engine.name) return;
+    const category = engine.category || "general";
+    if (!enginesByCategory[category]) {
+      enginesByCategory[category] = [];
+    }
+    enginesByCategory[category].push(engine);
+  });
+
+  // Render each category
+  Object.keys(categoryMap).forEach(categoryKey => {
+    if (!enginesByCategory[categoryKey] || enginesByCategory[categoryKey].length === 0) {
       return;
     }
-    checkbox.addEventListener('change', () => {
-      // Get current enabled engines from all checkboxes
-      let enabled = [];
-      const allCheckboxes = container.querySelectorAll('input[type="checkbox"][data-engine]');
-      allCheckboxes.forEach(cb => {
-        if (cb.checked) {
-          enabled.push(cb.dataset.engine);
+
+    // Create category container
+    const categoryDiv = document.createElement('div');
+    categoryDiv.style.marginBottom = '16px';
+    
+    // Category header
+    const categoryHeader = document.createElement('div');
+    categoryHeader.style.fontSize = '11px';
+    categoryHeader.style.fontWeight = '600';
+    categoryHeader.style.textTransform = 'uppercase';
+    categoryHeader.style.letterSpacing = '0.5px';
+    categoryHeader.style.color = 'var(--muted)';
+    categoryHeader.style.marginBottom = '8px';
+    categoryHeader.textContent = categoryMap[categoryKey];
+    categoryDiv.appendChild(categoryHeader);
+
+    // Category engines container
+    const categoryEnginesDiv = document.createElement('div');
+    categoryEnginesDiv.style.display = 'grid';
+    categoryEnginesDiv.style.gridTemplateColumns = 'repeat(auto-fill, minmax(200px, 1fr))';
+    categoryEnginesDiv.style.gap = '12px';
+    categoryEnginesDiv.style.maxWidth = '100%';
+
+    // Render engines for this category
+    enginesByCategory[categoryKey].forEach((engine) => {
+      const isEnabled = enabledEngines.includes(engine.name);
+      const item = document.createElement('div');
+      item.style.display = 'flex';
+      item.style.alignItems = 'center';
+      item.style.gap = '8px';
+      item.style.padding = '8px';
+      item.style.border = '1px solid var(--border)';
+      item.style.borderRadius = '6px';
+      item.innerHTML = `
+        <input type="checkbox" id="engine-${engine.name}" data-engine="${engine.name}" ${isEnabled ? 'checked' : ''} style="cursor:pointer;">
+        <label for="engine-${engine.name}" style="cursor:pointer; flex:1; display:flex; align-items:center; gap:8px; margin:0;">
+          <i class="${engine.icon}" style="color:var(--accent);"></i>
+          <span>${window.escapeHtml ? window.escapeHtml(engine.name) : engine.name}</span>
+        </label>
+      `;
+      categoryEnginesDiv.appendChild(item);
+
+      // Add event listener
+      const checkbox = item.querySelector(`input[data-engine="${engine.name}"]`);
+      if (!checkbox) {
+        if (window.debugError) window.debugError('preferences', `Could not find checkbox for engine: ${engine.name}`);
+        return;
+      }
+      checkbox.addEventListener('change', () => {
+        // Get current enabled engines from all checkboxes
+        let enabled = [];
+        const allCheckboxes = container.querySelectorAll('input[type="checkbox"][data-engine]');
+        allCheckboxes.forEach(cb => {
+          if (cb.checked) {
+            enabled.push(cb.dataset.engine);
+          }
+        });
+
+        // Ensure at least one engine is enabled
+        if (enabled.length === 0) {
+          checkbox.checked = true;
+          enabled.push(engine.name);
         }
-      });
 
-      // Ensure at least one engine is enabled
-      if (enabled.length === 0) {
-        checkbox.checked = true;
-        enabled.push(engine.name);
-      }
-
-      // Save all engine statuses to localStorage
-      localStorage.setItem('enabledSearchEngines', JSON.stringify(enabled));
-      
-      // Update the engines dropdown immediately
-      if (window.renderEngines) {
-        window.renderEngines();
-      }
-      
-      // If current engine was disabled, switch to first enabled engine
-      const currentEngine = localStorage.getItem('searchEngine');
-      if (!enabled.includes(currentEngine)) {
-        if (enabled.length > 0) {
-          localStorage.setItem('searchEngine', enabled[0]);
-          if (window.updateEngineBtn) {
-            window.updateEngineBtn();
+        // Save all engine statuses to localStorage
+        localStorage.setItem('enabledSearchEngines', JSON.stringify(enabled));
+        
+        // Update the engines dropdown immediately
+        if (window.renderEngines) {
+          window.renderEngines();
+        }
+        
+        // If current engine was disabled, switch to first enabled engine
+        const currentEngine = localStorage.getItem('searchEngine');
+        if (!enabled.includes(currentEngine)) {
+          if (enabled.length > 0) {
+            localStorage.setItem('searchEngine', enabled[0]);
+            if (window.updateEngineBtn) {
+              window.updateEngineBtn();
+            }
           }
         }
-      }
+      });
     });
+
+    categoryDiv.appendChild(categoryEnginesDiv);
+    container.appendChild(categoryDiv);
   });
 }
 

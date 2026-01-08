@@ -1,23 +1,46 @@
 // Search module: Search engines and history management
 
-// Search engines
+// Search engines organized by category
 const engines = [
-  {name: "Google", url: "https://www.google.com/search?q=%s", icon: "fab fa-google"},
-  {name: "DuckDuckGo", url: "https://duckduckgo.com/?q=%s", icon: "fas fa-duck"},
-  {name: "Bing", url: "https://www.bing.com/search?q=%s", icon: "fab fa-microsoft"},
-  {name: "Brave", url: "https://search.brave.com/search?q=%s", icon: "fas fa-shield-alt"},
-  {name: "Yandex", url: "https://yandex.com/search/?text=%s", icon: "fab fa-yandex"},
-  {name: "Startpage", url: "https://www.startpage.com/sp/search?query=%s", icon: "fas fa-search"},
-  {name: "Ecosia", url: "https://www.ecosia.org/search?q=%s", icon: "fas fa-leaf"},
-  {name: "Qwant", url: "https://www.qwant.com/?q=%s", icon: "fas fa-search"},
-  {name: "SearXNG", url: "https://searx.org/search?q=%s", icon: "fas fa-search"},
-  {name: "Perplexity", url: "https://www.perplexity.ai/search?q=%s", icon: "fas fa-brain"},
-  {name: "GitHub", url: "https://github.com/search?q=%s", icon: "fab fa-github"},
-  {name: "Stack Overflow", url: "https://stackoverflow.com/search?q=%s", icon: "fab fa-stack-overflow"},
-  {name: "YouTube", url: "https://www.youtube.com/results?search_query=%s", icon: "fab fa-youtube"},
-  {name: "Reddit", url: "https://www.reddit.com/search/?q=%s", icon: "fab fa-reddit"},
-  {name: "Wikipedia", url: "https://en.wikipedia.org/w/index.php?search=%s", icon: "fab fa-wikipedia-w"},
-  {name: "Skroutz", url: "https://www.skroutz.gr/search?keyphrase=%s", icon: "fas fa-shopping-bag"}
+  // General Search Engines
+  {name: "Google", url: "https://www.google.com/search?q=%s", icon: "fab fa-google", category: "general"},
+  {name: "DuckDuckGo", url: "https://duckduckgo.com/?q=%s", icon: "fas fa-duck", category: "general"},
+  {name: "Bing", url: "https://www.bing.com/search?q=%s", icon: "fab fa-microsoft", category: "general"},
+  {name: "Brave", url: "https://search.brave.com/search?q=%s", icon: "fas fa-shield-alt", category: "general"},
+  {name: "Startpage", url: "https://www.startpage.com/sp/search?query=%s", icon: "fas fa-search", category: "general"},
+  {name: "Ecosia", url: "https://www.ecosia.org/search?q=%s", icon: "fas fa-leaf", category: "general"},
+  {name: "Qwant", url: "https://www.qwant.com/?q=%s", icon: "fas fa-search", category: "general"},
+  {name: "SearXNG", url: "https://searx.org/search?q=%s", icon: "fas fa-search", category: "general"},
+  {name: "Wikipedia", url: "https://en.wikipedia.org/w/index.php?search=%s", icon: "fab fa-wikipedia-w", category: "general"},
+  
+  // LLM / AI Search
+  {name: "Perplexity", url: "https://www.perplexity.ai/search?q=%s", icon: "fas fa-brain", category: "llm"},
+  {name: "ChatGPT", url: "https://chat.openai.com/?q=%s", icon: "fas fa-robot", category: "llm"},
+  {name: "DeepSeek", url: "https://www.deepseek.com/chat?q=%s", icon: "fas fa-brain", category: "llm"},
+  {name: "Kimi", url: "https://kimi.moonshot.cn/search?q=%s", icon: "fas fa-sparkles", category: "llm"},
+  {name: "Claude", url: "https://claude.ai/chat?q=%s", icon: "fas fa-comments", category: "llm"},
+  
+  // Social
+  {name: "Reddit", url: "https://www.reddit.com/search/?q=%s", icon: "fab fa-reddit", category: "social"},
+  
+  // Media
+  {name: "YouTube", url: "https://www.youtube.com/results?search_query=%s", icon: "fab fa-youtube", category: "media"},
+  {name: "Genius", url: "https://genius.com/search?q=%s", icon: "fas fa-music", category: "media"},
+  {name: "AZLyrics", url: "https://search.azlyrics.com/search.php?q=%s", icon: "fas fa-music", category: "media"},
+  {name: "Lyrics.com", url: "https://www.lyrics.com/lyrics/%s", icon: "fas fa-music", category: "media"},
+  
+  // Shopping
+  {name: "Skroutz", url: "https://www.skroutz.gr/search?keyphrase=%s", icon: "fas fa-shopping-bag", category: "shopping"},
+  {name: "Amazon", url: "https://www.amazon.com/s?k=%s", icon: "fab fa-amazon", category: "shopping"},
+  {name: "eBay", url: "https://www.ebay.com/sch/i.html?_nkw=%s", icon: "fab fa-ebay", category: "shopping"},
+  
+  // Maps
+  {name: "Google Maps", url: "https://www.google.com/maps/search/%s", icon: "fas fa-map-marker-alt", category: "maps"},
+  {name: "OpenStreetMap", url: "https://www.openstreetmap.org/search?query=%s", icon: "fas fa-map", category: "maps"},
+  
+  // Development
+  {name: "GitHub", url: "https://github.com/search?q=%s", icon: "fab fa-github", category: "development"},
+  {name: "Stack Overflow", url: "https://stackoverflow.com/search?q=%s", icon: "fab fa-stack-overflow", category: "development"}
 ];
 
 let currentEngineIndex = 0;
@@ -185,18 +208,56 @@ function renderEngines() {
     localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
   }
 
+  // Group engines by category
+  const categoryMap = {
+    "general": "General",
+    "llm": "LLM / AI",
+    "social": "Social",
+    "media": "Media",
+    "shopping": "Shopping",
+    "maps": "Maps",
+    "development": "Development"
+  };
+
+  const enginesByCategory = {};
   enabledEnginesList.forEach((e) => {
-    const originalIndex = engines.findIndex(eng => eng.name === e.name);
-    const btn = document.createElement("button");
-    btn.textContent = e.name;
-    btn.onclick = function() {
-      currentEngineIndex = originalIndex;
-      updateEngineBtn();
-      menu.style.display = "none";
-      localStorage.setItem('searchEngine', e.name);
-      document.getElementById("q").focus();
-    };
-    menu.appendChild(btn);
+    const category = e.category || "general";
+    if (!enginesByCategory[category]) {
+      enginesByCategory[category] = [];
+    }
+    enginesByCategory[category].push(e);
+  });
+
+  // Render each category
+  Object.keys(categoryMap).forEach(categoryKey => {
+    if (!enginesByCategory[categoryKey] || enginesByCategory[categoryKey].length === 0) {
+      return;
+    }
+
+    // Create category header
+    const categoryDiv = document.createElement("div");
+    categoryDiv.className = "engine-category";
+    const categoryHeader = document.createElement("div");
+    categoryHeader.className = "engine-category-header";
+    categoryHeader.textContent = categoryMap[categoryKey];
+    categoryDiv.appendChild(categoryHeader);
+
+    // Add engines for this category
+    enginesByCategory[categoryKey].forEach((e) => {
+      const originalIndex = engines.findIndex(eng => eng.name === e.name);
+      const btn = document.createElement("button");
+      btn.textContent = e.name;
+      btn.onclick = function() {
+        currentEngineIndex = originalIndex;
+        updateEngineBtn();
+        menu.style.display = "none";
+        localStorage.setItem('searchEngine', e.name);
+        document.getElementById("q").focus();
+      };
+      categoryDiv.appendChild(btn);
+    });
+
+    menu.appendChild(categoryDiv);
   });
 }
 
