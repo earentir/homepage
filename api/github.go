@@ -500,7 +500,10 @@ func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (G
 			req2.Header.Set("Authorization", "Bearer "+token)
 		}
 		res2, err := githubHTTPClient.Do(req2)
-		if err != nil || res2.StatusCode < 200 || res2.StatusCode > 299 {
+		if err != nil {
+			continue
+		}
+		if res2.StatusCode < 200 || res2.StatusCode > 299 {
 			res2.Body.Close()
 			continue
 		}
