@@ -63,9 +63,12 @@
 - [x] Add amazon support
 - [x] preferences for selecting search engines
 - [ ] Add custom engine
+- [ ] Add search shortcuts
+- [ ] Add @ engine selection shortcut
+- [ ] Add tab autocomplete for search engine (ie youtube tab, switch the engine)
 
 ## Calendar & Todo
-- [ ] Sync with ics calendart (read only for now)
+- [ ] Sync with ics calendar (read only for now)
 - [ ] Sync with a todo system localy
 
 ## WiKi
