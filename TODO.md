@@ -25,7 +25,7 @@
 - [ ] Add paypal payment notification
 - [ ] Add gumroad payment notification
 - [ ] Add stripe payment notification
-
+- [ ] Add World Clock
 
 ## IP Address Module
 - [x] Add PTR of public IP addresses
