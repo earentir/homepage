@@ -60,7 +60,7 @@
 - [x] Add search in search history
 - [ ] Add bookmark support (read from filesystem?)
 - [x] Add skroutz support
-- [ ] Add amazon support
+- [x] Add amazon support
 - [x] preferences for selecting search engines
 - [ ] Add custom engine
 
