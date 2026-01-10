@@ -169,7 +169,7 @@
 - [ ] Create batch API endpoint - single request returns all module data at once
 - [ ] Move graph history aggregation to backend - server processes history and sends only needed data (NOTE: graph history stored in localStorage, backend processes/aggregates it)
 
-#### Real-time Updates
+#### Real-time Updates (tested, its stupid)
 - [x] Expand WebSocket to push all module updates (not just system metrics) - System metrics pushed every 5s, other modules can push data via timer manager
 - [x] Move refresh scheduling to backend - server determines when to refresh and pushes updates (via timer manager)
 - [x] Remove client-side polling intervals - rely entirely on WebSocket push (all polling removed, WebSocket-only)
@@ -180,8 +180,8 @@
 - [ ] Create module configuration API - CRUD operations for all module types (NOTE: CRUD operations work on localStorage, backend syncs for processing/validation)
 
 #### Search Functionality
-- [ ] Move search history filtering to backend - server handles search within history (NOTE: search history stored in localStorage, backend processes/filters)
-- [ ] Move autocomplete logic to backend - server returns filtered suggestions (NOTE: search history in localStorage, backend processes autocomplete)
+- [x] Move search history filtering to backend - server handles search within history (NOTE: search history stored in localStorage, backend processes/filters)
+- [x] Move autocomplete logic to backend - server returns filtered suggestions (NOTE: search history in localStorage, backend processes autocomplete)
 - [x] Move search engine switching logic to backend - server provides engine list via API (NOTE: current engine stored in localStorage, backend provides engine list)
 
 #### Calendar/Todo Logic

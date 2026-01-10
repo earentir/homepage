@@ -130,7 +130,7 @@ function clearSearchHistory() {
   }
 }
 
-function renderSearchHistory(filter = '') {
+async function renderSearchHistory(filter = '') {
   const list = document.getElementById('searchHistoryList');
   if (!list) return;
   
@@ -140,10 +140,34 @@ function renderSearchHistory(filter = '') {
     return;
   }
 
-  const filterLower = filter.toLowerCase();
-  const filtered = filterLower
-    ? searchHistory.filter(item => item.term.toLowerCase().includes(filterLower))
-    : searchHistory;
+  // Reload search history to ensure it's up to date
+  loadSearchHistory();
+
+  // Use backend API for filtering
+  let filtered = searchHistory;
+  try {
+    const response = await fetch(`/api/search/history/filter?filter=${encodeURIComponent(filter)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(searchHistory)
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.history && Array.isArray(data.history)) {
+        filtered = data.history;
+      }
+    }
+  } catch (e) {
+    // Fallback to client-side filtering if backend fails
+    if (window.debugError) window.debugError('search', 'Error filtering search history:', e);
+    const filterLower = filter.toLowerCase();
+    filtered = filterLower
+      ? searchHistory.filter(item => item.term.toLowerCase().includes(filterLower))
+      : searchHistory;
+  }
 
   if (filtered.length === 0) {
     list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No search history</div>';
@@ -371,7 +395,7 @@ function showAutocomplete() {
   }
 }
 
-function renderAutocomplete(filter = '') {
+async function renderAutocomplete(filter = '') {
   const autocomplete = document.getElementById("searchAutocomplete");
   if (!autocomplete) return;
 
@@ -393,24 +417,49 @@ function renderAutocomplete(filter = '') {
     return;
   }
 
-  const filterLower = term.toLowerCase();
-  autocompleteItems = searchHistory.filter(item => 
-    item && item.term && item.term.toLowerCase().includes(filterLower)
-  );
-
-  // Remove duplicates and reverse to show newest first
-  const uniqueItems = [];
-  const seen = new Set();
-  for (let i = autocompleteItems.length - 1; i >= 0; i--) {
-    const item = autocompleteItems[i];
-    if (!item || !item.term) continue;
-    const key = item.term.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueItems.push(item);
+  // Use backend API for autocomplete
+  try {
+    const response = await fetch(`/api/search/autocomplete?term=${encodeURIComponent(term)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(searchHistory)
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.suggestions && Array.isArray(data.suggestions)) {
+        autocompleteItems = data.suggestions;
+      } else {
+        autocompleteItems = [];
+      }
+    } else {
+      // Fallback to client-side filtering if backend fails
+      throw new Error('Backend request failed');
     }
+  } catch (e) {
+    // Fallback to client-side filtering if backend fails
+    if (window.debugError) window.debugError('search', 'Error getting autocomplete:', e);
+    const filterLower = term.toLowerCase();
+    autocompleteItems = searchHistory.filter(item => 
+      item && item.term && item.term.toLowerCase().includes(filterLower)
+    );
+
+    // Remove duplicates and reverse to show newest first
+    const uniqueItems = [];
+    const seen = new Set();
+    for (let i = autocompleteItems.length - 1; i >= 0; i--) {
+      const item = autocompleteItems[i];
+      if (!item || !item.term) continue;
+      const key = item.term.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueItems.push(item);
+      }
+    }
+    autocompleteItems = uniqueItems.slice(0, 10); // Limit to 10 items
   }
-  autocompleteItems = uniqueItems.slice(0, 10); // Limit to 10 items
 
   if (autocompleteItems.length === 0) {
     hideAutocomplete();

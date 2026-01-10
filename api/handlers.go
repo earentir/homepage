@@ -40,6 +40,8 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/baseboard", h.HandleBaseboard)
 	mux.HandleFunc("/api/weather", h.HandleWeather)
 	mux.HandleFunc("/api/search-engines", h.HandleSearchEngines)
+	mux.HandleFunc("/api/search/history/filter", h.HandleSearchHistoryFilter)
+	mux.HandleFunc("/api/search/autocomplete", h.HandleSearchAutocomplete)
 	mux.HandleFunc("/api/modules", h.HandleModules)
 	mux.HandleFunc("/api/calendar/process", h.HandleCalendarProcess)
 	mux.HandleFunc("/api/calendar/month", h.HandleCalendarMonth)
@@ -865,6 +867,81 @@ func (h *Handler) HandleStorageStatus(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) HandleSearchEngines(w http.ResponseWriter, _ *http.Request) {
 	engines := GetSearchEngines()
 	WriteJSON(w, map[string]any{"engines": engines})
+}
+
+// SearchHistoryItem represents a search history item.
+type SearchHistoryItem struct {
+	Term      string `json:"term"`
+	Engine    string `json:"engine"`
+	Timestamp string `json:"timestamp"`
+}
+
+// HandleSearchHistoryFilter filters search history based on a filter term.
+func (h *Handler) HandleSearchHistoryFilter(w http.ResponseWriter, r *http.Request) {
+	var history []SearchHistoryItem
+	if err := json.NewDecoder(r.Body).Decode(&history); err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	filter := strings.ToLower(r.URL.Query().Get("filter"))
+	if filter == "" {
+		// Return all history if no filter
+		WriteJSON(w, map[string]any{"history": history})
+		return
+	}
+
+	// Filter history items where term contains the filter (case-insensitive)
+	filtered := make([]SearchHistoryItem, 0)
+	for _, item := range history {
+		if strings.Contains(strings.ToLower(item.Term), filter) {
+			filtered = append(filtered, item)
+		}
+	}
+
+	WriteJSON(w, map[string]any{"history": filtered})
+}
+
+// HandleSearchAutocomplete returns autocomplete suggestions from search history.
+func (h *Handler) HandleSearchAutocomplete(w http.ResponseWriter, r *http.Request) {
+	var history []SearchHistoryItem
+	if err := json.NewDecoder(r.Body).Decode(&history); err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	term := strings.ToLower(r.URL.Query().Get("term"))
+	if term == "" {
+		WriteJSON(w, map[string]any{"suggestions": []SearchHistoryItem{}})
+		return
+	}
+
+	// Filter history items where term contains the search term (case-insensitive)
+	matched := make([]SearchHistoryItem, 0)
+	for _, item := range history {
+		if item.Term != "" && strings.Contains(strings.ToLower(item.Term), term) {
+			matched = append(matched, item)
+		}
+	}
+
+	// Remove duplicates (by term, case-insensitive) and reverse to show newest first
+	uniqueItems := make([]SearchHistoryItem, 0)
+	seen := make(map[string]bool)
+	for i := len(matched) - 1; i >= 0; i-- {
+		item := matched[i]
+		key := strings.ToLower(item.Term)
+		if !seen[key] {
+			seen[key] = true
+			uniqueItems = append(uniqueItems, item)
+		}
+	}
+
+	// Limit to 10 items
+	if len(uniqueItems) > 10 {
+		uniqueItems = uniqueItems[:10]
+	}
+
+	WriteJSON(w, map[string]any{"suggestions": uniqueItems})
 }
 
 // HandleModules returns metadata for all available modules.
