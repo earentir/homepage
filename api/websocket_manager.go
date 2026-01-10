@@ -80,3 +80,19 @@ var wsManager = NewWSConnectionManager()
 func GetWSManager() *WSConnectionManager {
 	return wsManager
 }
+
+// WriteJSON safely writes JSON to a specific connection using its mutex.
+func (m *WSConnectionManager) WriteJSON(conn *websocket.Conn, message interface{}) error {
+	m.mu.RLock()
+	cwm, exists := m.connections[conn]
+	m.mu.RUnlock()
+	
+	if !exists {
+		// Connection not in manager, write directly (shouldn't happen, but handle gracefully)
+		return conn.WriteJSON(message)
+	}
+	
+	cwm.mu.Lock()
+	defer cwm.mu.Unlock()
+	return cwm.conn.WriteJSON(message)
+}

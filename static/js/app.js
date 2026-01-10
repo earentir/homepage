@@ -45,7 +45,7 @@ function loadModulePrefs() {
   }
 }
 
-function saveModulePrefs() {
+async function saveModulePrefs() {
   try {
     const prefs = {};
     if (window.moduleConfig) {
@@ -56,6 +56,28 @@ function saveModulePrefs() {
         };
       });
     }
+    
+    // Process and validate using backend
+    try {
+      const res = await fetch('/api/modules/process-prefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prefs),
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.preferences) {
+          prefs = data.preferences;
+          if (data.errors && data.errors.length > 0 && window.debugError) {
+            window.debugError('app', 'Module prefs processing errors:', data.errors);
+          }
+        }
+      }
+    } catch (e) {
+      if (window.debugError) window.debugError('app', 'Error processing module prefs:', e);
+    }
+    
     window.saveToStorage('modulePrefs', prefs);
   } catch (e) {
     if (window.debugError) window.debugError('app', 'Failed to save module prefs:', e);

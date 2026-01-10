@@ -132,44 +132,29 @@ function renderLayout() {
   grid.innerHTML = '';
   grid.className = 'layout-grid';
 
-  // Helper function to check if module is enabled
-  const isModuleEnabled = (moduleId) => {
-    if (!moduleId) return false;
-    if (window.moduleConfig && window.moduleConfig[moduleId]) {
-      return window.moduleConfig[moduleId].enabled !== false;
-    }
-    return true; // Default to enabled if not in config
-  };
-
-  // Clean up layout config: remove disabled modules from rows
-  let configChanged = false;
-  layoutConfig.rows.forEach((row) => {
-    row.modules.forEach((moduleSlot, colIndex) => {
-      if (Array.isArray(moduleSlot)) {
-        // For split modules, remove disabled ones
-        const enabledModules = moduleSlot.filter(id => id && isModuleEnabled(id));
-        if (enabledModules.length === 0) {
-          row.modules[colIndex] = null;
-          configChanged = true;
-        } else if (enabledModules.length === 1) {
-          row.modules[colIndex] = enabledModules[0];
-          configChanged = true;
-        } else if (enabledModules.length < moduleSlot.length) {
-          row.modules[colIndex] = enabledModules;
-          configChanged = true;
+  // Process layout config using backend (removes disabled modules)
+  // This is done asynchronously, but we continue with rendering using current config
+  // The processed config will be saved back on next sync
+  (async () => {
+    try {
+      const res = await fetch('/api/layout/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(layoutConfig),
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.layout) {
+          // Update local config with processed version
+          layoutConfig = data.layout;
+          saveLayoutConfig();
         }
-      } else if (moduleSlot && !isModuleEnabled(moduleSlot)) {
-        // Remove disabled module
-        row.modules[colIndex] = null;
-        configChanged = true;
       }
-    });
-  });
-
-  // Save cleaned config if it changed
-  if (configChanged) {
-    saveLayoutConfig();
-  }
+    } catch (e) {
+      if (window.debugError) window.debugError('layout', 'Error processing layout:', e);
+    }
+  })();
 
   layoutConfig.rows.forEach((row, rowIndex) => {
     const rowEl = document.createElement('div');

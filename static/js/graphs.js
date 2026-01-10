@@ -115,7 +115,7 @@ function saveDiskHistory() {
   } catch (e) {}
 }
 
-function trimHistoryArrays() {
+async function trimHistoryArrays() {
   const graph = document.getElementById("cpuGraph");
   if (!graph) return false;
 
@@ -125,21 +125,35 @@ function trimHistoryArrays() {
   const maxBars = Math.floor((containerWidth + barGap) / (minBarWidth + barGap));
   if (maxBars <= 0) return true;
 
-  if (cpuHistory.length > maxBars) {
-    cpuHistory = cpuHistory.slice(-maxBars);
-    saveCpuHistory();
-  }
-  if (ramHistory.length > maxBars) {
-    ramHistory = ramHistory.slice(-maxBars);
-    saveRamHistory();
-  }
-  // Trim all disk histories
-  Object.keys(diskHistory).forEach(key => {
-    if (diskHistory[key].length > maxBars) {
-      diskHistory[key] = diskHistory[key].slice(-maxBars);
-      saveDiskHistory(key);
+  // Use backend to aggregate/trim history
+  try {
+    const res = await fetch(`/api/graphs/aggregate?maxBars=${maxBars}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cpuHistory: cpuHistory,
+        ramHistory: ramHistory,
+        diskHistory: diskHistory
+      }),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.history) {
+        cpuHistory = data.history.cpuHistory || cpuHistory;
+        ramHistory = data.history.ramHistory || ramHistory;
+        diskHistory = data.history.diskHistory || diskHistory;
+        saveCpuHistory();
+        saveRamHistory();
+        saveDiskHistory();
+      }
+    } else {
+      if (window.debugError) window.debugError('graphs', 'Backend aggregation failed:', res.status);
     }
-  });
+  } catch (e) {
+    if (window.debugError) window.debugError('graphs', 'Error aggregating graph history:', e);
+    // No fallback - backend handles all processing
+  }
   return true;
 }
 
@@ -282,8 +296,8 @@ function updateDiskGraph(usage, mountKey) {
   updateGraph(graphId, diskHistory[key], () => saveDiskHistory(key), usage);
 }
 
-function initGraphs() {
-  const graphsReady = trimHistoryArrays();
+async function initGraphs() {
+  const graphsReady = await trimHistoryArrays();
   renderCpuGraph();
   renderRamGraph();
 

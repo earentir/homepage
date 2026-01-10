@@ -70,6 +70,10 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/storage/get-all", h.HandleStorageGetAll)
 	mux.HandleFunc("/api/storage/status", h.HandleStorageStatus)
 	mux.HandleFunc("/api/layout/validate", h.HandleLayoutValidate)
+	mux.HandleFunc("/api/layout/process", h.HandleLayoutProcess)
+	mux.HandleFunc("/api/modules/process-prefs", h.HandleModulePrefsProcess)
+	mux.HandleFunc("/api/graphs/aggregate", h.HandleGraphHistoryAggregate)
+	mux.HandleFunc("/api/storage/process", h.HandleStorageProcess)
 	mux.HandleFunc("/api/utils/validate-url", h.HandleValidateURL)
 	mux.HandleFunc("/api/utils/normalize-url", h.HandleNormalizeURL)
 	mux.HandleFunc("/api/utils/validate-input", h.HandleValidateInput)
@@ -797,13 +801,17 @@ func (h *Handler) HandleStorageSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate layout config if it's being synced
-	if syncData.Key == "layoutConfig" {
+	// Process and validate data based on key type
+	var processedValue interface{} = syncData.Value
+	var processingErrors []string
+
+	switch syncData.Key {
+	case "layoutConfig":
 		var layoutConfig LayoutConfig
-		// Try to decode the value
 		configJSON, err := json.Marshal(syncData.Value)
 		if err == nil {
 			if err := json.Unmarshal(configJSON, &layoutConfig); err == nil {
+				// Validate
 				valid, errorMsg := ValidateLayoutConfig(layoutConfig)
 				if !valid {
 					WriteJSON(w, map[string]any{
@@ -812,12 +820,78 @@ func (h *Handler) HandleStorageSync(w http.ResponseWriter, r *http.Request) {
 					})
 					return
 				}
+				// Process (remove disabled modules)
+				storage := GetStorage()
+				var modulePrefs map[string]interface{}
+				if item, exists := storage.Get("modulePrefs"); exists {
+					if prefs, ok := item.Value.(map[string]interface{}); ok {
+						modulePrefs = prefs
+					}
+				}
+				processedConfig := ProcessLayoutConfig(layoutConfig, modulePrefs)
+				processedValue = processedConfig
 			}
+		}
+	case "modulePrefs":
+		if prefs, ok := syncData.Value.(map[string]interface{}); ok {
+			processed, errors := ProcessModulePrefs(prefs)
+			processedValue = processed
+			processingErrors = errors
+			// Reload timer manager preferences
+			GetTimerManager().loadPreferences()
+		}
+	case "cpuHistory", "ramHistory", "diskHistory":
+		// Graph history - aggregate if needed
+		var graphData GraphHistoryData
+		if syncData.Key == "cpuHistory" {
+			if history, ok := syncData.Value.([]interface{}); ok {
+				cpuHistory := make([]float64, 0, len(history))
+				for _, v := range history {
+					if f, ok := v.(float64); ok {
+						cpuHistory = append(cpuHistory, f)
+					}
+				}
+				graphData.CPUHistory = cpuHistory
+			}
+		} else if syncData.Key == "ramHistory" {
+			if history, ok := syncData.Value.([]interface{}); ok {
+				ramHistory := make([]float64, 0, len(history))
+				for _, v := range history {
+					if f, ok := v.(float64); ok {
+						ramHistory = append(ramHistory, f)
+					}
+				}
+				graphData.RAMHistory = ramHistory
+			}
+		} else if syncData.Key == "diskHistory" {
+			if history, ok := syncData.Value.(map[string]interface{}); ok {
+				diskHistory := make(map[string][]float64)
+				for key, val := range history {
+					if arr, ok := val.([]interface{}); ok {
+						diskArr := make([]float64, 0, len(arr))
+						for _, v := range arr {
+							if f, ok := v.(float64); ok {
+								diskArr = append(diskArr, f)
+							}
+						}
+						diskHistory[key] = diskArr
+					}
+				}
+				graphData.DiskHistory = diskHistory
+			}
+		}
+		aggregated := AggregateGraphHistory(graphData)
+		if syncData.Key == "cpuHistory" {
+			processedValue = aggregated.CPUHistory
+		} else if syncData.Key == "ramHistory" {
+			processedValue = aggregated.RAMHistory
+		} else {
+			processedValue = aggregated.DiskHistory
 		}
 	}
 
-	// Store in backend storage
-	globalStorage.Set(syncData.Key, syncData.Value, syncData.Version)
+	// Store processed value in backend storage
+	globalStorage.Set(syncData.Key, processedValue, syncData.Version)
 
 	// Get the stored item to return the actual version (in case of conflict resolution)
 	item, exists := globalStorage.Get(syncData.Key)
@@ -826,11 +900,15 @@ func (h *Handler) HandleStorageSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, map[string]interface{}{
+	response := map[string]interface{}{
 		"success": true,
 		"version": item.Version,
 		"key":     syncData.Key,
-	})
+	}
+	if len(processingErrors) > 0 {
+		response["processingErrors"] = processingErrors
+	}
+	WriteJSON(w, response)
 }
 
 // HandleStorageGet handles storage get requests from frontend.
@@ -1377,6 +1455,392 @@ func (h *Handler) HandleValidateInput(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, map[string]any{
 			"valid": false,
 			"error": errorMsg,
+		})
+	}
+}
+
+// ProcessLayoutConfig processes layout configuration (removes disabled modules, cleans up structure).
+func ProcessLayoutConfig(config LayoutConfig, modulePrefs map[string]interface{}) LayoutConfig {
+	// Get enabled modules from preferences
+	enabledModules := make(map[string]bool)
+	if modulePrefs != nil {
+		for moduleKey, prefData := range modulePrefs {
+			if prefMap, ok := prefData.(map[string]interface{}); ok {
+				if enabledVal, ok := prefMap["enabled"].(bool); ok {
+					enabledModules[moduleKey] = enabledVal
+				} else {
+					enabledModules[moduleKey] = true // Default to enabled
+				}
+			}
+		}
+	}
+
+	// Get module metadata to check defaults
+	metadata := GetModuleMetadata()
+	for moduleKey, modMeta := range metadata {
+		if _, exists := enabledModules[moduleKey]; !exists {
+			enabledModules[moduleKey] = modMeta.Enabled // Use default from metadata
+		}
+	}
+
+	// Helper function to check if module is enabled
+	isModuleEnabled := func(moduleID string) bool {
+		if moduleID == "" {
+			return false
+		}
+		if enabled, exists := enabledModules[moduleID]; exists {
+			return enabled
+		}
+		// Default to enabled if not in preferences
+		return true
+	}
+
+	// Process rows
+	processedRows := make([]LayoutRow, 0, len(config.Rows))
+	for _, row := range config.Rows {
+		processedModules := make([]interface{}, 0, len(row.Modules))
+		for _, moduleSlot := range row.Modules {
+			if moduleSlot == nil {
+				processedModules = append(processedModules, nil)
+				continue
+			}
+
+			switch v := moduleSlot.(type) {
+			case string:
+				// Single module - keep if enabled
+				if isModuleEnabled(v) {
+					processedModules = append(processedModules, v)
+				} else {
+					processedModules = append(processedModules, nil)
+				}
+			case []interface{}:
+				// Split modules - filter enabled ones
+				enabledList := make([]interface{}, 0)
+				for _, modID := range v {
+					if modIDStr, ok := modID.(string); ok && isModuleEnabled(modIDStr) {
+						enabledList = append(enabledList, modIDStr)
+					}
+				}
+				if len(enabledList) == 0 {
+					processedModules = append(processedModules, nil)
+				} else if len(enabledList) == 1 {
+					processedModules = append(processedModules, enabledList[0])
+				} else {
+					processedModules = append(processedModules, enabledList)
+				}
+			default:
+				processedModules = append(processedModules, nil)
+			}
+		}
+		processedRows = append(processedRows, LayoutRow{
+			Cols:    row.Cols,
+			Modules: processedModules,
+		})
+	}
+
+	return LayoutConfig{
+		MaxWidth: config.MaxWidth,
+		Rows:     processedRows,
+	}
+}
+
+// HandleLayoutProcess processes layout configuration (removes disabled modules).
+func (h *Handler) HandleLayoutProcess(w http.ResponseWriter, r *http.Request) {
+	var config LayoutConfig
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		WriteJSON(w, map[string]any{
+			"error": "Invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	// Get module preferences from query or body
+	var modulePrefs map[string]interface{}
+	if prefsStr := r.URL.Query().Get("modulePrefs"); prefsStr != "" {
+		if err := json.Unmarshal([]byte(prefsStr), &modulePrefs); err != nil {
+			// Try to get from storage
+			storage := GetStorage()
+			if item, exists := storage.Get("modulePrefs"); exists {
+				if prefs, ok := item.Value.(map[string]interface{}); ok {
+					modulePrefs = prefs
+				}
+			}
+		}
+	} else {
+		// Try to get from storage
+		storage := GetStorage()
+		if item, exists := storage.Get("modulePrefs"); exists {
+			if prefs, ok := item.Value.(map[string]interface{}); ok {
+				modulePrefs = prefs
+			}
+		}
+	}
+
+	processed := ProcessLayoutConfig(config, modulePrefs)
+	WriteJSON(w, map[string]any{"layout": processed})
+}
+
+// ProcessModulePrefs processes and validates module preferences.
+func ProcessModulePrefs(prefs map[string]interface{}) (map[string]interface{}, []string) {
+	metadata := GetModuleMetadata()
+	processed := make(map[string]interface{})
+	errors := []string{}
+
+	for moduleKey, prefData := range prefs {
+		prefMap, ok := prefData.(map[string]interface{})
+		if !ok {
+			errors = append(errors, fmt.Sprintf("Invalid preference format for module '%s'", moduleKey))
+			continue
+		}
+
+		// Check if module exists in metadata
+		modMeta, exists := metadata[moduleKey]
+		if !exists {
+			errors = append(errors, fmt.Sprintf("Unknown module '%s'", moduleKey))
+			continue
+		}
+
+		processedPref := make(map[string]interface{})
+
+		// Validate enabled flag
+		if enabledVal, ok := prefMap["enabled"].(bool); ok {
+			processedPref["enabled"] = enabledVal
+		} else {
+			processedPref["enabled"] = modMeta.Enabled // Use default
+		}
+
+		// Validate interval if module has timer
+		if modMeta.HasTimer {
+			if intervalVal, ok := prefMap["interval"].(float64); ok {
+				interval := int64(intervalVal)
+				// Validate interval range (1 second to 24 hours)
+				if interval < 1 {
+					interval = int64(modMeta.DefaultInterval)
+					errors = append(errors, fmt.Sprintf("Module '%s': interval too small, using default", moduleKey))
+				} else if interval > 86400 {
+					interval = 86400
+					errors = append(errors, fmt.Sprintf("Module '%s': interval too large, capped at 86400", moduleKey))
+				}
+				processedPref["interval"] = interval
+			} else {
+				processedPref["interval"] = int64(modMeta.DefaultInterval)
+			}
+		}
+
+		processed[moduleKey] = processedPref
+	}
+
+	return processed, errors
+}
+
+// HandleModulePrefsProcess processes and validates module preferences.
+func (h *Handler) HandleModulePrefsProcess(w http.ResponseWriter, r *http.Request) {
+	var prefs map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
+		WriteJSON(w, map[string]any{
+			"error": "Invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	processed, errors := ProcessModulePrefs(prefs)
+	response := map[string]any{
+		"preferences": processed,
+	}
+	if len(errors) > 0 {
+		response["errors"] = errors
+	}
+	WriteJSON(w, response)
+}
+
+// GraphHistoryData represents graph history data.
+type GraphHistoryData struct {
+	CPUHistory  []float64            `json:"cpuHistory"`
+	RAMHistory  []float64            `json:"ramHistory"`
+	DiskHistory map[string][]float64 `json:"diskHistory"`
+	MaxBars     int                  `json:"maxBars,omitempty"` // Optional: max bars to return
+}
+
+// AggregateGraphHistory aggregates and trims graph history data.
+func AggregateGraphHistory(data GraphHistoryData) GraphHistoryData {
+	result := GraphHistoryData{
+		CPUHistory:  make([]float64, len(data.CPUHistory)),
+		RAMHistory:  make([]float64, len(data.RAMHistory)),
+		DiskHistory: make(map[string][]float64),
+	}
+
+	// Copy CPU history
+	copy(result.CPUHistory, data.CPUHistory)
+
+	// Copy RAM history
+	copy(result.RAMHistory, data.RAMHistory)
+
+	// Copy disk histories
+	for key, history := range data.DiskHistory {
+		result.DiskHistory[key] = make([]float64, len(history))
+		copy(result.DiskHistory[key], history)
+	}
+
+	// Trim to maxBars if specified
+	if data.MaxBars > 0 {
+		if len(result.CPUHistory) > data.MaxBars {
+			result.CPUHistory = result.CPUHistory[len(result.CPUHistory)-data.MaxBars:]
+		}
+		if len(result.RAMHistory) > data.MaxBars {
+			result.RAMHistory = result.RAMHistory[len(result.RAMHistory)-data.MaxBars:]
+		}
+		for key, history := range result.DiskHistory {
+			if len(history) > data.MaxBars {
+				result.DiskHistory[key] = history[len(history)-data.MaxBars:]
+			}
+		}
+	}
+
+	return result
+}
+
+// HandleGraphHistoryAggregate aggregates graph history data.
+func (h *Handler) HandleGraphHistoryAggregate(w http.ResponseWriter, r *http.Request) {
+	var data GraphHistoryData
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		WriteJSON(w, map[string]any{
+			"error": "Invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	maxBars := 0
+	if maxBarsStr := r.URL.Query().Get("maxBars"); maxBarsStr != "" {
+		if parsed, err := strconv.Atoi(maxBarsStr); err == nil && parsed > 0 {
+			maxBars = parsed
+		}
+	}
+	data.MaxBars = maxBars
+
+	aggregated := AggregateGraphHistory(data)
+	WriteJSON(w, map[string]any{"history": aggregated})
+}
+
+// StorageProcessRequest represents a request to process localStorage data.
+type StorageProcessRequest struct {
+	Key   string      `json:"key"`
+	Value interface{} `json:"value"`
+}
+
+// HandleStorageProcess processes raw localStorage data and returns processed results.
+func (h *Handler) HandleStorageProcess(w http.ResponseWriter, r *http.Request) {
+	var req StorageProcessRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, map[string]any{
+			"error": "Invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	if req.Key == "" {
+		WriteJSON(w, map[string]any{
+			"error": "Missing 'key' field",
+		})
+		return
+	}
+
+	switch req.Key {
+	case "modulePrefs":
+		if prefs, ok := req.Value.(map[string]interface{}); ok {
+			processed, errors := ProcessModulePrefs(prefs)
+			response := map[string]any{
+				"key":         req.Key,
+				"processed":   processed,
+			}
+			if len(errors) > 0 {
+				response["errors"] = errors
+			}
+			WriteJSON(w, response)
+		} else {
+			WriteJSON(w, map[string]any{
+				"error": "Invalid module preferences format",
+			})
+		}
+	case "layoutConfig":
+		var config LayoutConfig
+		configJSON, err := json.Marshal(req.Value)
+		if err != nil {
+			WriteJSON(w, map[string]any{
+				"error": "Invalid layout config format: " + err.Error(),
+			})
+			return
+		}
+		if err := json.Unmarshal(configJSON, &config); err != nil {
+			WriteJSON(w, map[string]any{
+				"error": "Invalid layout config format: " + err.Error(),
+			})
+			return
+		}
+
+		// Get module preferences from storage
+		storage := GetStorage()
+		var modulePrefs map[string]interface{}
+		if item, exists := storage.Get("modulePrefs"); exists {
+			if prefs, ok := item.Value.(map[string]interface{}); ok {
+				modulePrefs = prefs
+			}
+		}
+
+		processed := ProcessLayoutConfig(config, modulePrefs)
+		WriteJSON(w, map[string]any{
+			"key":       req.Key,
+			"processed": processed,
+		})
+	case "cpuHistory", "ramHistory", "diskHistory":
+		// Graph history aggregation
+		var graphData GraphHistoryData
+		if req.Key == "cpuHistory" {
+			if history, ok := req.Value.([]interface{}); ok {
+				cpuHistory := make([]float64, 0, len(history))
+				for _, v := range history {
+					if f, ok := v.(float64); ok {
+						cpuHistory = append(cpuHistory, f)
+					}
+				}
+				graphData.CPUHistory = cpuHistory
+			}
+		} else if req.Key == "ramHistory" {
+			if history, ok := req.Value.([]interface{}); ok {
+				ramHistory := make([]float64, 0, len(history))
+				for _, v := range history {
+					if f, ok := v.(float64); ok {
+						ramHistory = append(ramHistory, f)
+					}
+				}
+				graphData.RAMHistory = ramHistory
+			}
+		} else if req.Key == "diskHistory" {
+			if history, ok := req.Value.(map[string]interface{}); ok {
+				diskHistory := make(map[string][]float64)
+				for key, val := range history {
+					if arr, ok := val.([]interface{}); ok {
+						diskArr := make([]float64, 0, len(arr))
+						for _, v := range arr {
+							if f, ok := v.(float64); ok {
+								diskArr = append(diskArr, f)
+							}
+						}
+						diskHistory[key] = diskArr
+					}
+				}
+				graphData.DiskHistory = diskHistory
+			}
+		}
+
+		aggregated := AggregateGraphHistory(graphData)
+		WriteJSON(w, map[string]any{
+			"key":       req.Key,
+			"processed": aggregated,
+		})
+	default:
+		WriteJSON(w, map[string]any{
+			"key":       req.Key,
+			"processed": req.Value, // Return as-is if no processing needed
 		})
 	}
 }

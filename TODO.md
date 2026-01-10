@@ -232,16 +232,16 @@
 - [x] Store data with metadata (lastModified, version, source)
 
 ### Backend: Data Processing Logic
-- [ ] Move all data processing logic from frontend to backend:
-  - Module preference processing (enabled/disabled, intervals) - NOTE: preferences stored in localStorage, backend processes/validates
-  - Layout configuration processing - NOTE: layout stored in localStorage, backend processes
-  - Search history processing/filtering - NOTE: search history stored in localStorage, backend processes/filters
-  - Calendar event calculations (upcoming events, date filtering) - NOTE: events stored in localStorage, backend calculates
-  - Todo prioritization and sorting - NOTE: todos stored in localStorage, backend sorts/prioritizes
-  - Graph history aggregation - NOTE: history stored in localStorage, backend aggregates
-  - Module configuration validation - NOTE: configs stored in localStorage, backend validates
-- [ ] Create processing functions that take raw localStorage data and return processed results
-- [ ] Add processing triggers (when data changes, process and notify via WebSocket)
+- [x] Move all data processing logic from frontend to backend:
+  - [x] Module preference processing (enabled/disabled, intervals) - NOTE: preferences stored in localStorage, backend processes/validates
+  - [x] Layout configuration processing - NOTE: layout stored in localStorage, backend processes
+  - [x] Search history processing/filtering - NOTE: search history stored in localStorage, backend processes/filters
+  - [x] Calendar event calculations (upcoming events, date filtering) - NOTE: events stored in localStorage, backend calculates
+  - [x] Todo prioritization and sorting - NOTE: todos stored in localStorage, backend sorts/prioritizes
+  - [x] Graph history aggregation - NOTE: history stored in localStorage, backend aggregates
+  - [x] Module configuration validation - NOTE: configs stored in localStorage, backend validates
+- [x] Create processing functions that take raw localStorage data and return processed results
+- [x] Add processing triggers (when data changes, process and notify via WebSocket)
 
 ### WebSocket: Update Notifications
 - [x] Extend WebSocket to send data change notifications:

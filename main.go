@@ -720,7 +720,7 @@ func main() {
 			Time:      time.Now().Format(time.RFC3339),
 			IsLocal:   isLocal,
 		}
-		if err := conn.WriteJSON(map[string]any{
+		if err := wsManager.WriteJSON(conn, map[string]any{
 			"type":   "status",
 			"status": "online",
 			"server": serverInfo,
@@ -765,7 +765,7 @@ func main() {
 			case <-systemTicker.C:
 				metrics := api.GetSystemMetrics(ctx)
 				uptimeSec := api.GetSystemUptime()
-				if err := conn.WriteJSON(map[string]any{
+				if err := wsManager.WriteJSON(conn, map[string]any{
 					"type":   "system",
 					"system": metrics,
 					"server": api.ServerInfo{
@@ -778,7 +778,7 @@ func main() {
 					return
 				}
 			case <-pingTicker.C:
-				if err := conn.WriteJSON(map[string]string{"type": "ping"}); err != nil {
+				if err := wsManager.WriteJSON(conn, map[string]string{"type": "ping"}); err != nil {
 					log.Printf("WebSocket ping error: %v", err)
 					return
 				}
@@ -786,7 +786,7 @@ func main() {
 				// Send timer status updates for UI
 				timerManager := api.GetTimerManager()
 				timerStatus := timerManager.GetTimerStatus()
-				if err := conn.WriteJSON(map[string]any{
+				if err := wsManager.WriteJSON(conn, map[string]any{
 					"type":         "timer-status",
 					"timerStatus":  timerStatus,
 					"timestamp":    time.Now().Unix(),

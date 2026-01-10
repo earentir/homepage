@@ -354,7 +354,7 @@ function initGeneralSettings() {
       if (window.setMinBarWidth) window.setMinBarWidth(val);
       // Save to localStorage
       if (window.saveMinBarWidth) window.saveMinBarWidth();
-      // Trim history and re-render graphs
+      // Trim history and re-render graphs (async, fire and forget)
       if (window.trimHistoryArrays) window.trimHistoryArrays();
       if (window.renderCpuGraph) window.renderCpuGraph();
       if (window.renderRamGraph) window.renderRamGraph();
