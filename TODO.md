@@ -22,9 +22,7 @@
 - [ ] Add inoreader support
 - [ ] Add TTRSS
 - [ ] Add module that gets a json and builds a ui
-- [ ] Add paypal payment notification
-- [ ] Add gumroad payment notification
-- [ ] Add stripe payment notification
+
 - [ ] Add World Clock
 
 ## IP Address Module
@@ -106,10 +104,10 @@
 - [ ] Add background image
 
 ## Performance
-- [ ] Add request batching
-- [ ] Add WebSocket for real-time updates
+- [x] Add request batching
+- [x] Add WebSocket for real-time updates
 - [x] Add service worker for offline support
-- [ ] Add asset caching
+- [x] Add asset caching
 
 ## Integrations
 - [x] Add RSS feed reader
@@ -119,6 +117,9 @@
 - [ ] Add Google Analytics metrics for users sites
 - [ ] Add Proxmox metrics for proxmox clusters
 - [ ] Add pihole start/stop/status and metrics
+- [ ] Add paypal payment notification
+- [ ] Add gumroad payment notification
+- [ ] Add stripe payment notification
 
 ## SMBIOS
 - [x] Add RAM information
