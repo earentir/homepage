@@ -6,8 +6,9 @@ require (
 	github.com/earentir/cpuid v1.0.8
 	github.com/earentir/gosmbios v1.0.3
 	github.com/gorilla/websocket v1.5.3
-	github.com/gosnmp/gosnmp v1.42.1
-	github.com/miekg/dns v1.1.69
+	github.com/gosnmp/gosnmp v1.43.1
+	github.com/miekg/dns v1.1.70
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 )
 
@@ -19,9 +20,9 @@ require (
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/mod v0.31.0 // indirect
+	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
 )
