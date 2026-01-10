@@ -132,3 +132,150 @@
 - [ ] Add a module to show dns status and last 5 dns requests
 - [ ] Add a module to show ntp status and last 5 ntp requests
 - [ ] Add a module to show proxy status and last 5 proxy requests
+
+## Backend Migration - Move Frontend Logic to Backend
+
+### Easy Pickings (Simple to implement)
+
+#### Data Formatting & Utilities
+- [ ] Move `formatBytes()` to backend - format byte values server-side before sending to frontend
+- [ ] Move `fmtUptime()` to backend - format uptime strings server-side
+- [ ] Move `escapeHtml()` to backend - HTML escaping should happen server-side (or use template escaping)
+- [ ] Move `detectClientInfo()` to backend - detect OS/browser/timezone from User-Agent header server-side
+- [ ] Move `isValidUrlOrIp()` and `normalizeUrl()` to backend - URL validation/normalization should be server-side
+
+#### Caching (Move to server-side)
+- [ ] Move GitHub data cache from localStorage to server-side cache (in-memory or disk)
+- [ ] Move RSS feed cache from localStorage to server-side cache
+- [ ] Move favicon cache from localStorage to server-side cache
+- [ ] Move graph history (CPU/RAM/Disk) from localStorage to server-side storage
+
+#### Data Processing
+- [ ] Move weather icon mapping (`getWeatherIcon()`) to backend - return icon class in API response
+- [ ] Move search engine list to backend API endpoint - return list of engines from server
+- [ ] Move module configuration metadata to backend - return module list with metadata from API
+- [ ] Move calendar date calculations to backend - return formatted calendar data from API
+- [ ] Move todo sorting/prioritization logic to backend - return sorted todos from API
+
+#### Timer Management
+- [ ] Move timer interval management to backend - server tracks refresh intervals and pushes updates via WebSocket
+- [ ] Remove client-side timer logic, rely on WebSocket push notifications for updates
+
+### More Complex (Requires architectural changes)
+
+#### State Management
+- [ ] Create unified preferences API endpoint - single endpoint for all user preferences
+- [ ] Create session-based or user-based storage system - replace localStorage with backend storage
+- [ ] Implement preference sync mechanism - ensure frontend and backend stay in sync
+- [ ] Add preference versioning/migration system - handle preference schema changes
+
+#### Data Aggregation
+- [ ] Move module data aggregation to backend - backend combines data from multiple sources before sending
+- [ ] Create batch API endpoint - single request returns all module data at once
+- [ ] Move graph history aggregation to backend - server maintains history and sends only needed data
+
+#### Real-time Updates
+- [ ] Expand WebSocket to push all module updates (not just system metrics)
+- [ ] Move refresh scheduling to backend - server determines when to refresh and pushes updates
+- [ ] Remove client-side polling intervals - rely entirely on WebSocket push
+
+#### Module Configuration
+- [ ] Move module enable/disable logic to backend - server manages module state
+- [ ] Move module ordering to backend - server stores and returns module order
+- [ ] Create module configuration API - CRUD operations for all module types
+
+#### Search Functionality
+- [ ] Move search history filtering to backend - server handles search within history
+- [ ] Move autocomplete logic to backend - server returns filtered suggestions
+- [ ] Move search engine switching logic to backend - server manages current engine state
+
+#### Calendar/Todo Logic
+- [ ] Move calendar event calculations (upcoming events, date filtering) to backend
+- [ ] Move todo prioritization and sorting to backend
+- [ ] Move calendar date navigation logic to backend - server calculates month/week views
+
+#### Layout System
+- [ ] Move layout configuration storage to backend (keep drag-and-drop UI, but store config server-side)
+- [ ] Move layout validation to backend - ensure layout config is valid before saving
+
+#### Error Handling & Validation
+- [ ] Move input validation to backend - validate all user inputs server-side
+- [ ] Move error message generation to backend - return user-friendly errors from API
+
+### Keep in Frontend (UI-specific, should stay)
+- Drag-and-drop UI interactions (but store result on backend)
+- Graph rendering (Canvas/SVG manipulation)
+- Modal/dialog UI management
+- Theme/scheme UI selection (but store preference on backend)
+- Real-time UI updates and animations
+- Keyboard shortcuts handling
+- Click handlers and event listeners
+- DOM manipulation for rendering
+- Visual feedback (loading states, hover effects, etc.)
+
+## localStorage Sync with Backend Processing
+
+### Frontend: Generic localStorage Wrapper
+- [ ] Create generic `saveToStorage(key, value)` wrapper that:
+  - Writes to localStorage (immediate, local-first)
+  - Sends data to backend API endpoint (async, non-blocking)
+  - Handles errors gracefully (localStorage always succeeds, backend sync can fail)
+- [ ] Create generic `loadFromStorage(key, defaultValue)` wrapper that:
+  - Reads from localStorage (fast, local-first)
+  - Optionally checks backend for newer version on initialization
+- [ ] Replace all direct `localStorage.setItem()` calls with wrapper
+- [ ] Replace all direct `localStorage.getItem()` calls with wrapper
+- [ ] Add version/timestamp tracking for each localStorage key to detect stale data
+- [ ] Add retry mechanism for failed backend syncs (queue failed syncs, retry later)
+
+### Backend: Storage & Sync API
+- [ ] Create `/api/storage/sync` endpoint (POST) - receives localStorage data from frontend
+- [ ] Create `/api/storage/get?key={key}` endpoint (GET) - returns backend copy of data
+- [ ] Create `/api/storage/get-all` endpoint (GET) - returns all stored preferences
+- [ ] Create backend storage system (in-memory map, file-based, or database)
+- [ ] Add version/timestamp tracking for each stored key
+- [ ] Store data with metadata (lastModified, version, source)
+
+### Backend: Data Processing Logic
+- [ ] Move all data processing logic from frontend to backend:
+  - Module preference processing (enabled/disabled, intervals)
+  - Layout configuration processing
+  - Search history processing/filtering
+  - Calendar event calculations (upcoming events, date filtering)
+  - Todo prioritization and sorting
+  - Graph history aggregation
+  - Module configuration validation
+- [ ] Create processing functions that take raw localStorage data and return processed results
+- [ ] Add processing triggers (when data changes, process and notify)
+
+### WebSocket: Update Notifications
+- [ ] Extend WebSocket to send data change notifications:
+  - `{type: "storage-update", key: "modulePrefs", version: 123, timestamp: "..."}`
+- [ ] Backend sends notification when:
+  - Data is processed/aggregated
+  - External events update data (scheduled tasks, etc.)
+  - Multiple clients might have conflicts
+- [ ] Frontend receives notification and fetches updated data
+- [ ] Add WebSocket message type for storage sync requests
+
+### Frontend: Sync Mechanism
+- [ ] On page load: Check backend for latest versions of all localStorage keys
+- [ ] Compare versions/timestamps between localStorage and backend
+- [ ] If backend has newer data: Fetch and update localStorage
+- [ ] If localStorage has newer data: Send to backend (already handled by wrapper)
+- [ ] On WebSocket notification: Fetch specific key from backend and update localStorage
+- [ ] Add conflict resolution (last-write-wins or user choice)
+- [ ] Add sync status indicator in UI (show when syncing, show errors)
+
+### Migration & Compatibility
+- [ ] Create migration script to send existing localStorage data to backend on first load
+- [ ] Ensure backward compatibility (if backend unavailable, localStorage still works)
+- [ ] Add feature flag to enable/disable backend sync
+- [ ] Add sync status API endpoint to check if backend has data
+
+### Testing & Error Handling
+- [ ] Handle offline scenarios (localStorage works, queue syncs for when online)
+- [ ] Handle backend errors gracefully (don't break UI if sync fails)
+- [ ] Add logging for sync operations (debug sync issues)
+- [ ] Test with multiple browser tabs (ensure sync works across tabs)
+- [ ] Test WebSocket reconnection scenarios (ensure sync resumes after reconnect)
