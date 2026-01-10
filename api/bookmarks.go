@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -38,82 +37,82 @@ type ChromeBookmarkRoot struct {
 // If preferredBrowser is specified, it will try to read only from that browser first.
 // If preferredBrowser is empty or the preferred browser is not found, it falls back to reading from all browsers.
 func GetBookmarks(preferredBrowser string) ([]Bookmark, error) {
-	log.Printf("[BOOKMARKS] GetBookmarks called with preferredBrowser: '%s'", preferredBrowser)
+	GetDebugLogger().Logf("bookmarks", "GetBookmarks called with preferredBrowser: '%s'", preferredBrowser)
 	var allBookmarks []Bookmark
 	foundPreferred := false
 
 	// If a preferred browser is specified, try to read from it first
 	if preferredBrowser != "" {
-		log.Printf("[BOOKMARKS] Attempting to read from preferred browser: %s", preferredBrowser)
+		GetDebugLogger().Logf("bookmarks", "Attempting to read from preferred browser: %s", preferredBrowser)
 		switch strings.ToLower(preferredBrowser) {
 		case "chrome", "chromium":
 			chromeBookmarks, err := getChromeBookmarks()
-			log.Printf("[BOOKMARKS] Chrome bookmarks: count=%d, error=%v", len(chromeBookmarks), err)
+			GetDebugLogger().Logf("bookmarks", "Chrome bookmarks: count=%d, error=%v", len(chromeBookmarks), err)
 			if err == nil && len(chromeBookmarks) > 0 {
 				allBookmarks = append(allBookmarks, chromeBookmarks...)
 				foundPreferred = true
-				log.Printf("[BOOKMARKS] Successfully loaded %d Chrome bookmarks", len(chromeBookmarks))
+				GetDebugLogger().Logf("bookmarks", "Successfully loaded %d Chrome bookmarks", len(chromeBookmarks))
 			}
 		case "firefox":
 			firefoxBookmarks, err := getFirefoxBookmarks()
-			log.Printf("[BOOKMARKS] Firefox bookmarks: count=%d, error=%v", len(firefoxBookmarks), err)
+			GetDebugLogger().Logf("bookmarks", "Firefox bookmarks: count=%d, error=%v", len(firefoxBookmarks), err)
 			if err == nil && len(firefoxBookmarks) > 0 {
 				allBookmarks = append(allBookmarks, firefoxBookmarks...)
 				foundPreferred = true
-				log.Printf("[BOOKMARKS] Successfully loaded %d Firefox bookmarks", len(firefoxBookmarks))
+				GetDebugLogger().Logf("bookmarks", "Successfully loaded %d Firefox bookmarks", len(firefoxBookmarks))
 			}
 		case "edge":
 			edgeBookmarks, err := getEdgeBookmarks()
-			log.Printf("[BOOKMARKS] Edge bookmarks: count=%d, error=%v", len(edgeBookmarks), err)
+			GetDebugLogger().Logf("bookmarks", "Edge bookmarks: count=%d, error=%v", len(edgeBookmarks), err)
 			if err == nil && len(edgeBookmarks) > 0 {
 				allBookmarks = append(allBookmarks, edgeBookmarks...)
 				foundPreferred = true
-				log.Printf("[BOOKMARKS] Successfully loaded %d Edge bookmarks", len(edgeBookmarks))
+				GetDebugLogger().Logf("bookmarks", "Successfully loaded %d Edge bookmarks", len(edgeBookmarks))
 			}
 		case "brave":
 			braveBookmarks, err := getBraveBookmarks()
-			log.Printf("[BOOKMARKS] Brave bookmarks: count=%d, error=%v", len(braveBookmarks), err)
+			GetDebugLogger().Logf("bookmarks", "Brave bookmarks: count=%d, error=%v", len(braveBookmarks), err)
 			if err == nil && len(braveBookmarks) > 0 {
 				allBookmarks = append(allBookmarks, braveBookmarks...)
 				foundPreferred = true
-				log.Printf("[BOOKMARKS] Successfully loaded %d Brave bookmarks", len(braveBookmarks))
+				GetDebugLogger().Logf("bookmarks", "Successfully loaded %d Brave bookmarks", len(braveBookmarks))
 			}
 		}
 	}
 
 	// If preferred browser not found or not specified, try all browsers
 	if !foundPreferred {
-		log.Printf("[BOOKMARKS] Preferred browser not found or not specified, trying all browsers...")
+		GetDebugLogger().Logf("bookmarks", "Preferred browser not found or not specified, trying all browsers...")
 		// Try Chrome/Chromium bookmarks
 		chromeBookmarks, err := getChromeBookmarks()
-		log.Printf("[BOOKMARKS] Chrome bookmarks: count=%d, error=%v", len(chromeBookmarks), err)
+		GetDebugLogger().Logf("bookmarks", "Chrome bookmarks: count=%d, error=%v", len(chromeBookmarks), err)
 		if err == nil {
 			allBookmarks = append(allBookmarks, chromeBookmarks...)
 		}
 
 		// Try Firefox bookmarks (HTML format)
 		firefoxBookmarks, err := getFirefoxBookmarks()
-		log.Printf("[BOOKMARKS] Firefox bookmarks: count=%d, error=%v", len(firefoxBookmarks), err)
+		GetDebugLogger().Logf("bookmarks", "Firefox bookmarks: count=%d, error=%v", len(firefoxBookmarks), err)
 		if err == nil {
 			allBookmarks = append(allBookmarks, firefoxBookmarks...)
 		}
 
 		// Try Edge bookmarks (same format as Chrome)
 		edgeBookmarks, err := getEdgeBookmarks()
-		log.Printf("[BOOKMARKS] Edge bookmarks: count=%d, error=%v", len(edgeBookmarks), err)
+		GetDebugLogger().Logf("bookmarks", "Edge bookmarks: count=%d, error=%v", len(edgeBookmarks), err)
 		if err == nil {
 			allBookmarks = append(allBookmarks, edgeBookmarks...)
 		}
 
 		// Try Brave bookmarks (same format as Chrome)
 		braveBookmarks, err := getBraveBookmarks()
-		log.Printf("[BOOKMARKS] Brave bookmarks: count=%d, error=%v", len(braveBookmarks), err)
+		GetDebugLogger().Logf("bookmarks", "Brave bookmarks: count=%d, error=%v", len(braveBookmarks), err)
 		if err == nil {
 			allBookmarks = append(allBookmarks, braveBookmarks...)
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Total bookmarks before deduplication: %d", len(allBookmarks))
+	GetDebugLogger().Logf("bookmarks", "Total bookmarks before deduplication: %d", len(allBookmarks))
 
 	// Remove duplicates (by URL)
 	uniqueBookmarks := make([]Bookmark, 0)
@@ -125,7 +124,7 @@ func GetBookmarks(preferredBrowser string) ([]Bookmark, error) {
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Total unique bookmarks after deduplication: %d", len(uniqueBookmarks))
+	GetDebugLogger().Logf("bookmarks", "Total unique bookmarks after deduplication: %d", len(uniqueBookmarks))
 	return uniqueBookmarks, nil
 }
 
@@ -152,7 +151,7 @@ func getChromeBookmarks() ([]Bookmark, error) {
 		// Windows paths
 		localAppData := os.Getenv("LOCALAPPDATA")
 		if localAppData == "" {
-			log.Printf("[BOOKMARKS] LOCALAPPDATA not set on Windows")
+			GetDebugLogger().Logf("bookmarks", "LOCALAPPDATA not set on Windows")
 			return nil, fmt.Errorf("LOCALAPPDATA not set")
 		}
 		baseDirs = []string{
@@ -165,7 +164,7 @@ func getChromeBookmarks() ([]Bookmark, error) {
 		// Linux/macOS paths
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			log.Printf("[BOOKMARKS] Failed to get home directory: %v", err)
+			GetDebugLogger().Logf("bookmarks", "Failed to get home directory: %v", err)
 			return nil, err
 		}
 		baseDirs = []string{
@@ -183,20 +182,20 @@ func getChromeBookmarks() ([]Bookmark, error) {
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Searching for Chrome bookmarks in %d directories (OS: %s)", len(baseDirs), runtime.GOOS)
+	GetDebugLogger().Logf("bookmarks", "Searching for Chrome bookmarks in %d directories (OS: %s)", len(baseDirs), runtime.GOOS)
 	for _, baseDir := range baseDirs {
-		log.Printf("[BOOKMARKS] Trying Chrome directory: %s", baseDir)
+		GetDebugLogger().Logf("bookmarks", "Trying Chrome directory: %s", baseDir)
 		// Try to find bookmarks in any profile directory
 		bookmarks, err := findChromeBookmarksInDir(baseDir)
 		if err == nil && len(bookmarks) > 0 {
-			log.Printf("[BOOKMARKS] Found Chrome bookmarks in %s: %d bookmarks", baseDir, len(bookmarks))
+			GetDebugLogger().Logf("bookmarks", "Found Chrome bookmarks in %s: %d bookmarks", baseDir, len(bookmarks))
 			return bookmarks, nil
 		} else if err != nil {
-			log.Printf("[BOOKMARKS] Error reading from %s: %v", baseDir, err)
+			GetDebugLogger().Logf("bookmarks", "Error reading from %s: %v", baseDir, err)
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Chrome bookmarks not found in any directory")
+	GetDebugLogger().Logf("bookmarks", "Chrome bookmarks not found in any directory")
 	return nil, fmt.Errorf("chrome bookmarks not found")
 }
 
@@ -204,71 +203,71 @@ func getChromeBookmarks() ([]Bookmark, error) {
 func findChromeBookmarksInDir(baseDir string) ([]Bookmark, error) {
 	// Check if base directory exists
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
-		log.Printf("[BOOKMARKS] Directory does not exist: %s", baseDir)
+		GetDebugLogger().Logf("bookmarks", "Directory does not exist: %s", baseDir)
 		return nil, fmt.Errorf("directory does not exist: %s", baseDir)
 	}
 
 	// First try the common "Default" profile
 	defaultPath := filepath.Join(baseDir, "Default", "Bookmarks")
-	log.Printf("[BOOKMARKS] Trying default profile: %s", defaultPath)
+	GetDebugLogger().Logf("bookmarks", "Trying default profile: %s", defaultPath)
 	if bookmarks, err := readChromeBookmarksFile(defaultPath); err == nil {
-		log.Printf("[BOOKMARKS] Found bookmarks in default profile: %d bookmarks", len(bookmarks))
+		GetDebugLogger().Logf("bookmarks", "Found bookmarks in default profile: %d bookmarks", len(bookmarks))
 		return bookmarks, nil
 	} else {
-		log.Printf("[BOOKMARKS] Default profile not found or error: %v", err)
+		GetDebugLogger().Logf("bookmarks", "Default profile not found or error: %v", err)
 	}
 
 	// If Default doesn't exist, try to find any profile directory
 	entries, err := os.ReadDir(baseDir)
 	if err != nil {
-		log.Printf("[BOOKMARKS] Error reading directory %s: %v", baseDir, err)
+		GetDebugLogger().Logf("bookmarks", "Error reading directory %s: %v", baseDir, err)
 		return nil, err
 	}
 
-	log.Printf("[BOOKMARKS] Found %d entries in %s, searching for profiles...", len(entries), baseDir)
+	GetDebugLogger().Logf("bookmarks", "Found %d entries in %s, searching for profiles...", len(entries), baseDir)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		// Skip system directories
 		if entry.Name() == "System Profile" || entry.Name() == "Guest Profile" {
-			log.Printf("[BOOKMARKS] Skipping system directory: %s", entry.Name())
+			GetDebugLogger().Logf("bookmarks", "Skipping system directory: %s", entry.Name())
 			continue
 		}
 		profilePath := filepath.Join(baseDir, entry.Name(), "Bookmarks")
-		log.Printf("[BOOKMARKS] Trying profile: %s", profilePath)
+		GetDebugLogger().Logf("bookmarks", "Trying profile: %s", profilePath)
 		if bookmarks, err := readChromeBookmarksFile(profilePath); err == nil {
-			log.Printf("[BOOKMARKS] Found bookmarks in profile %s: %d bookmarks", entry.Name(), len(bookmarks))
+			GetDebugLogger().Logf("bookmarks", "Found bookmarks in profile %s: %d bookmarks", entry.Name(), len(bookmarks))
 			return bookmarks, nil
 		} else {
-			log.Printf("[BOOKMARKS] Profile %s error: %v", entry.Name(), err)
+			GetDebugLogger().Logf("bookmarks", "Profile %s error: %v", entry.Name(), err)
 		}
 	}
 
-	log.Printf("[BOOKMARKS] No bookmarks found in %s", baseDir)
+	GetDebugLogger().Logf("bookmarks", "No bookmarks found in %s", baseDir)
 	return nil, fmt.Errorf("no bookmarks found in %s", baseDir)
 }
 
 // readChromeBookmarksFile reads and parses a Chrome bookmarks file.
 func readChromeBookmarksFile(path string) ([]Bookmark, error) {
-	log.Printf("[BOOKMARKS] Attempting to read Chrome bookmarks file: %s", path)
+	GetDebugLogger().Logf("bookmarks", "Attempting to read Chrome bookmarks file: %s", path)
 	
 	// Check if file exists
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		log.Printf("[BOOKMARKS] File does not exist: %s", path)
+		GetDebugLogger().Logf("bookmarks", "File does not exist: %s", path)
 		return nil, fmt.Errorf("file does not exist: %s", path)
 	}
 
 	file, err := os.Open(path)
 	if err != nil {
-		log.Printf("[BOOKMARKS] Error opening file %s: %v", path, err)
+		GetDebugLogger().Logf("bookmarks", "Error opening file %s: %v", path, err)
 		return nil, err
 	}
 	defer file.Close()
 
 	var root ChromeBookmarkRoot
 	if err := json.NewDecoder(file).Decode(&root); err != nil {
-		log.Printf("[BOOKMARKS] Error decoding JSON from %s: %v", path, err)
+		GetDebugLogger().Logf("bookmarks", "Error decoding JSON from %s: %v", path, err)
 		return nil, err
 	}
 
@@ -277,7 +276,7 @@ func readChromeBookmarksFile(path string) ([]Bookmark, error) {
 	extractBookmarks(&root.Roots.Other, &bookmarks)
 	extractBookmarks(&root.Roots.Synced, &bookmarks)
 
-	log.Printf("[BOOKMARKS] Successfully parsed %d bookmarks from %s", len(bookmarks), path)
+	GetDebugLogger().Logf("bookmarks", "Successfully parsed %d bookmarks from %s", len(bookmarks), path)
 	return bookmarks, nil
 }
 
@@ -297,14 +296,14 @@ func extractBookmarks(node *ChromeBookmarkNode, bookmarks *[]Bookmark) {
 
 // getEdgeBookmarks reads bookmarks from Microsoft Edge.
 func getEdgeBookmarks() ([]Bookmark, error) {
-	log.Printf("[BOOKMARKS] Searching for Edge bookmarks...")
+	GetDebugLogger().Logf("bookmarks", "Searching for Edge bookmarks...")
 	var baseDirs []string
 
 	if runtime.GOOS == "windows" {
 		// Windows paths
 		localAppData := os.Getenv("LOCALAPPDATA")
 		if localAppData == "" {
-			log.Printf("[BOOKMARKS] LOCALAPPDATA not set on Windows")
+			GetDebugLogger().Logf("bookmarks", "LOCALAPPDATA not set on Windows")
 			return nil, fmt.Errorf("LOCALAPPDATA not set")
 		}
 		baseDirs = []string{
@@ -316,7 +315,7 @@ func getEdgeBookmarks() ([]Bookmark, error) {
 		// Linux paths
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			log.Printf("[BOOKMARKS] Failed to get home directory for Edge: %v", err)
+			GetDebugLogger().Logf("bookmarks", "Failed to get home directory for Edge: %v", err)
 			return nil, err
 		}
 		baseDirs = []string{
@@ -332,32 +331,32 @@ func getEdgeBookmarks() ([]Bookmark, error) {
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Trying %d Edge directories (OS: %s)", len(baseDirs), runtime.GOOS)
+	GetDebugLogger().Logf("bookmarks", "Trying %d Edge directories (OS: %s)", len(baseDirs), runtime.GOOS)
 	for _, baseDir := range baseDirs {
-		log.Printf("[BOOKMARKS] Trying Edge directory: %s", baseDir)
+		GetDebugLogger().Logf("bookmarks", "Trying Edge directory: %s", baseDir)
 		bookmarks, err := findChromeBookmarksInDir(baseDir) // Edge uses same format as Chrome
 		if err == nil && len(bookmarks) > 0 {
-			log.Printf("[BOOKMARKS] Found Edge bookmarks in %s: %d bookmarks", baseDir, len(bookmarks))
+			GetDebugLogger().Logf("bookmarks", "Found Edge bookmarks in %s: %d bookmarks", baseDir, len(bookmarks))
 			return bookmarks, nil
 		} else if err != nil {
-			log.Printf("[BOOKMARKS] Edge directory %s error: %v", baseDir, err)
+			GetDebugLogger().Logf("bookmarks", "Edge directory %s error: %v", baseDir, err)
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Edge bookmarks not found")
+	GetDebugLogger().Logf("bookmarks", "Edge bookmarks not found")
 	return nil, fmt.Errorf("edge bookmarks not found")
 }
 
 // getBraveBookmarks reads bookmarks from Brave browser.
 func getBraveBookmarks() ([]Bookmark, error) {
-	log.Printf("[BOOKMARKS] Searching for Brave bookmarks...")
+	GetDebugLogger().Logf("bookmarks", "Searching for Brave bookmarks...")
 	var baseDir string
 
 	if runtime.GOOS == "windows" {
 		// Windows paths
 		localAppData := os.Getenv("LOCALAPPDATA")
 		if localAppData == "" {
-			log.Printf("[BOOKMARKS] LOCALAPPDATA not set on Windows")
+			GetDebugLogger().Logf("bookmarks", "LOCALAPPDATA not set on Windows")
 			return nil, fmt.Errorf("LOCALAPPDATA not set")
 		}
 		baseDir = filepath.Join(localAppData, "BraveSoftware", "Brave-Browser", "User Data")
@@ -365,7 +364,7 @@ func getBraveBookmarks() ([]Bookmark, error) {
 		// Linux paths
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			log.Printf("[BOOKMARKS] Failed to get home directory for Brave: %v", err)
+			GetDebugLogger().Logf("bookmarks", "Failed to get home directory for Brave: %v", err)
 			return nil, err
 		}
 		baseDir = filepath.Join(homeDir, ".config", "BraveSoftware", "Brave-Browser")
@@ -375,26 +374,26 @@ func getBraveBookmarks() ([]Bookmark, error) {
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Trying Brave directory: %s (OS: %s)", baseDir, runtime.GOOS)
+	GetDebugLogger().Logf("bookmarks", "Trying Brave directory: %s (OS: %s)", baseDir, runtime.GOOS)
 	bookmarks, err := findChromeBookmarksInDir(baseDir) // Brave uses same format as Chrome
 	if err == nil {
-		log.Printf("[BOOKMARKS] Found Brave bookmarks: %d bookmarks", len(bookmarks))
+		GetDebugLogger().Logf("bookmarks", "Found Brave bookmarks: %d bookmarks", len(bookmarks))
 	} else {
-		log.Printf("[BOOKMARKS] Brave bookmarks error: %v", err)
+		GetDebugLogger().Logf("bookmarks", "Brave bookmarks error: %v", err)
 	}
 	return bookmarks, err
 }
 
 // getFirefoxBookmarks reads bookmarks from Firefox (HTML format).
 func getFirefoxBookmarks() ([]Bookmark, error) {
-	log.Printf("[BOOKMARKS] Searching for Firefox bookmarks...")
+	GetDebugLogger().Logf("bookmarks", "Searching for Firefox bookmarks...")
 	var firefoxDir string
 
 	if runtime.GOOS == "windows" {
 		// Windows paths
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
-			log.Printf("[BOOKMARKS] APPDATA not set on Windows")
+			GetDebugLogger().Logf("bookmarks", "APPDATA not set on Windows")
 			return nil, fmt.Errorf("APPDATA not set")
 		}
 		firefoxDir = filepath.Join(appData, "Mozilla", "Firefox")
@@ -402,7 +401,7 @@ func getFirefoxBookmarks() ([]Bookmark, error) {
 		// Linux/macOS paths
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			log.Printf("[BOOKMARKS] Failed to get home directory for Firefox: %v", err)
+			GetDebugLogger().Logf("bookmarks", "Failed to get home directory for Firefox: %v", err)
 			return nil, err
 		}
 		if runtime.GOOS == "darwin" {
@@ -412,62 +411,62 @@ func getFirefoxBookmarks() ([]Bookmark, error) {
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Firefox directory: %s (OS: %s)", firefoxDir, runtime.GOOS)
+	GetDebugLogger().Logf("bookmarks", "Firefox directory: %s (OS: %s)", firefoxDir, runtime.GOOS)
 	
 	entries, err := os.ReadDir(firefoxDir)
 	if err != nil {
-		log.Printf("[BOOKMARKS] Error reading Firefox directory %s: %v", firefoxDir, err)
+		GetDebugLogger().Logf("bookmarks", "Error reading Firefox directory %s: %v", firefoxDir, err)
 		return nil, err
 	}
 
-	log.Printf("[BOOKMARKS] Found %d entries in Firefox directory", len(entries))
+	GetDebugLogger().Logf("bookmarks", "Found %d entries in Firefox directory", len(entries))
 	var bookmarksFile string
 	for _, entry := range entries {
 		if entry.IsDir() && (strings.Contains(entry.Name(), ".default") || strings.Contains(entry.Name(), ".default-release")) {
 			potentialFile := filepath.Join(firefoxDir, entry.Name(), "bookmarks.html")
-			log.Printf("[BOOKMARKS] Checking Firefox profile: %s", potentialFile)
+			GetDebugLogger().Logf("bookmarks", "Checking Firefox profile: %s", potentialFile)
 			if _, err := os.Stat(potentialFile); err == nil {
 				bookmarksFile = potentialFile
-				log.Printf("[BOOKMARKS] Found Firefox bookmarks file: %s", bookmarksFile)
+				GetDebugLogger().Logf("bookmarks", "Found Firefox bookmarks file: %s", bookmarksFile)
 				break
 			} else {
-				log.Printf("[BOOKMARKS] Firefox bookmarks file not found: %s (error: %v)", potentialFile, err)
+				GetDebugLogger().Logf("bookmarks", "Firefox bookmarks file not found: %s (error: %v)", potentialFile, err)
 			}
 		}
 	}
 
 	if bookmarksFile == "" {
-		log.Printf("[BOOKMARKS] Firefox bookmarks not found in any profile")
+		GetDebugLogger().Logf("bookmarks", "Firefox bookmarks not found in any profile")
 		return nil, fmt.Errorf("firefox bookmarks not found")
 	}
 
 	bookmarks, err := readFirefoxBookmarksFile(bookmarksFile)
 	if err == nil {
-		log.Printf("[BOOKMARKS] Successfully read %d Firefox bookmarks from %s", len(bookmarks), bookmarksFile)
+		GetDebugLogger().Logf("bookmarks", "Successfully read %d Firefox bookmarks from %s", len(bookmarks), bookmarksFile)
 	} else {
-		log.Printf("[BOOKMARKS] Error reading Firefox bookmarks from %s: %v", bookmarksFile, err)
+		GetDebugLogger().Logf("bookmarks", "Error reading Firefox bookmarks from %s: %v", bookmarksFile, err)
 	}
 	return bookmarks, err
 }
 
 // readFirefoxBookmarksFile reads and parses a Firefox bookmarks.html file.
 func readFirefoxBookmarksFile(path string) ([]Bookmark, error) {
-	log.Printf("[BOOKMARKS] Attempting to read Firefox bookmarks file: %s", path)
+	GetDebugLogger().Logf("bookmarks", "Attempting to read Firefox bookmarks file: %s", path)
 	
 	file, err := os.Open(path)
 	if err != nil {
-		log.Printf("[BOOKMARKS] Error opening Firefox bookmarks file %s: %v", path, err)
+		GetDebugLogger().Logf("bookmarks", "Error opening Firefox bookmarks file %s: %v", path, err)
 		return nil, err
 	}
 	defer file.Close()
 
 	content, err := io.ReadAll(file)
 	if err != nil {
-		log.Printf("[BOOKMARKS] Error reading Firefox bookmarks file %s: %v", path, err)
+		GetDebugLogger().Logf("bookmarks", "Error reading Firefox bookmarks file %s: %v", path, err)
 		return nil, err
 	}
 
-	log.Printf("[BOOKMARKS] Read %d bytes from Firefox bookmarks file", len(content))
+	GetDebugLogger().Logf("bookmarks", "Read %d bytes from Firefox bookmarks file", len(content))
 	var bookmarks []Bookmark
 	htmlContent := string(content)
 
@@ -531,7 +530,7 @@ func readFirefoxBookmarksFile(path string) ([]Bookmark, error) {
 		}
 	}
 
-	log.Printf("[BOOKMARKS] Parsed %d bookmarks from Firefox HTML file", len(bookmarks))
+	GetDebugLogger().Logf("bookmarks", "Parsed %d bookmarks from Firefox HTML file", len(bookmarks))
 	return bookmarks, nil
 }
 

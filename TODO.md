@@ -58,14 +58,14 @@
 - [x] Add preference to use the last search engine used for the search history item
 - [x] Add preference to visit links directly from search history (shift always does that)
 - [x] Add search in search history
-- [ ] Add bookmark support (read from filesystem?)
+- [x] Add bookmark support (read from filesystem?)
 - [x] Add skroutz support
 - [x] Add amazon support
 - [x] preferences for selecting search engines
 - [ ] Add custom engine
-- [ ] Add search shortcuts
-- [ ] Add @ engine selection shortcut
-- [ ] Add tab autocomplete for search engine (ie youtube tab, switch the engine)
+- [x] Add search shortcuts
+- [x] Add @ engine selection shortcut
+- [x] Add tab autocomplete for search engine (ie youtube tab, switch the engine)
 
 ## Calendar & Todo
 - [ ] Sync with ics calendar (read only for now)

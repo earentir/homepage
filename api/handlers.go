@@ -1045,15 +1045,15 @@ func (h *Handler) HandleSearchAutocomplete(w http.ResponseWriter, r *http.Reques
 	// Detect browser from User-Agent to prioritize that browser's bookmarks
 	userAgent := r.Header.Get("User-Agent")
 	preferredBrowser := DetectBrowserFromUserAgent(userAgent)
-	log.Printf("[BOOKMARKS] User-Agent: %s", userAgent)
-	log.Printf("[BOOKMARKS] Detected browser: %s", preferredBrowser)
+	GetDebugLogger().Logf("bookmarks", "User-Agent: %s", userAgent)
+	GetDebugLogger().Logf("bookmarks", "Detected browser: %s", preferredBrowser)
 	
 	bookmarks, err := GetBookmarks(preferredBrowser)
-	log.Printf("[BOOKMARKS] GetBookmarks result: count=%d, error=%v", len(bookmarks), err)
+	GetDebugLogger().Logf("bookmarks", "GetBookmarks result: count=%d, error=%v", len(bookmarks), err)
 	
 	if err == nil && len(bookmarks) > 0 {
 		filteredBookmarks := FilterBookmarks(bookmarks, term)
-		log.Printf("[BOOKMARKS] After filtering with term '%s': %d bookmarks match", term, len(filteredBookmarks))
+		GetDebugLogger().Logf("bookmarks", "After filtering with term '%s': %d bookmarks match", term, len(filteredBookmarks))
 		
 		// Convert bookmarks to SearchHistoryItem format
 		for _, bookmark := range filteredBookmarks {
@@ -1071,12 +1071,12 @@ func (h *Handler) HandleSearchAutocomplete(w http.ResponseWriter, r *http.Reques
 				bookmarkItems = append(bookmarkItems, bookmarkItem)
 			}
 		}
-		log.Printf("[BOOKMARKS] Added %d bookmark items to autocomplete results", len(bookmarkItems))
+		GetDebugLogger().Logf("bookmarks", "Added %d bookmark items to autocomplete results", len(bookmarkItems))
 	} else {
 		if err != nil {
-			log.Printf("[BOOKMARKS] Error loading bookmarks: %v", err)
+			GetDebugLogger().Logf("bookmarks", "Error loading bookmarks: %v", err)
 		} else {
-			log.Printf("[BOOKMARKS] No bookmarks found (count: %d)", len(bookmarks))
+			GetDebugLogger().Logf("bookmarks", "No bookmarks found (count: %d)", len(bookmarks))
 		}
 	}
 
