@@ -531,7 +531,12 @@ function initMonitoring() {
 
   // Initial check and intervals
   setTimeout(refreshMonitoring, 2000);
-  setInterval(refreshMonitoring, window.timers ? window.timers.monitoring.interval : 60000);
+  // Refresh is now handled via WebSocket refresh notifications (fallback only if WebSocket not connected)
+  setInterval(() => {
+    if (!window.wsIsConnected || !window.wsIsConnected()) {
+      refreshMonitoring();
+    }
+  }, window.timers ? window.timers.monitoring.interval : 60000);
   setInterval(updateDownMonitorsDisplay, 1000);
 }
 

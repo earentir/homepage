@@ -27,6 +27,7 @@ function setupTimerHandlers() {
 }
 
 // Module prefs loading/saving
+// Note: Timer intervals are now managed by the backend and updated via WebSocket
 function loadModulePrefs() {
   try {
     const saved = window.loadFromStorage('modulePrefs');
@@ -36,9 +37,7 @@ function loadModulePrefs() {
         if (window.moduleConfig && window.moduleConfig[key]) {
           window.moduleConfig[key].enabled = prefs[key].enabled;
         }
-        if (prefs[key].interval && window.timers && window.timers[key]) {
-          window.timers[key].interval = prefs[key].interval * 1000;
-        }
+        // Timer intervals are managed by backend and updated via WebSocket timer-status messages
       });
     }
   } catch (e) {
@@ -88,7 +87,8 @@ function applyModuleVisibility() {
   }
 }
 
-// Set up refresh intervals
+// Set up refresh intervals (fallback only if WebSocket is not connected)
+// Note: Module refreshes are now managed by backend timer manager via WebSocket
 function setupIntervals() {
   if (!window.timers) return;
 
@@ -100,20 +100,8 @@ function setupIntervals() {
     }
   }, 30000);
 
-  // CPU and RAM - only if WebSocket is not connected (WebSocket handles these in real-time)
-  setInterval(() => {
-    if (!window.wsIsConnected || !window.wsIsConnected()) {
-      if (window.refreshCPU) window.refreshCPU();
-      if (window.refreshRAM) window.refreshRAM();
-    }
-  }, window.timers.cpu.interval);
-
-  // Other modules continue to use HTTP polling
-  setInterval(() => window.refreshAllDisks && window.refreshAllDisks(), window.timers.disk.interval);
-  setInterval(() => window.refreshGitHub && window.refreshGitHub(), window.timers.github.interval);
-  setInterval(() => window.refreshWeather && window.refreshWeather(), window.timers.weather.interval);
-  setInterval(() => window.refreshIP && window.refreshIP(), window.timers.ip.interval);
-  setInterval(() => { if (window.refreshRss) window.refreshRss(); }, window.timers.rss.interval);
+  // Module refreshes are handled via WebSocket refresh notifications from backend timer manager
+  // No client-side intervals needed - backend sends refresh messages when timers expire
 }
 
 // Initial data load
@@ -193,6 +181,33 @@ async function initApp() {
   if (window.initWebSocket) {
     window.initWebSocket();
   }
+
+  // Set up WebSocket refresh handler
+  window.onModuleRefresh = function(moduleName) {
+    if (window.debugLog) window.debugLog('app', 'WebSocket refresh notification for:', moduleName);
+    
+    // Map timer keys to refresh handlers
+    const refreshMap = {
+      'cpu': () => window.refreshCPU && window.refreshCPU(),
+      'ram': () => window.refreshRAM && window.refreshRAM(),
+      'disk': () => window.refreshAllDisks && window.refreshAllDisks(),
+      'github': () => window.refreshGitHub && window.refreshGitHub(),
+      'weather': () => window.refreshWeather && window.refreshWeather(),
+      'ip': () => window.refreshIP && window.refreshIP(),
+      'monitoring': () => window.refreshMonitoring && window.refreshMonitoring(),
+      'snmp': () => window.refreshSnmp && window.refreshSnmp(),
+      'rss': () => window.refreshRss && window.refreshRss()
+    };
+    
+    const handler = refreshMap[moduleName];
+    if (handler) {
+      handler();
+      // Update timer UI to show refresh happened
+      if (window.startTimer) {
+        window.startTimer(moduleName);
+      }
+    }
+  };
 
   // Initialize sync status indicator
   if (window.updateSyncStatusIndicator) {

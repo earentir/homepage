@@ -553,6 +553,7 @@ function renderModuleList() {
   });
 
   // Handle interval changes
+  // Note: Changes are saved to localStorage and synced to backend, which manages refresh scheduling
   moduleList.querySelectorAll('.interval-input').forEach(input => {
     input.addEventListener('change', () => {
       const key = input.dataset.module;
@@ -560,6 +561,7 @@ function renderModuleList() {
       if (mod && mod.hasTimer && window.timers && window.timers[mod.timerKey]) {
         const val = Math.max(1, parseInt(input.value) || mod.defaultInterval);
         input.value = val;
+        // Update local timer for immediate UI feedback (backend will sync and update via WebSocket)
         window.timers[mod.timerKey].interval = val * 1000;
         if (window.saveModulePrefs) window.saveModulePrefs();
       }

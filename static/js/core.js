@@ -1,6 +1,6 @@
 // Core utilities and timer management
 
-// Timer management
+// Timer management (UI only - intervals are managed by backend via WebSocket)
 const timers = {
   cpu: {interval: 5000, lastUpdate: 0, timer: null},
   ram: {interval: 5000, lastUpdate: 0, timer: null},
@@ -37,6 +37,8 @@ function updateTimer(moduleName) {
   }
 }
 
+// Start timer UI update (called when module is manually refreshed)
+// Note: Timer intervals and refresh scheduling are managed by backend
 function startTimer(moduleName) {
   const timer = timers[moduleName];
   if (!timer) return;
@@ -44,6 +46,43 @@ function startTimer(moduleName) {
   updateTimer(moduleName);
   if (timer.timer) clearInterval(timer.timer);
   timer.timer = setInterval(() => updateTimer(moduleName), 1000);
+}
+
+// Update timer status from WebSocket
+function updateTimerStatus(timerStatus, timestamp) {
+  if (!timerStatus) return;
+  
+  const now = timestamp ? timestamp * 1000 : Date.now();
+  
+  Object.keys(timerStatus).forEach(timerKey => {
+    const status = timerStatus[timerKey];
+    
+    // Ensure timer exists
+    if (!timers[timerKey]) {
+      timers[timerKey] = {interval: 5000, lastUpdate: 0, timer: null};
+    }
+    
+    const timer = timers[timerKey];
+    
+    // Update interval if it changed
+    if (status.interval) {
+      timer.interval = status.interval * 1000; // Convert to milliseconds
+    }
+    
+    // Update lastUpdate based on elapsed time
+    if (status.elapsed !== undefined && status.lastRefresh) {
+      const lastRefreshMs = status.lastRefresh * 1000;
+      timer.lastUpdate = now - (status.elapsed * 1000);
+    }
+    
+    // Start the timer UI update interval if not already running
+    if (!timer.timer) {
+      timer.timer = setInterval(() => updateTimer(timerKey), 1000);
+    }
+    
+    // Update the timer UI
+    updateTimer(timerKey);
+  });
 }
 
 function formatBytes(bytes) {
@@ -720,6 +759,7 @@ if (typeof indexedDB !== 'undefined') {
 window.timers = timers;
 window.updateTimer = updateTimer;
 window.startTimer = startTimer;
+window.updateTimerStatus = updateTimerStatus;
 window.formatBytes = formatBytes;
 window.escapeHtml = escapeHtml;
 window.fmtUptime = fmtUptime;

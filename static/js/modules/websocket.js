@@ -52,6 +52,17 @@ function connect() {
           if (window.onWebSocketUpdate) {
             window.onWebSocketUpdate('system', data);
           }
+        } else if (data.type === 'refresh') {
+          // Refresh notification for a module
+          if (window.debugLog) window.debugLog('websocket', 'Refresh notification received for module:', data.module);
+          if (data.module && window.onModuleRefresh) {
+            window.onModuleRefresh(data.module);
+          }
+        } else if (data.type === 'timer-status') {
+          // Timer status update - update timer UI
+          if (data.timerStatus && window.updateTimerStatus) {
+            window.updateTimerStatus(data.timerStatus, data.timestamp);
+          }
         } else if (data.type === 'storage-update') {
           // Storage update notification - fetch updated data from backend
           if (window.debugLog) window.debugLog('websocket', 'Storage update received for:', data.key);

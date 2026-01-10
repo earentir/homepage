@@ -394,7 +394,12 @@ function initSnmp() {
 
   // Initial check and interval
   setTimeout(refreshSnmp, 3000);
-  setInterval(refreshSnmp, window.timers ? window.timers.snmp.interval : 60000);
+  // Refresh is now handled via WebSocket refresh notifications (fallback only if WebSocket not connected)
+  setInterval(() => {
+    if (!window.wsIsConnected || !window.wsIsConnected()) {
+      refreshSnmp();
+    }
+  }, window.timers ? window.timers.snmp.interval : 60000);
 }
 
 // Export to window

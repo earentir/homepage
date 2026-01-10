@@ -93,3 +93,8 @@ func (s *Storage) Delete(key string) {
 
 // Global storage instance
 var globalStorage = NewStorage()
+
+// GetStorage returns the global storage instance.
+func GetStorage() *Storage {
+	return globalStorage
+}

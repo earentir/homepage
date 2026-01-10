@@ -154,8 +154,8 @@
 - [x] Move todo sorting/prioritization logic to backend - return sorted todos from API (NOTE: todos stored in localStorage, backend processes/sorts them)
 
 #### Timer Management
-- [ ] Move timer interval management to backend - server tracks refresh intervals and pushes updates via WebSocket
-- [ ] Remove client-side timer logic, rely on WebSocket push notifications for updates
+- [x] Move timer interval management to backend - server tracks refresh intervals and pushes updates via WebSocket
+- [x] Remove client-side timer logic, rely on WebSocket push notifications for updates
 
 ### More Complex (Requires architectural changes)
 

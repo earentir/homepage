@@ -735,6 +735,9 @@ func main() {
 		pingTicker := time.NewTicker(30 * time.Second)
 		defer pingTicker.Stop()
 
+		timerStatusTicker := time.NewTicker(1 * time.Second)
+		defer timerStatusTicker.Stop()
+
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		conn.SetPongHandler(func(string) error {
 			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -779,6 +782,18 @@ func main() {
 					log.Printf("WebSocket ping error: %v", err)
 					return
 				}
+			case <-timerStatusTicker.C:
+				// Send timer status updates for UI
+				timerManager := api.GetTimerManager()
+				timerStatus := timerManager.GetTimerStatus()
+				if err := conn.WriteJSON(map[string]any{
+					"type":         "timer-status",
+					"timerStatus":  timerStatus,
+					"timestamp":    time.Now().Unix(),
+				}); err != nil {
+					log.Printf("WebSocket timer status error: %v", err)
+					return
+				}
 			}
 		}
 	})
@@ -793,6 +808,11 @@ func main() {
 	if listenPort == "" {
 		listenPort = "8080"
 	}
+
+	// Start timer manager
+	log.Printf("Starting timer manager...")
+	timerManager := api.GetTimerManager()
+	go timerManager.Start()
 
 	log.Printf("Dashboard starting...")
 	log.Printf("  Listening on: %s", cfg.ListenAddr)
