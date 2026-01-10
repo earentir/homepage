@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -812,40 +811,10 @@ func main() {
 
 	// Initialize debug logger and load preferences
 	api.GetDebugLogger().UpdatePrefs()
-	
-	// Create module data fetcher for timer manager
-	moduleDataFetcher := func(ctx context.Context, timerKey string) (interface{}, error) {
-		switch timerKey {
-		case "ip":
-			// Fetch IP data
-			networkIPs := api.HostIPs()
-			publicIP, err := api.PublicIP(ctx, cfg.PublicIPTimeout)
-			resp := struct {
-				Network api.NetworkInfo  `json:"network"`
-				Public  api.PublicIPInfo `json:"public"`
-			}{
-				Network: api.NetworkInfo{
-					HostIPs: networkIPs,
-				},
-				Public: api.PublicIPInfo{},
-			}
-			if err != nil {
-				resp.Public.Error = err.Error()
-			} else {
-				resp.Public.IP = publicIP
-				resp.Public.PTR = api.ReverseDNS(publicIP, "1.1.1.1")
-			}
-			return resp, nil
-		// Add more modules here as needed
-		default:
-			return nil, nil // Return nil to use refresh notification instead
-		}
-	}
 
-	// Start timer manager with data fetcher
+	// Start timer manager
 	log.Printf("Starting timer manager...")
 	timerManager := api.GetTimerManager()
-	timerManager.SetDataFetcher(moduleDataFetcher)
 	go timerManager.Start()
 
 	log.Printf("Dashboard starting...")

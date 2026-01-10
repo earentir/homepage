@@ -163,58 +163,6 @@ async function refreshIP() {
   }
 }
 
-// Update IP data from WebSocket push (no HTTP fetch needed)
-function updateIPData(data) {
-  try {
-    // Display LAN IPs with PTR records
-    const lanIpsEl = document.getElementById("lanIps");
-    const lanPtrEl = document.getElementById("lanPtr");
-    if (data.network && data.network.hostIps && data.network.hostIps.length > 0) {
-      const ips = data.network.hostIps.map(ipInfo => ipInfo.ip);
-      const ptrs = data.network.hostIps.map(ipInfo => ipInfo.ptr).filter(p => p);
-      renderClickableList(lanIpsEl, ips);
-      if (ptrs.length > 0) {
-        renderClickableList(lanPtrEl, ptrs);
-      } else {
-        if (lanPtrEl) lanPtrEl.textContent = "";
-      }
-    } else {
-      if (lanIpsEl) lanIpsEl.textContent = "—";
-      if (lanPtrEl) lanPtrEl.textContent = "";
-    }
-
-    // Display Public IP with PTR
-    const pubIpEl = document.getElementById("pubIp");
-    const pubPtrEl = document.getElementById("pubPtr");
-    if (data.public && data.public.ip) {
-      if (pubIpEl) {
-        pubIpEl.innerHTML = '';
-        pubIpEl.appendChild(createClickableElement(data.public.ip));
-      }
-      if (pubPtrEl) {
-        if (data.public.ptr) {
-          pubPtrEl.innerHTML = '';
-          pubPtrEl.appendChild(createClickableElement(data.public.ptr));
-        } else {
-          pubPtrEl.textContent = "";
-        }
-      }
-      const pubIpErrEl = document.getElementById("pubIpErr");
-      if (pubIpErrEl) pubIpErrEl.textContent = "";
-    } else {
-      if (pubIpEl) pubIpEl.textContent = "—";
-      if (pubPtrEl) pubPtrEl.textContent = "";
-      const pubIpErrEl = document.getElementById("pubIpErr");
-      if (pubIpErrEl) pubIpErrEl.textContent = (data.public && data.public.error) || "";
-    }
-  } catch(err) {
-    if (window.debugError) window.debugError('network', "Error updating IP data:", err);
-  }
-}
-
-// Export updateIPData
-window.updateIPData = updateIPData;
-
 // Track offline state (managed by WebSocket)
 let isOffline = false;
 

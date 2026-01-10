@@ -53,16 +53,10 @@ function connect() {
             window.onWebSocketUpdate('system', data);
           }
         } else if (data.type === 'refresh') {
-          // Refresh notification for a module
+          // Refresh notification for a module - module will fetch its own data
           if (window.debugLog) window.debugLog('websocket', 'Refresh notification received for module:', data.module);
           if (data.module && window.onModuleRefresh) {
             window.onModuleRefresh(data.module);
-          }
-        } else if (data.type === 'module-update') {
-          // Module data update (includes data, no need to fetch)
-          if (window.debugLog) window.debugLog('websocket', 'Module data update received for:', data.module);
-          if (data.module && data.data && window.onModuleUpdate) {
-            window.onModuleUpdate(data.module, data.data);
           }
         } else if (data.type === 'timer-status') {
           // Timer status update - update timer UI

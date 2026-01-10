@@ -176,11 +176,11 @@ async function initApp() {
     window.initWebSocket();
   }
 
-  // Set up WebSocket refresh handler (for modules that need to fetch data)
+  // Set up WebSocket refresh handler - modules receive refresh notifications and fetch their own data
   window.onModuleRefresh = function(moduleName) {
     if (window.debugLog) window.debugLog('app', 'WebSocket refresh notification for:', moduleName);
     
-    // Map timer keys to refresh handlers
+    // Map timer keys to refresh handlers - modules fetch their own data via HTTP
     const refreshMap = {
       'cpu': () => window.refreshCPU && window.refreshCPU(),
       'ram': () => window.refreshRAM && window.refreshRAM(),
@@ -201,21 +201,6 @@ async function initApp() {
         window.startTimer(moduleName);
       }
     }
-  };
-
-  // Set up WebSocket module data update handler (for modules that push data directly)
-  window.onModuleUpdate = function(moduleName, data) {
-    if (window.debugLog) window.debugLog('app', 'WebSocket module data update for:', moduleName);
-    
-    // Handle modules that receive data directly
-    if (moduleName === 'ip' && window.updateIPData) {
-      window.updateIPData(data);
-      // Update timer UI
-      if (window.startTimer) {
-        window.startTimer(moduleName);
-      }
-    }
-    // Add more modules here as they support data push
   };
 
   // Initialize sync status indicator
