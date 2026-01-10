@@ -43,6 +43,7 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/search-engines", h.HandleSearchEngines)
 	mux.HandleFunc("/api/search/history/filter", h.HandleSearchHistoryFilter)
 	mux.HandleFunc("/api/search/autocomplete", h.HandleSearchAutocomplete)
+	mux.HandleFunc("/api/bookmarks", h.HandleBookmarks)
 	mux.HandleFunc("/api/modules", h.HandleModules)
 	mux.HandleFunc("/api/calendar/process", h.HandleCalendarProcess)
 	mux.HandleFunc("/api/calendar/month", h.HandleCalendarMonth)
@@ -1005,7 +1006,7 @@ func (h *Handler) HandleSearchHistoryFilter(w http.ResponseWriter, r *http.Reque
 	WriteJSON(w, map[string]any{"history": filtered})
 }
 
-// HandleSearchAutocomplete returns autocomplete suggestions from search history.
+// HandleSearchAutocomplete returns autocomplete suggestions from search history and bookmarks.
 func (h *Handler) HandleSearchAutocomplete(w http.ResponseWriter, r *http.Request) {
 	var history []SearchHistoryItem
 	if err := json.NewDecoder(r.Body).Decode(&history); err != nil {
@@ -1028,23 +1029,107 @@ func (h *Handler) HandleSearchAutocomplete(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Remove duplicates (by term, case-insensitive) and reverse to show newest first
-	uniqueItems := make([]SearchHistoryItem, 0)
+	historyItems := make([]SearchHistoryItem, 0)
 	seen := make(map[string]bool)
 	for i := len(matched) - 1; i >= 0; i-- {
 		item := matched[i]
 		key := strings.ToLower(item.Term)
 		if !seen[key] {
 			seen[key] = true
-			uniqueItems = append(uniqueItems, item)
+			historyItems = append(historyItems, item)
 		}
 	}
 
-	// Limit to 10 items
+	// Get and filter bookmarks
+	bookmarkItems := make([]SearchHistoryItem, 0)
+	// Detect browser from User-Agent to prioritize that browser's bookmarks
+	userAgent := r.Header.Get("User-Agent")
+	preferredBrowser := DetectBrowserFromUserAgent(userAgent)
+	log.Printf("[BOOKMARKS] User-Agent: %s", userAgent)
+	log.Printf("[BOOKMARKS] Detected browser: %s", preferredBrowser)
+	
+	bookmarks, err := GetBookmarks(preferredBrowser)
+	log.Printf("[BOOKMARKS] GetBookmarks result: count=%d, error=%v", len(bookmarks), err)
+	
+	if err == nil && len(bookmarks) > 0 {
+		filteredBookmarks := FilterBookmarks(bookmarks, term)
+		log.Printf("[BOOKMARKS] After filtering with term '%s': %d bookmarks match", term, len(filteredBookmarks))
+		
+		// Convert bookmarks to SearchHistoryItem format
+		for _, bookmark := range filteredBookmarks {
+			// Use bookmark title as the term, and mark it as a bookmark
+			bookmarkItem := SearchHistoryItem{
+				Term:      bookmark.Title,
+				Engine:    "Bookmark",
+				Timestamp: bookmark.URL, // Store URL in timestamp field
+			}
+			// Check if we already have this exact bookmark URL in history to avoid duplicates
+			// Use URL as key since titles might be duplicated across different URLs
+			key := strings.ToLower(bookmark.URL)
+			if !seen[key] {
+				seen[key] = true
+				bookmarkItems = append(bookmarkItems, bookmarkItem)
+			}
+		}
+		log.Printf("[BOOKMARKS] Added %d bookmark items to autocomplete results", len(bookmarkItems))
+	} else {
+		if err != nil {
+			log.Printf("[BOOKMARKS] Error loading bookmarks: %v", err)
+		} else {
+			log.Printf("[BOOKMARKS] No bookmarks found (count: %d)", len(bookmarks))
+		}
+	}
+
+	// Combine results: prioritize bookmarks, then history
+	// Limit history to 7 items to ensure bookmarks can appear
+	maxHistory := 7
+	if len(historyItems) > maxHistory {
+		historyItems = historyItems[:maxHistory]
+	}
+
+	// Combine: bookmarks first (up to 5), then history (up to 7), total max 10
+	uniqueItems := make([]SearchHistoryItem, 0)
+	maxBookmarks := 5
+	if len(bookmarkItems) > maxBookmarks {
+		bookmarkItems = bookmarkItems[:maxBookmarks]
+	}
+	uniqueItems = append(uniqueItems, bookmarkItems...)
+	uniqueItems = append(uniqueItems, historyItems...)
+
+	// Final limit to 10 items
 	if len(uniqueItems) > 10 {
 		uniqueItems = uniqueItems[:10]
 	}
 
 	WriteJSON(w, map[string]any{"suggestions": uniqueItems})
+}
+
+// HandleBookmarks returns all bookmarks for debugging purposes.
+func (h *Handler) HandleBookmarks(w http.ResponseWriter, r *http.Request) {
+	// Optionally filter by browser from query parameter or User-Agent
+	preferredBrowser := r.URL.Query().Get("browser")
+	if preferredBrowser == "" {
+		userAgent := r.Header.Get("User-Agent")
+		preferredBrowser = DetectBrowserFromUserAgent(userAgent)
+	}
+
+	bookmarks, err := GetBookmarks(preferredBrowser)
+	if err != nil {
+		WriteJSON(w, map[string]any{
+			"error":            err.Error(),
+			"bookmarks":        []Bookmark{},
+			"count":            0,
+			"preferredBrowser": preferredBrowser,
+		})
+		return
+	}
+
+	WriteJSON(w, map[string]any{
+		"bookmarks":        bookmarks,
+		"count":            len(bookmarks),
+		"error":            nil,
+		"preferredBrowser": preferredBrowser,
+	})
 }
 
 // HandleModules returns metadata for all available modules.

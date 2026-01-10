@@ -448,7 +448,13 @@ async function renderAutocomplete(filter = '') {
     if (!item || !item.term) return;
     
     const isDirectUrl = item.engine === "Direct URL" || isValidUrlOrIpSync(item.term);
-    const iconClass = isDirectUrl ? 'fas fa-link' : 'fas fa-history';
+    const isBookmark = item.engine === "Bookmark";
+    let iconClass = 'fas fa-history';
+    if (isDirectUrl) {
+      iconClass = 'fas fa-link';
+    } else if (isBookmark) {
+      iconClass = 'fas fa-bookmark';
+    }
     
     const div = document.createElement('div');
     div.className = 'autocomplete-item';
@@ -468,8 +474,8 @@ async function renderAutocomplete(filter = '') {
       updateAutocompleteSelection();
     });
     div.addEventListener('mousedown', (e) => {
-      // Don't prevent default on Shift+Click for direct URLs
-      if (!(e.shiftKey && (item.engine === "Direct URL" || isValidUrlOrIpSync(item.term)))) {
+      // Don't prevent default on Shift+Click for direct URLs or bookmarks
+      if (!(e.shiftKey && (item.engine === "Direct URL" || item.engine === "Bookmark" || isValidUrlOrIpSync(item.term)))) {
         e.preventDefault(); // Prevent input from losing focus
       }
     });
@@ -508,6 +514,7 @@ function selectAutocompleteItem(index, event = null) {
 
   const term = item.term;
   const isDirectUrl = item.engine === "Direct URL" || isValidUrlOrIpSync(term);
+  const isBookmark = item.engine === "Bookmark";
   const shiftPressed = event && event.shiftKey;
 
   // Get preferences
@@ -533,6 +540,35 @@ function selectAutocompleteItem(index, event = null) {
     }
   } catch (e) {
     // Use defaults
+  }
+
+  // Handle bookmarks - always navigate to bookmark URL
+  if (isBookmark && item.timestamp) {
+    // Use timestamp field which contains the bookmark URL
+    hideAutocomplete();
+    
+    // Get same tab preference
+    let sameTab = true;
+    try {
+      const saved = window.loadFromStorage('sameTabOnSearch');
+      if (saved === null || saved === undefined) {
+        sameTab = true;
+      } else if (typeof saved === 'boolean') {
+        sameTab = saved;
+      } else {
+        sameTab = saved === 'true' || saved === true;
+      }
+    } catch (e) {
+      sameTab = true;
+    }
+
+    const url = normalizeUrl(item.timestamp);
+    if (sameTab) {
+      window.location.href = url;
+    } else {
+      window.open(url, "_blank", "noreferrer");
+    }
+    return;
   }
 
   // Handle direct URLs
@@ -567,7 +603,7 @@ function selectAutocompleteItem(index, event = null) {
     // Otherwise, just fill the search box (default behavior)
   } else {
     // For regular searches, switch engine if preference is enabled
-    if (switchEngine && item.engine && item.engine !== "Direct URL") {
+    if (switchEngine && item.engine && item.engine !== "Direct URL" && item.engine !== "Bookmark") {
       const engineIndex = engines.findIndex(e => e.name === item.engine);
       if (engineIndex >= 0) {
         // Check if engine is enabled
