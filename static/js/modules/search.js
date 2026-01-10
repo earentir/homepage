@@ -40,6 +40,18 @@ async function initSearchEngines() {
   // Load engines from backend
   await loadSearchEngines();
   
+  // Ensure enabledSearchEngines is synced to backend if it exists locally
+  // This prevents loss of settings after server restart
+  try {
+    const localEnabled = window.loadFromStorage('enabledSearchEngines');
+    if (localEnabled && Array.isArray(localEnabled) && localEnabled.length > 0) {
+      // Force sync to backend to ensure it's preserved
+      window.saveToStorage('enabledSearchEngines', localEnabled);
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('search', 'Error syncing enabledSearchEngines:', e);
+  }
+  
   // Load saved engine
   try {
     const saved = window.loadFromStorage('searchEngine');
@@ -48,14 +60,16 @@ async function initSearchEngines() {
       let enabledEngines = [];
       try {
         const enabledSaved = window.loadFromStorage('enabledSearchEngines');
-        if (enabledSaved) {
+        if (enabledSaved && Array.isArray(enabledSaved) && enabledSaved.length > 0) {
           enabledEngines = enabledSaved;
         } else {
           // Default: all engines enabled
           enabledEngines = engines.map(e => e.name);
+          window.saveToStorage('enabledSearchEngines', enabledEngines);
         }
       } catch (e) {
         enabledEngines = engines.map(e => e.name);
+        window.saveToStorage('enabledSearchEngines', enabledEngines);
       }
 
       // If saved engine is enabled, use it
@@ -206,8 +220,10 @@ function renderEngines() {
   let enabledEngines = [];
   try {
     const saved = window.loadFromStorage('enabledSearchEngines');
-    if (saved) {
+    if (saved && Array.isArray(saved) && saved.length > 0) {
       enabledEngines = saved;
+      // Ensure it's synced to backend
+      window.saveToStorage('enabledSearchEngines', enabledEngines);
     } else {
       // Default: all engines enabled - save this to localStorage
       enabledEngines = engines.map(e => e.name);
