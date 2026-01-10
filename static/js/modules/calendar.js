@@ -604,15 +604,35 @@ function deleteEvent(id) {
   renderUpcomingEvents(); // renderUpcomingEvents is now async but we don't await it (fire and forget)
 }
 
-function saveEventFromForm() {
+async function saveEventFromForm() {
   const id = document.getElementById('event-id').value;
   const title = document.getElementById('event-title').value.trim();
   const date = document.getElementById('event-date').value;
   const time = document.getElementById('event-time').value;
 
-  if (!title || !date) {
-    alert('Title and date are required');
-    return;
+  // Validate using backend
+  try {
+    const res = await fetch('/api/utils/validate-input', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'calendar-event',
+        data: { title, date, time }
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.valid) {
+        alert(data.error || 'Validation failed');
+        return;
+      }
+    }
+  } catch (e) {
+    // Fallback to client-side validation if backend fails
+    if (!title || !date) {
+      alert('Title and date are required');
+      return;
+    }
   }
 
   if (id) {

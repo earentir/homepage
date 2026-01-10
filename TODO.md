@@ -191,11 +191,11 @@
 
 #### Layout System
 - [x] Move layout configuration storage to backend (via localStorage sync - layout stored in localStorage, synced to backend for processing)
-- [ ] Move layout validation to backend - ensure layout config is valid before saving (NOTE: layout stored in localStorage, backend validates on sync)
+- [x] Move layout validation to backend - ensure layout config is valid before saving (NOTE: layout stored in localStorage, backend validates on sync)
 
 #### Error Handling & Validation
-- [ ] Move input validation to backend - validate all user inputs server-side
-- [ ] Move error message generation to backend - return user-friendly errors from API
+- [x] Move input validation to backend - validate all user inputs server-side
+- [x] Move error message generation to backend - return user-friendly errors from API
 
 ### Keep in Frontend (UI-specific, should stay)
 - Drag-and-drop UI interactions (result stored in localStorage, synced to backend)

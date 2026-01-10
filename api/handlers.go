@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -68,8 +69,10 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/storage/get", h.HandleStorageGet)
 	mux.HandleFunc("/api/storage/get-all", h.HandleStorageGetAll)
 	mux.HandleFunc("/api/storage/status", h.HandleStorageStatus)
+	mux.HandleFunc("/api/layout/validate", h.HandleLayoutValidate)
 	mux.HandleFunc("/api/utils/validate-url", h.HandleValidateURL)
 	mux.HandleFunc("/api/utils/normalize-url", h.HandleNormalizeURL)
+	mux.HandleFunc("/api/utils/validate-input", h.HandleValidateInput)
 	mux.HandleFunc("/healthz", h.HandleHealthz)
 }
 
@@ -794,6 +797,25 @@ func (h *Handler) HandleStorageSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate layout config if it's being synced
+	if syncData.Key == "layoutConfig" {
+		var layoutConfig LayoutConfig
+		// Try to decode the value
+		configJSON, err := json.Marshal(syncData.Value)
+		if err == nil {
+			if err := json.Unmarshal(configJSON, &layoutConfig); err == nil {
+				valid, errorMsg := ValidateLayoutConfig(layoutConfig)
+				if !valid {
+					WriteJSON(w, map[string]any{
+						"error": "Invalid layout configuration: " + errorMsg,
+						"valid": false,
+					})
+					return
+				}
+			}
+		}
+	}
+
 	// Store in backend storage
 	globalStorage.Set(syncData.Key, syncData.Value, syncData.Version)
 
@@ -1094,6 +1116,269 @@ func (h *Handler) HandleNormalizeURL(w http.ResponseWriter, r *http.Request) {
 
 	normalized := NormalizeURL(input)
 	WriteJSON(w, map[string]any{"normalized": normalized, "input": input})
+}
+
+// LayoutConfig represents the layout configuration structure.
+type LayoutConfig struct {
+	MaxWidth int          `json:"maxWidth"`
+	Rows     []LayoutRow  `json:"rows"`
+}
+
+// LayoutRow represents a row in the layout.
+type LayoutRow struct {
+	Cols    int           `json:"cols"`
+	Modules []interface{} `json:"modules"` // Can be string (module ID), []string (split modules), or null
+}
+
+// ValidateLayoutConfig validates a layout configuration.
+func ValidateLayoutConfig(config LayoutConfig) (bool, string) {
+	// Validate maxWidth
+	if config.MaxWidth < 0 || config.MaxWidth > 100 {
+		return false, "maxWidth must be between 0 and 100"
+	}
+
+	// Validate rows
+	if len(config.Rows) == 0 {
+		return false, "layout must have at least one row"
+	}
+
+	for i, row := range config.Rows {
+		// Validate cols
+		if row.Cols < 1 || row.Cols > 12 {
+			return false, fmt.Sprintf("row %d: cols must be between 1 and 12", i+1)
+		}
+
+		// Validate modules array
+		if row.Modules == nil {
+			return false, fmt.Sprintf("row %d: modules array cannot be null", i+1)
+		}
+
+		// Validate module slots
+		for j, moduleSlot := range row.Modules {
+			if moduleSlot == nil {
+				continue // null is allowed (empty slot)
+			}
+
+			switch v := moduleSlot.(type) {
+			case string:
+				// Single module ID - validate it's not empty
+				if v == "" {
+					return false, fmt.Sprintf("row %d, column %d: module ID cannot be empty string", i+1, j+1)
+				}
+			case []interface{}:
+				// Split modules - validate array
+				if len(v) == 0 {
+					return false, fmt.Sprintf("row %d, column %d: split modules array cannot be empty", i+1, j+1)
+				}
+				// Validate each module ID in split
+				for k, modID := range v {
+					if modIDStr, ok := modID.(string); ok {
+						if modIDStr == "" {
+							return false, fmt.Sprintf("row %d, column %d, split %d: module ID cannot be empty string", i+1, j+1, k+1)
+						}
+					} else {
+						return false, fmt.Sprintf("row %d, column %d, split %d: module ID must be a string", i+1, j+1, k+1)
+					}
+				}
+			default:
+				return false, fmt.Sprintf("row %d, column %d: module slot must be a string, array, or null", i+1, j+1)
+			}
+		}
+	}
+
+	return true, ""
+}
+
+// HandleLayoutValidate validates a layout configuration.
+func (h *Handler) HandleLayoutValidate(w http.ResponseWriter, r *http.Request) {
+	var config LayoutConfig
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		WriteJSON(w, map[string]any{
+			"valid": false,
+			"error": "Invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	valid, errorMsg := ValidateLayoutConfig(config)
+	if valid {
+		WriteJSON(w, map[string]any{
+			"valid": true,
+		})
+	} else {
+		WriteJSON(w, map[string]any{
+			"valid": false,
+			"error": errorMsg,
+		})
+	}
+}
+
+// InputValidationRequest represents a request to validate user input.
+type InputValidationRequest struct {
+	Type  string                 `json:"type"`  // "calendar-event", "todo", "monitoring", etc.
+	Data  map[string]interface{} `json:"data"`
+}
+
+// ValidateInput validates user input based on type.
+func ValidateInput(req InputValidationRequest) (bool, string) {
+	switch req.Type {
+	case "calendar-event":
+		return validateCalendarEvent(req.Data)
+	case "todo":
+		return validateTodo(req.Data)
+	case "monitoring":
+		return validateMonitoring(req.Data)
+	default:
+		return false, "Unknown validation type: " + req.Type
+	}
+}
+
+// validateCalendarEvent validates a calendar event.
+func validateCalendarEvent(data map[string]interface{}) (bool, string) {
+	title, ok := data["title"].(string)
+	if !ok || strings.TrimSpace(title) == "" {
+		return false, "Title is required"
+	}
+
+	date, ok := data["date"].(string)
+	if !ok || strings.TrimSpace(date) == "" {
+		return false, "Date is required"
+	}
+
+	// Validate date format (YYYY-MM-DD)
+	if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`).MatchString(date) {
+		return false, "Date must be in YYYY-MM-DD format"
+	}
+
+	// Validate time format if provided (HH:MM)
+	if timeStr, ok := data["time"].(string); ok && timeStr != "" {
+		if !regexp.MustCompile(`^\d{2}:\d{2}$`).MatchString(timeStr) {
+			return false, "Time must be in HH:MM format (24-hour)"
+		}
+		// Validate hour and minute ranges
+		parts := strings.Split(timeStr, ":")
+		if len(parts) == 2 {
+			hour, err1 := strconv.Atoi(parts[0])
+			minute, err2 := strconv.Atoi(parts[1])
+			if err1 != nil || err2 != nil || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+				return false, "Time must be valid (hour: 0-23, minute: 0-59)"
+			}
+		}
+	}
+
+	return true, ""
+}
+
+// validateTodo validates a todo item.
+func validateTodo(data map[string]interface{}) (bool, string) {
+	title, ok := data["title"].(string)
+	if !ok || strings.TrimSpace(title) == "" {
+		return false, "Title is required"
+	}
+
+	// Validate priority if provided
+	if priority, ok := data["priority"].(string); ok && priority != "" {
+		validPriorities := map[string]bool{"low": true, "medium": true, "high": true}
+		if !validPriorities[priority] {
+			return false, "Priority must be 'low', 'medium', or 'high'"
+		}
+	}
+
+	// Validate due date format if provided (YYYY-MM-DD)
+	if dueDate, ok := data["dueDate"].(string); ok && dueDate != "" {
+		if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`).MatchString(dueDate) {
+			return false, "Due date must be in YYYY-MM-DD format"
+		}
+	}
+
+	return true, ""
+}
+
+// validateMonitoring validates a monitoring item.
+func validateMonitoring(data map[string]interface{}) (bool, string) {
+	name, ok := data["name"].(string)
+	if !ok || strings.TrimSpace(name) == "" {
+		return false, "Name is required"
+	}
+
+	monType, ok := data["type"].(string)
+	if !ok {
+		return false, "Type is required"
+	}
+
+	validTypes := map[string]bool{"http": true, "port": true, "ping": true}
+	if !validTypes[monType] {
+		return false, "Type must be 'http', 'port', or 'ping'"
+	}
+
+	switch monType {
+	case "http":
+		url, ok := data["url"].(string)
+		if !ok || strings.TrimSpace(url) == "" {
+			return false, "URL is required for HTTP monitoring"
+		}
+		// Basic URL validation
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			return false, "URL must start with http:// or https://"
+		}
+	case "port", "ping":
+		host, ok := data["host"].(string)
+		if !ok || strings.TrimSpace(host) == "" {
+			return false, "Host is required for " + monType + " monitoring"
+		}
+		if monType == "port" {
+			port, ok := data["port"]
+			if !ok {
+				return false, "Port is required for port monitoring"
+			}
+			portNum, ok := port.(float64) // JSON numbers come as float64
+			if !ok {
+				// Try as int
+				if portInt, ok := port.(int); ok {
+					portNum = float64(portInt)
+				} else {
+					return false, "Port must be a number"
+				}
+			}
+			if portNum < 1 || portNum > 65535 {
+				return false, "Port must be between 1 and 65535"
+			}
+		}
+	}
+
+	return true, ""
+}
+
+// HandleValidateInput validates user input.
+func (h *Handler) HandleValidateInput(w http.ResponseWriter, r *http.Request) {
+	var req InputValidationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, map[string]any{
+			"valid": false,
+			"error": "Invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	if req.Type == "" {
+		WriteJSON(w, map[string]any{
+			"valid": false,
+			"error": "Type is required",
+		})
+		return
+	}
+
+	valid, errorMsg := ValidateInput(req)
+	if valid {
+		WriteJSON(w, map[string]any{
+			"valid": true,
+		})
+	} else {
+		WriteJSON(w, map[string]any{
+			"valid": false,
+			"error": errorMsg,
+		})
+	}
 }
 
 // HandleHealthz is the health check endpoint.

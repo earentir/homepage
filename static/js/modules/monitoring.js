@@ -448,44 +448,68 @@ function initMonitoring() {
   }
 
   if (saveBtn) {
-    saveBtn.addEventListener('click', () => {
+    saveBtn.addEventListener('click', async () => {
       const name = document.getElementById('mon-name').value.trim();
       const type = document.getElementById('mon-type').value;
-
-      if (!name) {
-        alert('Please enter a name');
-        return;
-      }
 
       let mon = { id: 'mon-' + Date.now(), name, type };
 
       if (type === 'http') {
         const url = document.getElementById('mon-url').value.trim();
-        if (!url) {
-          alert('Please enter a URL');
-          return;
-        }
         mon.url = url;
       } else if (type === 'port') {
         const host = document.getElementById('mon-host').value.trim();
         const port = parseInt(document.getElementById('mon-port').value);
-        if (!host) {
-          alert('Please enter a host');
-          return;
-        }
-        if (!port || port < 1 || port > 65535) {
-          alert('Please enter a valid port (1-65535)');
-          return;
-        }
         mon.host = host;
         mon.port = port;
       } else if (type === 'ping') {
         const host = document.getElementById('mon-host').value.trim();
-        if (!host) {
-          alert('Please enter a host');
+        mon.host = host;
+      }
+
+      // Validate using backend
+      try {
+        const res = await fetch('/api/utils/validate-input', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'monitoring',
+            data: mon
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.valid) {
+            alert(data.error || 'Validation failed');
+            return;
+          }
+        }
+      } catch (e) {
+        // Fallback to client-side validation if backend fails
+        if (!name) {
+          alert('Please enter a name');
           return;
         }
-        mon.host = host;
+        if (type === 'http') {
+          if (!mon.url) {
+            alert('Please enter a URL');
+            return;
+          }
+        } else if (type === 'port') {
+          if (!mon.host) {
+            alert('Please enter a host');
+            return;
+          }
+          if (!mon.port || mon.port < 1 || mon.port > 65535) {
+            alert('Please enter a valid port (1-65535)');
+            return;
+          }
+        } else if (type === 'ping') {
+          if (!mon.host) {
+            alert('Please enter a host');
+            return;
+          }
+        }
       }
 
       const editIndex = form.dataset.editIndex;

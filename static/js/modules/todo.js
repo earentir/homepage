@@ -286,15 +286,35 @@ function deleteTodo(id) {
   renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
 }
 
-function saveTodoFromForm() {
+async function saveTodoFromForm() {
   const id = document.getElementById('todo-id').value;
   const title = document.getElementById('todo-title').value.trim();
   const priority = document.getElementById('todo-priority').value;
   const dueDate = document.getElementById('todo-due-date').value;
 
-  if (!title) {
-    alert('Title is required');
-    return;
+  // Validate using backend
+  try {
+    const res = await fetch('/api/utils/validate-input', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'todo',
+        data: { title, priority, dueDate }
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.valid) {
+        alert(data.error || 'Validation failed');
+        return;
+      }
+    }
+  } catch (e) {
+    // Fallback to client-side validation if backend fails
+    if (!title) {
+      alert('Title is required');
+      return;
+    }
   }
 
   if (id) {
