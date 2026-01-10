@@ -56,8 +56,28 @@ function dateHasEvents(dateStr) {
   return calendarEvents.some(evt => evt.date === dateStr);
 }
 
-// Get events for a specific date
-function getEventsForDate(dateStr) {
+// Get events for a specific date - uses backend processing
+async function getEventsForDate(dateStr) {
+  if (calendarEvents.length === 0) return [];
+
+  try {
+    const res = await fetch(`/api/calendar/events-for-date?date=${encodeURIComponent(dateStr)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calendarEvents),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.events && Array.isArray(data.events)) {
+        return data.events;
+      }
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('calendar', 'Error getting events for date:', e);
+  }
+
+  // Fallback to client-side filtering if backend fails
   return calendarEvents.filter(evt => evt.date === dateStr);
 }
 
@@ -189,14 +209,14 @@ async function renderCalendar() {
   container.querySelectorAll('.cal-day.has-event').forEach(el => {
     el.addEventListener('click', () => {
       const date = el.getAttribute('data-date');
-      showDayEvents(date);
+      showDayEvents(date); // showDayEvents is now async but we don't await it (fire and forget)
     });
   });
 }
 
 // Show events for a specific day (tooltip or modal)
-function showDayEvents(dateStr) {
-  const events = getEventsForDate(dateStr);
+async function showDayEvents(dateStr) {
+  const events = await getEventsForDate(dateStr);
   if (events.length === 0) return;
 
   let msg = 'Events for ' + dateStr + ':\n\n';
@@ -309,7 +329,7 @@ async function renderWeekCalendar() {
     container.querySelectorAll('.week-day').forEach(el => {
       el.addEventListener('click', () => {
         const date = el.getAttribute('data-date');
-        showDayEvents(date);
+        showDayEvents(date); // showDayEvents is now async but we don't await it (fire and forget)
       });
     });
     return;
@@ -354,7 +374,8 @@ async function renderWeekCalendar() {
     const dayNum = currentDay.getDate();
     const hasEvents = dateHasEvents(dateStr);
     const isToday = dateStr === todayStr;
-    const events = getEventsForDate(dateStr);
+    // Note: In fallback mode, we use client-side filtering for events
+    const events = calendarEvents.filter(evt => evt.date === dateStr);
 
     let classes = 'week-day';
     if (hasEvents) classes += ' has-event';
@@ -386,7 +407,7 @@ async function renderWeekCalendar() {
   container.querySelectorAll('.week-day').forEach(el => {
     el.addEventListener('click', () => {
       const date = el.getAttribute('data-date');
-      showDayEvents(date);
+      showDayEvents(date); // showDayEvents is now async but we don't await it (fire and forget)
     });
   });
 }

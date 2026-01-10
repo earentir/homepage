@@ -46,6 +46,7 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/calendar/process", h.HandleCalendarProcess)
 	mux.HandleFunc("/api/calendar/month", h.HandleCalendarMonth)
 	mux.HandleFunc("/api/calendar/week", h.HandleCalendarWeek)
+	mux.HandleFunc("/api/calendar/events-for-date", h.HandleCalendarEventsForDate)
 	mux.HandleFunc("/api/todos/process", h.HandleTodosProcess)
 	mux.HandleFunc("/api/geocode", h.HandleGeocode)
 	mux.HandleFunc("/api/github", h.HandleGitHub)
@@ -1030,6 +1031,24 @@ func (h *Handler) HandleCalendarWeek(w http.ResponseWriter, r *http.Request) {
 
 	data := GetWeekCalendarData(weekStart, workWeekOnly, startDay, events)
 	WriteJSON(w, data)
+}
+
+// HandleCalendarEventsForDate returns events for a specific date.
+func (h *Handler) HandleCalendarEventsForDate(w http.ResponseWriter, r *http.Request) {
+	dateStr := r.URL.Query().Get("date")
+	if dateStr == "" {
+		WriteJSON(w, map[string]any{"error": "Missing 'date' parameter"})
+		return
+	}
+
+	var events []CalendarEvent
+	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	dayEvents := GetEventsForDate(events, dateStr)
+	WriteJSON(w, map[string]any{"events": dayEvents})
 }
 
 // HandleTodosProcess processes todos and returns sorted/prioritized todos.

@@ -185,9 +185,9 @@
 - [x] Move search engine switching logic to backend - server provides engine list via API (NOTE: current engine stored in localStorage, backend provides engine list)
 
 #### Calendar/Todo Logic
-- [ ] Move calendar event calculations (upcoming events, date filtering) to backend (NOTE: events stored in localStorage, backend calculates)
-- [ ] Move todo prioritization and sorting to backend (NOTE: todos stored in localStorage, backend sorts/prioritizes)
-- [ ] Move calendar date navigation logic to backend - server calculates month/week views (NOTE: events stored in localStorage, backend calculates views)
+- [x] Move calendar event calculations (upcoming events, date filtering) to backend (NOTE: events stored in localStorage, backend calculates)
+- [x] Move todo prioritization and sorting to backend (NOTE: todos stored in localStorage, backend sorts/prioritizes)
+- [x] Move calendar date navigation logic to backend - server calculates month/week views (NOTE: events stored in localStorage, backend calculates views)
 
 #### Layout System
 - [x] Move layout configuration storage to backend (via localStorage sync - layout stored in localStorage, synced to backend for processing)
