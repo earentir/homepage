@@ -8,11 +8,9 @@ function collectAllConfig() {
     const key = localStorage.key(i);
     if (key) {
       try {
-        const value = localStorage.getItem(key);
-        // Try to parse as JSON, if fails store as string
-        try {
-          config[key] = JSON.parse(value);
-        } catch {
+        // Use loadFromStorage which handles JSON parsing automatically
+        const value = window.loadFromStorage(key);
+        if (value !== null) {
           config[key] = value;
         }
       } catch (e) {
@@ -30,11 +28,8 @@ function importConfig(configData) {
 
   for (const [key, value] of Object.entries(configData)) {
     try {
-      if (typeof value === 'object') {
-        localStorage.setItem(key, JSON.stringify(value));
-      } else {
-        localStorage.setItem(key, value);
-      }
+      // Use saveToStorage which handles JSON automatically
+      window.saveToStorage(key, value);
       imported++;
     } catch (e) {
       if (window.debugError) window.debugError('config', 'Error importing key:', key, e);

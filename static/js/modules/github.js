@@ -15,9 +15,9 @@ const githubDisplayTypes = {
 
 let githubModules = [];
 try {
-  const saved = localStorage.getItem('githubModules');
+  const saved = window.loadFromStorage('githubModules');
   if (saved) {
-    githubModules = JSON.parse(saved);
+    githubModules = saved;
   } else {
     githubModules = defaultGitHubModules;
   }
@@ -26,14 +26,14 @@ try {
 }
 
 function saveGitHubModules() {
-  localStorage.setItem('githubModules', JSON.stringify(githubModules));
+  window.saveToStorage('githubModules', githubModules);
 }
 
 // GitHub data cache functions
 function getGitHubCache() {
   try {
-    const cache = localStorage.getItem('githubDataCache');
-    return cache ? JSON.parse(cache) : {};
+    const cache = window.loadFromStorage('githubDataCache');
+    return cache || {};
   } catch (e) {
     return {};
   }
@@ -41,7 +41,7 @@ function getGitHubCache() {
 
 function saveGitHubCache(cache) {
   try {
-    localStorage.setItem('githubDataCache', JSON.stringify(cache));
+    window.saveToStorage('githubDataCache', cache);
   } catch (e) {
     if (window.debugError) window.debugError('github', 'Error saving GitHub cache:', e);
   }
@@ -279,7 +279,7 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
     }
 
     // Fetch from API (timer expired or forced refresh or no cache)
-    const githubToken = localStorage.getItem('githubToken') || '';
+    const githubToken = window.loadFromStorage('githubToken') || '';
     const maxItems = mod.maxItems || 5;
     let url = "/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType + "&count=" + maxItems;
     if (githubToken) url += "&token=" + encodeURIComponent(githubToken);

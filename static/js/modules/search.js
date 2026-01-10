@@ -50,14 +50,14 @@ let selectedAutocompleteIndex = -1;
 
 // Load saved engine
 try {
-  const saved = localStorage.getItem('searchEngine');
+  const saved = window.loadFromStorage('searchEngine');
   if (saved) {
     // Check if saved engine is enabled
     let enabledEngines = [];
     try {
-      const enabledSaved = localStorage.getItem('enabledSearchEngines');
+      const enabledSaved = window.loadFromStorage('enabledSearchEngines');
       if (enabledSaved) {
-        enabledEngines = JSON.parse(enabledSaved);
+        enabledEngines = enabledSaved;
       } else {
         // Default: all engines enabled
         enabledEngines = engines.map(e => e.name);
@@ -76,7 +76,7 @@ try {
         const firstEnabled = engines.findIndex(e => e.name === enabledEngines[0]);
         if (firstEnabled >= 0) {
           currentEngineIndex = firstEnabled;
-          localStorage.setItem('searchEngine', enabledEngines[0]);
+          window.saveToStorage('searchEngine', enabledEngines[0]);
         }
       }
     }
@@ -85,9 +85,9 @@ try {
 
 function loadSearchHistory() {
   try {
-    const stored = localStorage.getItem('searchHistory');
+    const stored = window.loadFromStorage('searchHistory');
     if (stored) {
-      searchHistory = JSON.parse(stored);
+      searchHistory = stored;
     }
   } catch (e) {
     if (window.debugError) {
@@ -101,7 +101,7 @@ function saveSearchHistory() {
   if (searchHistory.length > 100) {
     searchHistory = searchHistory.slice(-100);
   }
-  localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+  window.saveToStorage('searchHistory', searchHistory);
 }
 
 function addToSearchHistory(term, engineName) {
@@ -190,18 +190,18 @@ function renderEngines() {
   // Always get enabled engines from localStorage (single source of truth)
   let enabledEngines = [];
   try {
-    const saved = localStorage.getItem('enabledSearchEngines');
+    const saved = window.loadFromStorage('enabledSearchEngines');
     if (saved) {
-      enabledEngines = JSON.parse(saved);
+      enabledEngines = saved;
     } else {
       // Default: all engines enabled - save this to localStorage
       enabledEngines = engines.map(e => e.name);
-      localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+      window.saveToStorage('enabledSearchEngines', enabledEngines);
     }
   } catch (e) {
     // If error, default to all enabled
     enabledEngines = engines.map(e => e.name);
-    localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+    window.saveToStorage('enabledSearchEngines', enabledEngines);
   }
 
   // Filter engines to only show enabled ones
@@ -211,7 +211,7 @@ function renderEngines() {
     // Fallback: if no engines enabled, show all and save to localStorage
     enabledEnginesList.push(...engines);
     enabledEngines = engines.map(e => e.name);
-    localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+    window.saveToStorage('enabledSearchEngines', enabledEngines);
   }
 
   // Group engines by category
@@ -257,7 +257,7 @@ function renderEngines() {
         currentEngineIndex = originalIndex;
         updateEngineBtn();
         menu.style.display = "none";
-        localStorage.setItem('searchEngine', e.name);
+        window.saveToStorage('searchEngine', e.name);
         document.getElementById("q").focus();
       };
       categoryDiv.appendChild(btn);
@@ -468,10 +468,23 @@ function selectAutocompleteItem(index, event = null) {
   let directVisitUrls = true;
   let switchEngine = true;
   try {
-    const directVisitSaved = localStorage.getItem('directVisitUrlsFromSearch');
-    directVisitUrls = directVisitSaved === null ? true : directVisitSaved === 'true';
-    const switchEngineSaved = localStorage.getItem('switchEngineOnSelect');
-    switchEngine = switchEngineSaved === null ? true : switchEngineSaved === 'true';
+    const directVisitSaved = window.loadFromStorage('directVisitUrlsFromSearch');
+    if (directVisitSaved === null || directVisitSaved === undefined) {
+      directVisitUrls = true;
+    } else if (typeof directVisitSaved === 'boolean') {
+      directVisitUrls = directVisitSaved;
+    } else {
+      directVisitUrls = directVisitSaved === 'true' || directVisitSaved === true;
+    }
+    
+    const switchEngineSaved = window.loadFromStorage('switchEngineOnSelect');
+    if (switchEngineSaved === null || switchEngineSaved === undefined) {
+      switchEngine = true;
+    } else if (typeof switchEngineSaved === 'boolean') {
+      switchEngine = switchEngineSaved;
+    } else {
+      switchEngine = switchEngineSaved === 'true' || switchEngineSaved === true;
+    }
   } catch (e) {
     // Use defaults
   }
@@ -485,8 +498,14 @@ function selectAutocompleteItem(index, event = null) {
       // Get same tab preference
       let sameTab = true;
       try {
-        const saved = localStorage.getItem('sameTabOnSearch');
-        sameTab = saved === null ? true : saved === 'true';
+        const saved = window.loadFromStorage('sameTabOnSearch');
+        if (saved === null || saved === undefined) {
+          sameTab = true;
+        } else if (typeof saved === 'boolean') {
+          sameTab = saved;
+        } else {
+          sameTab = saved === 'true' || saved === true;
+        }
       } catch (e) {
         sameTab = true;
       }
@@ -508,9 +527,9 @@ function selectAutocompleteItem(index, event = null) {
         // Check if engine is enabled
         let enabledEngines = [];
         try {
-          const enabledSaved = localStorage.getItem('enabledSearchEngines');
+          const enabledSaved = window.loadFromStorage('enabledSearchEngines');
           if (enabledSaved) {
-            enabledEngines = JSON.parse(enabledSaved);
+            enabledEngines = enabledSaved;
           } else {
             enabledEngines = engines.map(e => e.name);
           }
@@ -521,7 +540,7 @@ function selectAutocompleteItem(index, event = null) {
         if (enabledEngines.includes(item.engine)) {
           currentEngineIndex = engineIndex;
           updateEngineBtn();
-          localStorage.setItem('searchEngine', item.engine);
+          window.saveToStorage('searchEngine', item.engine);
         }
       }
     }
@@ -543,8 +562,14 @@ function goSearch() {
   // Get same tab preference (default: true)
   let sameTab = true;
   try {
-    const saved = localStorage.getItem('sameTabOnSearch');
-    sameTab = saved === null ? true : saved === 'true';
+    const saved = window.loadFromStorage('sameTabOnSearch');
+    if (saved === null || saved === undefined) {
+      sameTab = true;
+    } else if (typeof saved === 'boolean') {
+      sameTab = saved;
+    } else {
+      sameTab = saved === 'true' || saved === true;
+    }
   } catch (e) {
     sameTab = true;
   }
@@ -703,14 +728,20 @@ function initSearch() {
           const isDirectUrl = item && (item.engine === "Direct URL" || isValidUrlOrIp(item.term));
           
           // For direct URLs, check if we should visit directly
-          if (isDirectUrl) {
-            let directVisitUrls = true;
-            try {
-              const directVisitSaved = localStorage.getItem('directVisitUrlsFromSearch');
-              directVisitUrls = directVisitSaved === null ? true : directVisitSaved === 'true';
-            } catch (err) {
-              // Use default
-            }
+            if (isDirectUrl) {
+              let directVisitUrls = true;
+              try {
+                const directVisitSaved = window.loadFromStorage('directVisitUrlsFromSearch');
+                if (directVisitSaved === null || directVisitSaved === undefined) {
+                  directVisitUrls = true;
+                } else if (typeof directVisitSaved === 'boolean') {
+                  directVisitUrls = directVisitSaved;
+                } else {
+                  directVisitUrls = directVisitSaved === 'true' || directVisitSaved === true;
+                }
+              } catch (err) {
+                // Use default
+              }
             
             if (directVisitUrls) {
               selectAutocompleteItem(selectedAutocompleteIndex, e);
@@ -802,13 +833,13 @@ function initSearch() {
 
   // Validate current engine is still enabled
   try {
-    const saved = localStorage.getItem('searchEngine');
+    const saved = window.loadFromStorage('searchEngine');
     if (saved) {
       let enabledEngines = [];
       try {
-        const enabledSaved = localStorage.getItem('enabledSearchEngines');
+        const enabledSaved = window.loadFromStorage('enabledSearchEngines');
         if (enabledSaved) {
-          enabledEngines = JSON.parse(enabledSaved);
+          enabledEngines = enabledSaved;
         } else {
           enabledEngines = engines.map(e => e.name);
         }
@@ -821,7 +852,7 @@ function initSearch() {
         const firstEnabled = engines.findIndex(e => e.name === enabledEngines[0]);
         if (firstEnabled >= 0) {
           currentEngineIndex = firstEnabled;
-          localStorage.setItem('searchEngine', enabledEngines[0]);
+          window.saveToStorage('searchEngine', enabledEngines[0]);
           updateEngineBtn();
         }
       }

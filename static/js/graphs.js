@@ -17,9 +17,9 @@ let diskHistory = {};
 // Load preferences from localStorage
 (function() {
   try {
-    const saved = localStorage.getItem('minBarWidth');
-    if (saved) {
-      const parsed = parseInt(saved);
+    const saved = window.loadFromStorage('minBarWidth');
+    if (saved !== null && saved !== undefined) {
+      const parsed = typeof saved === 'number' ? saved : parseInt(saved);
       if (parsed >= 2 && parsed <= 50) {
         minBarWidth = parsed;
       }
@@ -27,44 +27,57 @@ let diskHistory = {};
   } catch (e) {}
 
   try {
-    showFullBars = localStorage.getItem('showFullBars') === 'true';
+    const savedFullBars = window.loadFromStorage('showFullBars');
+    if (typeof savedFullBars === 'boolean') {
+      showFullBars = savedFullBars;
+    } else {
+      showFullBars = savedFullBars === 'true' || savedFullBars === true;
+    }
   } catch (e) {}
 
   try {
-    colorizeBackground = localStorage.getItem('colorizeBackground') === 'true';
+    const savedColorize = window.loadFromStorage('colorizeBackground');
+    if (typeof savedColorize === 'boolean') {
+      colorizeBackground = savedColorize;
+    } else {
+      colorizeBackground = savedColorize === 'true' || savedColorize === true;
+    }
   } catch (e) {}
 
   try {
-    const saved = localStorage.getItem('cpuHistory');
-    if (saved) cpuHistory = JSON.parse(saved);
+    const saved = window.loadFromStorage('cpuHistory');
+    if (saved) cpuHistory = saved;
   } catch (e) { cpuHistory = []; }
 
   try {
-    const saved = localStorage.getItem('ramHistory');
-    if (saved) ramHistory = JSON.parse(saved);
+    const saved = window.loadFromStorage('ramHistory');
+    if (saved) ramHistory = saved;
   } catch (e) { ramHistory = []; }
 
   try {
-    const saved = localStorage.getItem('diskHistory');
-    if (saved) diskHistory = JSON.parse(saved);
+    const saved = window.loadFromStorage('diskHistory');
+    if (saved) diskHistory = saved;
   } catch (e) { diskHistory = {}; }
 })();
 
 function saveMinBarWidth() {
   try {
-    localStorage.setItem('minBarWidth', minBarWidth.toString());
+    // Save as number
+    window.saveToStorage('minBarWidth', minBarWidth);
   } catch (e) {}
 }
 
 function saveFullBarsPreference() {
   try {
-    localStorage.setItem('showFullBars', showFullBars.toString());
+    // Save as boolean
+    window.saveToStorage('showFullBars', showFullBars);
   } catch (e) {}
 }
 
 function saveColorizeBackgroundPreference() {
   try {
-    localStorage.setItem('colorizeBackground', colorizeBackground.toString());
+    // Save as boolean
+    window.saveToStorage('colorizeBackground', colorizeBackground);
   } catch (e) {}
 }
 
@@ -86,19 +99,19 @@ function applyFullBarsClass() {
 
 function saveCpuHistory() {
   try {
-    localStorage.setItem('cpuHistory', JSON.stringify(cpuHistory));
+    window.saveToStorage('cpuHistory', cpuHistory);
   } catch (e) {}
 }
 
 function saveRamHistory() {
   try {
-    localStorage.setItem('ramHistory', JSON.stringify(ramHistory));
+    window.saveToStorage('ramHistory', ramHistory);
   } catch (e) {}
 }
 
 function saveDiskHistory() {
   try {
-    localStorage.setItem('diskHistory', JSON.stringify(diskHistory));
+    window.saveToStorage('diskHistory', diskHistory);
   } catch (e) {}
 }
 
@@ -256,9 +269,9 @@ function updateDiskGraph(usage, mountKey) {
     diskHistory[key] = [];
     // Try to load from localStorage
     try {
-      const saved = localStorage.getItem('diskHistory');
+      const saved = window.loadFromStorage('diskHistory');
       if (saved) {
-        const allHistory = JSON.parse(saved);
+        const allHistory = saved;
         if (allHistory[key]) {
           diskHistory[key] = allHistory[key];
         }

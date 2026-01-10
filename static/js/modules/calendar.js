@@ -16,9 +16,9 @@ let calendarSettings = {
 
 function loadCalendarSettings() {
   try {
-    const saved = localStorage.getItem('calendarSettings');
+    const saved = window.loadFromStorage('calendarSettings');
     if (saved) {
-      calendarSettings = { ...calendarSettings, ...JSON.parse(saved) };
+      calendarSettings = { ...calendarSettings, ...saved };
     }
   } catch (e) {
     if (window.debugError) window.debugError('calendar', 'Failed to load calendar settings:', e);
@@ -26,15 +26,15 @@ function loadCalendarSettings() {
 }
 
 function saveCalendarSettings() {
-  localStorage.setItem('calendarSettings', JSON.stringify(calendarSettings));
+  window.saveToStorage('calendarSettings', calendarSettings);
 }
 
 // Load events from localStorage
 function loadEvents() {
   try {
-    const saved = localStorage.getItem('calendarEvents');
+    const saved = window.loadFromStorage('calendarEvents');
     if (saved) {
-      calendarEvents = JSON.parse(saved);
+      calendarEvents = saved;
     }
   } catch (e) {
     if (window.debugError) window.debugError('calendar', 'Failed to load calendar events:', e);
@@ -43,7 +43,7 @@ function loadEvents() {
 }
 
 function saveEvents() {
-  localStorage.setItem('calendarEvents', JSON.stringify(calendarEvents));
+  window.saveToStorage('calendarEvents', calendarEvents);
 }
 
 // Generate unique ID

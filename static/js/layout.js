@@ -29,9 +29,9 @@ let layoutConfig = {
 
 function loadLayoutConfig() {
   try {
-    const saved = localStorage.getItem('layoutConfig');
+    const saved = window.loadFromStorage('layoutConfig');
     if (saved) {
-      layoutConfig = JSON.parse(saved);
+      layoutConfig = saved;
     } else {
       initializeDefaultLayout();
     }
@@ -74,7 +74,7 @@ function initializeDefaultLayout() {
 
 function saveLayoutConfig() {
   try {
-    localStorage.setItem('layoutConfig', JSON.stringify(layoutConfig));
+    window.saveToStorage('layoutConfig', layoutConfig);
   } catch (e) {
     if (window.debugError) window.debugError('layout', 'Failed to save layout config:', e);
   }
@@ -802,15 +802,15 @@ function createDropZones() {
         const moduleId = draggedElement.getAttribute('data-module');
         if (moduleId) {
           // Disable the module in moduleVisibility
-          const moduleVisibility = JSON.parse(localStorage.getItem('moduleVisibility') || '{}');
+          const moduleVisibility = window.loadFromStorage('moduleVisibility', {});
           moduleVisibility[moduleId] = false;
-          localStorage.setItem('moduleVisibility', JSON.stringify(moduleVisibility));
+          window.saveToStorage('moduleVisibility', moduleVisibility);
 
           // Also add to hiddenModules for compatibility
-          const hiddenModules = JSON.parse(localStorage.getItem('hiddenModules') || '[]');
+          const hiddenModules = window.loadFromStorage('hiddenModules', []);
           if (!hiddenModules.includes(moduleId)) {
             hiddenModules.push(moduleId);
-            localStorage.setItem('hiddenModules', JSON.stringify(hiddenModules));
+            window.saveToStorage('hiddenModules', hiddenModules);
           }
 
           // Remove from layout
@@ -1025,11 +1025,11 @@ function hideDropZones() {
 
 function loadModuleOrder() {
   if (!grid) return;
-  const savedOrder = localStorage.getItem('moduleOrder');
+  const savedOrder = window.loadFromStorage('moduleOrder');
   if (!savedOrder) return;
 
   try {
-    const order = JSON.parse(savedOrder);
+    const order = savedOrder;
     const cards = Array.from(grid.querySelectorAll('.card[data-module]'));
     const moduleMap = new Map();
     cards.forEach(card => {
@@ -1054,7 +1054,7 @@ function saveModuleOrder() {
   if (!grid) return;
   const cards = Array.from(grid.querySelectorAll('.card[data-module]'));
   const order = cards.map(card => card.getAttribute('data-module')).filter(Boolean);
-  localStorage.setItem('moduleOrder', JSON.stringify(order));
+  window.saveToStorage('moduleOrder', order);
 }
 
 function findCardColumn(card) {

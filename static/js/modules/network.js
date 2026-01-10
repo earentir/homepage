@@ -235,6 +235,12 @@ function initWebSocket() {
 
 async function refresh() {
   if (window.debugLog) window.debugLog('network', 'refresh() called, isOffline:', isOffline);
+  
+  // Set subtitle to loading initially if it's still "Loading..."
+  const subtitleEl = document.getElementById("subtitle");
+  if (subtitleEl && subtitleEl.textContent === "Loading…") {
+    subtitleEl.textContent = "Connecting...";
+  }
   const statusTextEl = document.getElementById("statusText");
   const pulseEl = document.querySelector(".pulse");
 
@@ -481,3 +487,17 @@ window.detectClientInfo = detectClientInfo;
 window.refreshIP = refreshIP;
 window.refresh = refresh;
 window.initWebSocket = initWebSocket;
+
+// Make sure refresh is called early to update subtitle
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.refresh) {
+      window.refresh().catch(() => {});
+    }
+  });
+} else {
+  // DOM already loaded, call refresh immediately
+  if (window.refresh) {
+    window.refresh().catch(() => {});
+  }
+}

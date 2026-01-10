@@ -216,25 +216,25 @@
 ## localStorage Sync with Backend Processing
 
 ### Frontend: Generic localStorage Wrapper
-- [ ] Create generic `saveToStorage(key, value)` wrapper that:
+- [x] Create generic `saveToStorage(key, value)` wrapper that:
   - Writes to localStorage (immediate, local-first)
   - Sends data to backend API endpoint (async, non-blocking)
   - Handles errors gracefully (localStorage always succeeds, backend sync can fail)
-- [ ] Create generic `loadFromStorage(key, defaultValue)` wrapper that:
+- [x] Create generic `loadFromStorage(key, defaultValue)` wrapper that:
   - Reads from localStorage (fast, local-first)
   - Optionally checks backend for newer version on initialization
-- [ ] Replace all direct `localStorage.setItem()` calls with wrapper
-- [ ] Replace all direct `localStorage.getItem()` calls with wrapper
-- [ ] Add version/timestamp tracking for each localStorage key to detect stale data
-- [ ] Add retry mechanism for failed backend syncs (queue failed syncs, retry later)
+- [x] Replace all direct `localStorage.setItem()` calls with wrapper
+- [x] Replace all direct `localStorage.getItem()` calls with wrapper
+- [x] Add version/timestamp tracking for each localStorage key to detect stale data
+- [x] Add retry mechanism for failed backend syncs (queue failed syncs, retry later)
 
 ### Backend: Storage & Sync API
-- [ ] Create `/api/storage/sync` endpoint (POST) - receives localStorage data from frontend
-- [ ] Create `/api/storage/get?key={key}` endpoint (GET) - returns backend copy of data
-- [ ] Create `/api/storage/get-all` endpoint (GET) - returns all stored preferences
-- [ ] Create backend storage system (in-memory map, file-based, or database)
-- [ ] Add version/timestamp tracking for each stored key
-- [ ] Store data with metadata (lastModified, version, source)
+- [x] Create `/api/storage/sync` endpoint (POST) - receives localStorage data from frontend
+- [x] Create `/api/storage/get?key={key}` endpoint (GET) - returns backend copy of data
+- [x] Create `/api/storage/get-all` endpoint (GET) - returns all stored preferences
+- [x] Create backend storage system (in-memory map, file-based, or database)
+- [x] Add version/timestamp tracking for each stored key
+- [x] Store data with metadata (lastModified, version, source)
 
 ### Backend: Data Processing Logic
 - [ ] Move all data processing logic from frontend to backend:
@@ -249,33 +249,33 @@
 - [ ] Add processing triggers (when data changes, process and notify)
 
 ### WebSocket: Update Notifications
-- [ ] Extend WebSocket to send data change notifications:
+- [x] Extend WebSocket to send data change notifications:
   - `{type: "storage-update", key: "modulePrefs", version: 123, timestamp: "..."}`
-- [ ] Backend sends notification when:
+- [x] Backend sends notification when:
   - Data is processed/aggregated
   - External events update data (scheduled tasks, etc.)
   - Multiple clients might have conflicts
-- [ ] Frontend receives notification and fetches updated data
-- [ ] Add WebSocket message type for storage sync requests
+- [x] Frontend receives notification and fetches updated data
+- [x] Add WebSocket message type for storage sync requests
 
 ### Frontend: Sync Mechanism
-- [ ] On page load: Check backend for latest versions of all localStorage keys
-- [ ] Compare versions/timestamps between localStorage and backend
-- [ ] If backend has newer data: Fetch and update localStorage
-- [ ] If localStorage has newer data: Send to backend (already handled by wrapper)
-- [ ] On WebSocket notification: Fetch specific key from backend and update localStorage
-- [ ] Add conflict resolution (last-write-wins or user choice)
-- [ ] Add sync status indicator in UI (show when syncing, show errors)
+- [x] On page load: Check backend for latest versions of all localStorage keys
+- [x] Compare versions/timestamps between localStorage and backend
+- [x] If backend has newer data: Fetch and update localStorage
+- [x] If localStorage has newer data: Send to backend (already handled by wrapper)
+- [x] On WebSocket notification: Fetch specific key from backend and update localStorage
+- [x] Add conflict resolution (last-write-wins or user choice)
+- [x] Add sync status indicator in UI (show when syncing, show errors)
 
 ### Migration & Compatibility
-- [ ] Create migration script to send existing localStorage data to backend on first load
-- [ ] Ensure backward compatibility (if backend unavailable, localStorage still works)
-- [ ] Add feature flag to enable/disable backend sync
-- [ ] Add sync status API endpoint to check if backend has data
+- [x] Create migration script to send existing localStorage data to backend on first load (handled by syncAllFromBackend on init)
+- [x] Ensure backward compatibility (if backend unavailable, localStorage still works)
+- [x] Add feature flag to enable/disable backend sync (backendSyncDisabled in localStorage)
+- [x] Add sync status API endpoint to check if backend has data
 
 ### Testing & Error Handling
-- [ ] Handle offline scenarios (localStorage works, queue syncs for when online)
-- [ ] Handle backend errors gracefully (don't break UI if sync fails)
-- [ ] Add logging for sync operations (debug sync issues)
+- [x] Handle offline scenarios (localStorage works, queue syncs for when online)
+- [x] Handle backend errors gracefully (don't break UI if sync fails)
+- [x] Add logging for sync operations (debug sync issues)
 - [ ] Test with multiple browser tabs (ensure sync works across tabs)
 - [ ] Test WebSocket reconnection scenarios (ensure sync resumes after reconnect)

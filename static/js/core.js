@@ -108,14 +108,274 @@ function fetchWithTimeout(url, options = {}, timeout = 5000) {
     });
 }
 
-// localStorage helpers with JSON support
+// Storage sync queue for failed backend syncs
+const storageSyncQueue = [];
+let storageSyncInProgress = false;
+
+// Sync status tracking
+let syncStatus = {
+  state: 'idle', // 'idle', 'syncing', 'success', 'error', 'offline'
+  lastSync: null,
+  errorCount: 0,
+  pendingCount: 0
+};
+
+// Update sync status indicator
+function updateSyncStatusIndicator() {
+  const statusEl = document.getElementById('syncStatus');
+  if (!statusEl) return;
+
+  const iconEl = statusEl.querySelector('.sync-icon');
+  const textEl = statusEl.querySelector('.sync-text');
+
+  if (!iconEl) return;
+
+  // Hide text element, only show icon
+  if (textEl) {
+    textEl.style.display = 'none';
+  }
+
+  statusEl.style.display = 'inline-flex';
+  statusEl.style.alignItems = 'center';
+  statusEl.style.cursor = 'help';
+
+  let tooltip = '';
+  let iconClass = '';
+  let iconColor = '';
+
+  switch (syncStatus.state) {
+    case 'syncing':
+      iconClass = 'sync-icon fas fa-sync fa-spin';
+      iconColor = 'var(--accent)';
+      tooltip = 'Syncing data to backend...';
+      break;
+    case 'success':
+      iconClass = 'sync-icon fas fa-check-circle';
+      iconColor = 'var(--success, #10b981)';
+      tooltip = 'Data synced to backend successfully';
+      // Hide after 2 seconds
+      setTimeout(() => {
+        if (syncStatus.state === 'success') {
+          syncStatus.state = 'idle';
+          updateSyncStatusIndicator();
+        }
+      }, 2000);
+      break;
+    case 'error':
+      iconClass = 'sync-icon fas fa-exclamation-circle';
+      iconColor = 'var(--error, #ef4444)';
+      tooltip = `Sync error (${syncStatus.errorCount} failed). Data is saved locally and will sync when connection is restored.`;
+      break;
+    case 'offline':
+      iconClass = 'sync-icon fas fa-wifi';
+      iconColor = 'var(--warn, #f59e0b)';
+      tooltip = 'Offline. Data is saved locally and will sync when connection is restored.';
+      break;
+    case 'idle':
+    default:
+      if (syncStatus.pendingCount > 0) {
+        iconClass = 'sync-icon fas fa-clock';
+        iconColor = 'var(--muted)';
+        tooltip = `${syncStatus.pendingCount} sync operation(s) pending`;
+      } else {
+        // Show synced icon when idle (data is synced)
+        iconClass = 'sync-icon fas fa-cloud-check';
+        iconColor = 'var(--muted)';
+        tooltip = 'Data synced to backend. All preferences and settings are backed up on the server.';
+      }
+      break;
+  }
+
+  iconEl.className = iconClass;
+  iconEl.style.color = iconColor;
+  statusEl.title = tooltip;
+  
+  // Only hide if idle with no pending operations (but we show the synced icon)
+  if (syncStatus.state === 'idle' && syncStatus.pendingCount === 0) {
+    // Keep it visible to show sync status
+    statusEl.style.display = 'inline-flex';
+  }
+}
+
+// Storage version metadata (tracks lastModified timestamp for each key)
+function getStorageVersion(key) {
+  try {
+    const metaKey = key + '_meta';
+    const meta = localStorage.getItem(metaKey);
+    if (meta) {
+      const parsed = JSON.parse(meta);
+      return parsed.version || 0;
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('core', 'Error getting storage version:', key, e);
+  }
+  return 0;
+}
+
+function setStorageVersion(key, version) {
+  try {
+    const metaKey = key + '_meta';
+    const meta = {
+      version: version,
+      lastModified: Date.now()
+    };
+    localStorage.setItem(metaKey, JSON.stringify(meta));
+  } catch (e) {
+    if (window.debugError) window.debugError('core', 'Error setting storage version:', key, e);
+  }
+}
+
+// Sync single key to backend (async, non-blocking)
+function syncToBackend(key, value, version) {
+  // Skip sync if backend sync is disabled
+  const syncDisabled = window.loadFromStorage('backendSyncDisabled');
+  if (syncDisabled === 'true' || syncDisabled === true) {
+    return;
+  }
+
+  // Update status
+  syncStatus.pendingCount++;
+  if (syncStatus.state === 'idle') {
+    syncStatus.state = 'syncing';
+    updateSyncStatusIndicator();
+  }
+
+  const syncData = {
+    key: key,
+    value: value,
+    version: version,
+    timestamp: Date.now()
+  };
+
+  // Try to sync immediately
+  fetch('/api/storage/sync', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(syncData)
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (window.debugLog) window.debugLog('core', 'Synced to backend:', key, 'version:', version);
+      // Update local version if backend returned a new version
+      if (data.version && data.version > version) {
+        setStorageVersion(key, data.version);
+      }
+      
+      // Update status
+      syncStatus.pendingCount = Math.max(0, syncStatus.pendingCount - 1);
+      syncStatus.lastSync = Date.now();
+      syncStatus.errorCount = 0;
+      syncStatus.state = syncStatus.pendingCount > 0 ? 'syncing' : 'success';
+      updateSyncStatusIndicator();
+    })
+    .catch(error => {
+      if (window.debugError) window.debugError('core', 'Failed to sync to backend:', key, error);
+      
+      // Update status
+      syncStatus.pendingCount = Math.max(0, syncStatus.pendingCount - 1);
+      syncStatus.errorCount++;
+      syncStatus.state = 'error';
+      updateSyncStatusIndicator();
+      
+      // Queue for retry
+      storageSyncQueue.push({ key, value, version, retries: 0 });
+      // Try to process queue
+      processStorageSyncQueue();
+    });
+}
+
+// Process sync queue (retry failed syncs)
+function processStorageSyncQueue() {
+  if (storageSyncInProgress || storageSyncQueue.length === 0) {
+    if (storageSyncQueue.length === 0 && syncStatus.pendingCount === 0) {
+      syncStatus.state = syncStatus.errorCount > 0 ? 'error' : 'success';
+      updateSyncStatusIndicator();
+    }
+    return;
+  }
+
+  storageSyncInProgress = true;
+  syncStatus.state = 'syncing';
+  updateSyncStatusIndicator();
+
+  const item = storageSyncQueue.shift();
+
+  // Max 3 retries
+  if (item.retries >= 3) {
+    if (window.debugError) window.debugError('core', 'Max retries reached for:', item.key);
+    syncStatus.errorCount++;
+    storageSyncInProgress = false;
+    processStorageSyncQueue(); // Process next item
+    return;
+  }
+
+  item.retries++;
+  const syncData = {
+    key: item.key,
+    value: item.value,
+    version: item.version,
+    timestamp: Date.now()
+  };
+
+  fetch('/api/storage/sync', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(syncData)
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (window.debugLog) window.debugLog('core', 'Retry sync succeeded:', item.key);
+      syncStatus.errorCount = Math.max(0, syncStatus.errorCount - 1);
+      syncStatus.lastSync = Date.now();
+      storageSyncInProgress = false;
+      processStorageSyncQueue(); // Process next item
+    })
+    .catch(error => {
+      if (window.debugError) window.debugError('core', 'Retry sync failed:', item.key, error);
+      syncStatus.errorCount++;
+      // Re-queue with delay
+      setTimeout(() => {
+        storageSyncQueue.push(item);
+        storageSyncInProgress = false;
+        processStorageSyncQueue();
+      }, 5000 * item.retries); // Exponential backoff
+    });
+}
+
+// localStorage helpers with JSON support and backend sync
 function saveToStorage(key, value) {
   try {
-    if (typeof value === 'object' || Array.isArray(value)) {
-      localStorage.setItem(key, JSON.stringify(value));
-    } else {
+    // Save to localStorage first (immediate, local-first)
+    // Always JSON stringify for consistency (handles objects, arrays, booleans, numbers, null)
+    // Only store plain strings as-is to avoid double-stringifying
+    if (typeof value === 'string') {
       localStorage.setItem(key, value);
+    } else {
+      // Object, array, boolean, number, null - JSON stringify
+      localStorage.setItem(key, JSON.stringify(value));
     }
+
+    // Update version (increment)
+    const currentVersion = getStorageVersion(key);
+    const newVersion = currentVersion + 1;
+    setStorageVersion(key, newVersion);
+
+    // Sync to backend (async, non-blocking)
+    syncToBackend(key, value, newVersion);
   } catch (e) {
     if (window.debugError) window.debugError('core', 'Error saving to localStorage:', key, e);
   }
@@ -134,6 +394,128 @@ function loadFromStorage(key, defaultValue = null) {
   } catch (e) {
     if (window.debugError) window.debugError('core', 'Error loading from localStorage:', key, e);
     return defaultValue;
+  }
+}
+
+// Check backend for newer version and update if needed
+async function syncFromBackend(key) {
+  try {
+    const response = await fetch(`/api/storage/get?key=${encodeURIComponent(key)}`);
+    if (!response.ok) {
+      return false; // Backend doesn't have this key or error
+    }
+
+    const data = await response.json();
+    if (!data || !data.value) {
+      return false; // No data from backend
+    }
+
+    const localVersion = getStorageVersion(key);
+    const backendVersion = data.version || 0;
+
+    // If backend has newer version, update localStorage
+    if (backendVersion > localVersion) {
+      if (window.debugLog) window.debugLog('core', 'Updating from backend:', key, 'local:', localVersion, 'backend:', backendVersion);
+      
+      // Use saveToStorage to maintain version tracking, but don't sync back (avoid loop)
+      // Temporarily disable sync for this update
+      const wasDisabled = window.loadFromStorage('backendSyncDisabled');
+      if (!wasDisabled) {
+        window.saveToStorage('backendSyncDisabled', 'true');
+      }
+      
+      // Save to localStorage using our wrapper (but sync is disabled)
+      if (typeof data.value === 'string') {
+        localStorage.setItem(key, data.value);
+      } else {
+        localStorage.setItem(key, JSON.stringify(data.value));
+      }
+      
+      // Update version
+      setStorageVersion(key, backendVersion);
+      
+      // Re-enable sync if it wasn't disabled
+      if (!wasDisabled) {
+        localStorage.removeItem('backendSyncDisabled');
+      }
+      
+      return true; // Updated
+    }
+
+    return false; // No update needed
+  } catch (e) {
+    if (window.debugError) window.debugError('core', 'Error syncing from backend:', key, e);
+    return false;
+  }
+}
+
+// Sync all keys from backend on initialization
+async function syncAllFromBackend() {
+  try {
+    syncStatus.state = 'syncing';
+    updateSyncStatusIndicator();
+
+    const response = await fetch('/api/storage/get-all');
+    if (!response.ok) {
+      syncStatus.state = 'offline';
+      updateSyncStatusIndicator();
+      return;
+    }
+
+    const data = await response.json();
+    if (!data || !data.items) {
+      syncStatus.state = 'success';
+      syncStatus.lastSync = Date.now();
+      updateSyncStatusIndicator();
+      return;
+    }
+
+    let updatedCount = 0;
+    for (const item of data.items) {
+      const localVersion = getStorageVersion(item.key);
+      const backendVersion = item.version || 0;
+
+      if (backendVersion > localVersion) {
+        if (window.debugLog) window.debugLog('core', 'Updating from backend:', item.key);
+        
+        // Temporarily disable sync to avoid sync loop
+        const wasDisabled = window.loadFromStorage('backendSyncDisabled');
+        if (!wasDisabled) {
+          window.saveToStorage('backendSyncDisabled', 'true');
+        }
+        
+        // Save to localStorage
+        if (typeof item.value === 'string') {
+          localStorage.setItem(item.key, item.value);
+        } else {
+          localStorage.setItem(item.key, JSON.stringify(item.value));
+        }
+        
+        // Update version
+        setStorageVersion(item.key, backendVersion);
+        
+        // Re-enable sync if it wasn't disabled
+        if (!wasDisabled) {
+          localStorage.removeItem('backendSyncDisabled');
+        }
+        
+        updatedCount++;
+      }
+    }
+
+    if (updatedCount > 0 && window.debugLog) {
+      window.debugLog('core', 'Synced', updatedCount, 'keys from backend');
+    }
+
+    syncStatus.state = 'success';
+    syncStatus.lastSync = Date.now();
+    syncStatus.errorCount = 0;
+    updateSyncStatusIndicator();
+  } catch (e) {
+    if (window.debugError) window.debugError('core', 'Error syncing all from backend:', e);
+    syncStatus.state = 'offline';
+    syncStatus.errorCount++;
+    updateSyncStatusIndicator();
   }
 }
 
@@ -280,7 +662,7 @@ function createModuleListItem(config) {
 // Debug logging utility
 function isDebugEnabled(module) {
   try {
-    const debugPrefs = JSON.parse(localStorage.getItem('debugPrefs') || '{}');
+    const debugPrefs = window.loadFromStorage('debugPrefs', {});
     return debugPrefs[module] === true;
   } catch (e) {
     return false;
@@ -302,7 +684,7 @@ function debugError(module, ...args) {
 // Sync debug preferences to IndexedDB for service worker access
 function syncDebugPrefsToIndexedDB() {
   try {
-    const debugPrefs = JSON.parse(localStorage.getItem('debugPrefs') || '{}');
+    const debugPrefs = window.loadFromStorage('debugPrefs', {});
     const request = indexedDB.open('homepage-debug', 1);
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
@@ -345,6 +727,10 @@ window.isModalOpen = isModalOpen;
 window.fetchWithTimeout = fetchWithTimeout;
 window.saveToStorage = saveToStorage;
 window.loadFromStorage = loadFromStorage;
+window.syncFromBackend = syncFromBackend;
+window.syncAllFromBackend = syncAllFromBackend;
+window.getStorageVersion = getStorageVersion;
+window.updateSyncStatusIndicator = updateSyncStatusIndicator;
 window.moveArrayItemUp = moveArrayItemUp;
 window.moveArrayItemDown = moveArrayItemDown;
 window.moveArrayItem = moveArrayItem;

@@ -701,6 +701,11 @@ func main() {
 		}
 		defer conn.Close()
 
+		// Register connection with manager
+		wsManager := api.GetWSManager()
+		wsManager.Add(conn)
+		defer wsManager.Remove(conn)
+
 		log.Printf("WebSocket client connected from %s", r.RemoteAddr)
 
 		ctx := r.Context()

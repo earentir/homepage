@@ -4,9 +4,9 @@ const defaultRssModules = [];
 
 let rssModules = [];
 try {
-  const saved = localStorage.getItem('rssModules');
+  const saved = window.loadFromStorage('rssModules');
   if (saved) {
-    rssModules = JSON.parse(saved);
+    rssModules = saved;
   } else {
     rssModules = defaultRssModules;
   }
@@ -15,14 +15,14 @@ try {
 }
 
 function saveRssModules() {
-  localStorage.setItem('rssModules', JSON.stringify(rssModules));
+  window.saveToStorage('rssModules', rssModules);
 }
 
 // RSS feed cache functions
 function getRssCache() {
   try {
-    const cache = localStorage.getItem('rssFeedCache');
-    return cache ? JSON.parse(cache) : {};
+    const cache = window.loadFromStorage('rssFeedCache');
+    return cache || {};
   } catch (e) {
     return {};
   }
@@ -30,7 +30,7 @@ function getRssCache() {
 
 function saveRssCache(cache) {
   try {
-    localStorage.setItem('rssFeedCache', JSON.stringify(cache));
+    window.saveToStorage('rssFeedCache', cache);
   } catch (e) {
     if (window.debugError) window.debugError('rss', 'Error saving RSS cache:', e);
   }

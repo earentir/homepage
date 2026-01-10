@@ -117,16 +117,16 @@ function initThemeSelection() {
   const schemeSelect = document.getElementById('pref-scheme');
 
   // Set current values from localStorage
-  const currentTemplate = localStorage.getItem('template') || document.documentElement.getAttribute('data-template') || 'nordic';
-  const currentScheme = localStorage.getItem('scheme') || document.documentElement.getAttribute('data-scheme') || 'default';
+  const currentTemplate = window.loadFromStorage('template') || document.documentElement.getAttribute('data-template') || 'nordic';
+  const currentScheme = window.loadFromStorage('scheme') || document.documentElement.getAttribute('data-scheme') || 'default';
 
   if (templateSelect) {
     templateSelect.value = currentTemplate;
     templateSelect.addEventListener('change', (e) => {
       const newTemplate = e.target.value;
-      localStorage.setItem('template', newTemplate);
+      window.saveToStorage('template', newTemplate);
       // Clear scheme when template changes (schemes are template-specific)
-      localStorage.removeItem('scheme');
+      localStorage.removeItem('scheme'); // Use direct removeItem for removal
       // Reload to apply the new template
       location.reload();
     });
@@ -134,7 +134,7 @@ function initThemeSelection() {
 
   if (schemeSelect) {
     schemeSelect.addEventListener('change', (e) => {
-      localStorage.setItem('scheme', e.target.value);
+      window.saveToStorage('scheme', e.target.value);
       location.reload();
     });
   }
@@ -207,8 +207,8 @@ function populateSchemeDropdownForTemplate(templateName) {
 function populateSchemeDropdown() {
   const templateSelect = document.getElementById('pref-template');
   const schemeSelect = document.getElementById('pref-scheme');
-  const currentTemplate = localStorage.getItem('template') || document.documentElement.getAttribute('data-template') || 'nordic';
-  const currentScheme = localStorage.getItem('scheme') || document.documentElement.getAttribute('data-scheme') || 'default';
+  const currentTemplate = window.loadFromStorage('template') || document.documentElement.getAttribute('data-template') || 'nordic';
+  const currentScheme = window.loadFromStorage('scheme') || document.documentElement.getAttribute('data-scheme') || 'default';
 
   // Set template value
   if (templateSelect) {
@@ -284,7 +284,7 @@ function initGeneralSettings() {
 
   if (titleInput) {
     // Load saved title or use default
-    const savedTitle = localStorage.getItem('pageTitle');
+    const savedTitle = window.loadFromStorage('pageTitle');
     titleInput.value = savedTitle || defaultTitle;
 
     // Helper function to apply title
@@ -308,7 +308,7 @@ function initGeneralSettings() {
     titleInput.addEventListener('change', () => {
       const title = titleInput.value.trim() || defaultTitle;
       titleInput.value = title;
-      localStorage.setItem('pageTitle', title);
+      window.saveToStorage('pageTitle', title);
       applyTitle(title);
     });
 
@@ -323,7 +323,7 @@ function initGeneralSettings() {
     resetTitleBtn.addEventListener('click', () => {
       if (titleInput) {
         titleInput.value = defaultTitle;
-        localStorage.setItem('pageTitle', defaultTitle);
+        window.saveToStorage('pageTitle', defaultTitle);
         document.title = defaultTitle;
         const headerTitle = document.querySelector('.h-title');
         if (headerTitle) {
@@ -340,7 +340,7 @@ function initGeneralSettings() {
   const minBarWidthInput = document.getElementById('pref-min-bar-width');
   if (minBarWidthInput) {
     // Load saved value or use current window value
-    const saved = localStorage.getItem('minBarWidth');
+    const saved = window.loadFromStorage('minBarWidth');
     if (saved) {
       minBarWidthInput.value = parseInt(saved) || 10;
     } else if (window.minBarWidth) {
@@ -378,8 +378,12 @@ function initGeneralSettings() {
   }
   
   if (fullBarsCheckbox) {
-    const saved = localStorage.getItem('showFullBars');
-    fullBarsCheckbox.checked = saved === 'true';
+    const saved = window.loadFromStorage('showFullBars');
+    if (typeof saved === 'boolean') {
+      fullBarsCheckbox.checked = saved;
+    } else {
+      fullBarsCheckbox.checked = saved === 'true' || saved === true;
+    }
     fullBarsCheckbox.addEventListener('change', () => {
       // Update the variable in graphs.js
       if (window.setShowFullBars) window.setShowFullBars(fullBarsCheckbox.checked);
@@ -394,8 +398,12 @@ function initGeneralSettings() {
 
   // Colorize background toggle
   if (colorizeBgCheckbox) {
-    const saved = localStorage.getItem('colorizeBackground');
-    colorizeBgCheckbox.checked = saved === 'true';
+    const saved = window.loadFromStorage('colorizeBackground');
+    if (typeof saved === 'boolean') {
+      colorizeBgCheckbox.checked = saved;
+    } else {
+      colorizeBgCheckbox.checked = saved === 'true' || saved === true;
+    }
     colorizeBgCheckbox.disabled = !fullBarsCheckbox || !fullBarsCheckbox.checked;
     colorizeBgCheckbox.addEventListener('change', () => {
       if (fullBarsCheckbox && fullBarsCheckbox.checked) {
@@ -416,9 +424,9 @@ function initGeneralSettings() {
   const toggleGithubToken = document.getElementById('toggleGithubToken');
 
   if (githubTokenInput) {
-    githubTokenInput.value = localStorage.getItem('githubToken') || '';
+    githubTokenInput.value = window.loadFromStorage('githubToken') || '';
     githubTokenInput.addEventListener('change', () => {
-      localStorage.setItem('githubToken', githubTokenInput.value.trim());
+      window.saveToStorage('githubToken', githubTokenInput.value.trim());
       if (window.refreshGitHub) window.refreshGitHub();
     });
   }
@@ -461,10 +469,11 @@ function initGeneralSettings() {
   const diskIntervalInput = document.getElementById('pref-disk-interval');
   if (diskIntervalInput && window.timers) {
     // Load saved value or use current timer value
-    const saved = localStorage.getItem('diskInterval');
-    if (saved) {
-      diskIntervalInput.value = parseInt(saved) || 15;
-      window.timers.disk.interval = parseInt(saved) * 1000 || 15000;
+    const saved = window.loadFromStorage('diskInterval');
+    if (saved !== null && saved !== undefined) {
+      const interval = typeof saved === 'number' ? saved : parseInt(saved);
+      diskIntervalInput.value = interval || 15;
+      window.timers.disk.interval = interval * 1000 || 15000;
     } else {
       diskIntervalInput.value = window.timers.disk.interval / 1000;
     }
@@ -473,7 +482,8 @@ function initGeneralSettings() {
       const val = Math.max(5, Math.min(3600, parseInt(diskIntervalInput.value) || 15));
       diskIntervalInput.value = val;
       window.timers.disk.interval = val * 1000;
-      localStorage.setItem('diskInterval', val.toString());
+      // Save as number
+      window.saveToStorage('diskInterval', val);
     });
   }
 
@@ -481,10 +491,11 @@ function initGeneralSettings() {
   const rssIntervalInput = document.getElementById('pref-rss-interval');
   if (rssIntervalInput && window.timers) {
     // Load saved value or use current timer value
-    const saved = localStorage.getItem('rssInterval');
-    if (saved) {
-      rssIntervalInput.value = parseInt(saved) || 300;
-      window.timers.rss.interval = parseInt(saved) * 1000 || 300000;
+    const saved = window.loadFromStorage('rssInterval');
+    if (saved !== null && saved !== undefined) {
+      const interval = typeof saved === 'number' ? saved : parseInt(saved);
+      rssIntervalInput.value = interval || 300;
+      window.timers.rss.interval = interval * 1000 || 300000;
     } else {
       rssIntervalInput.value = window.timers.rss.interval / 1000;
     }
@@ -493,7 +504,8 @@ function initGeneralSettings() {
       const val = Math.max(60, Math.min(86400, parseInt(rssIntervalInput.value) || 300));
       rssIntervalInput.value = val;
       window.timers.rss.interval = val * 1000;
-      localStorage.setItem('rssInterval', val.toString());
+      // Save as number
+      window.saveToStorage('rssInterval', val);
     });
   }
 }
@@ -565,10 +577,10 @@ function initWeatherSettings() {
   const currentLocationDisplay = document.getElementById('currentLocationDisplay');
 
   // Show current location
-  const savedLocation = localStorage.getItem('weatherLocation');
+  const savedLocation = window.loadFromStorage('weatherLocation');
   if (savedLocation && currentLocationDisplay) {
     try {
-      const loc = JSON.parse(savedLocation);
+      const loc = typeof savedLocation === 'string' ? JSON.parse(savedLocation) : savedLocation;
       currentLocationDisplay.textContent = loc.name || 'Not set';
     } catch (e) {
       currentLocationDisplay.textContent = 'Not set';
@@ -650,8 +662,8 @@ function initWeatherSettings() {
       }
 
       try {
-        localStorage.setItem('weatherLocation', selected);
         const loc = JSON.parse(selected);
+        window.saveToStorage('weatherLocation', loc);
         currentLocationDisplay.textContent = loc.name;
 
         // Hide the results row
@@ -681,10 +693,10 @@ function initWeatherSettings() {
   // Weather provider
   const weatherProviderSelect = document.getElementById('pref-weather-provider');
   if (weatherProviderSelect) {
-    const savedProvider = localStorage.getItem('weatherProvider') || 'openmeteo';
+    const savedProvider = window.loadFromStorage('weatherProvider') || 'openmeteo';
     weatherProviderSelect.value = savedProvider;
     weatherProviderSelect.addEventListener('change', () => {
-      localStorage.setItem('weatherProvider', weatherProviderSelect.value);
+      window.saveToStorage('weatherProvider', weatherProviderSelect.value);
       // Note: Provider change requires server restart with env var, this is just for UI reference
     });
   }
@@ -694,9 +706,9 @@ function initWeatherSettings() {
   const toggleWeatherApiKey = document.getElementById('toggleWeatherApiKey');
 
   if (weatherApiKeyInput) {
-    weatherApiKeyInput.value = localStorage.getItem('weatherApiKey') || '';
+    weatherApiKeyInput.value = window.loadFromStorage('weatherApiKey') || '';
     weatherApiKeyInput.addEventListener('change', () => {
-      localStorage.setItem('weatherApiKey', weatherApiKeyInput.value.trim());
+      window.saveToStorage('weatherApiKey', weatherApiKeyInput.value.trim());
       // Note: API key change requires server restart with env var, this is just for UI reference
     });
   }
@@ -784,33 +796,54 @@ function initSearchSettings() {
   // Same tab preference
   if (sameTabCheckbox) {
     // Load saved preference (default: true)
-    const saved = localStorage.getItem('sameTabOnSearch');
-    sameTabCheckbox.checked = saved === null ? true : saved === 'true';
+    const saved = window.loadFromStorage('sameTabOnSearch');
+    if (saved === null || saved === undefined) {
+      sameTabCheckbox.checked = true;
+    } else if (typeof saved === 'boolean') {
+      sameTabCheckbox.checked = saved;
+    } else {
+      sameTabCheckbox.checked = saved === 'true' || saved === true;
+    }
     
     sameTabCheckbox.addEventListener('change', () => {
-      localStorage.setItem('sameTabOnSearch', sameTabCheckbox.checked.toString());
+      // Save as boolean
+      window.saveToStorage('sameTabOnSearch', sameTabCheckbox.checked);
     });
   }
 
   // Switch engine preference
   if (switchEngineCheckbox) {
     // Load saved preference (default: true)
-    const saved = localStorage.getItem('switchEngineOnSelect');
-    switchEngineCheckbox.checked = saved === null ? true : saved === 'true';
+    const saved = window.loadFromStorage('switchEngineOnSelect');
+    if (saved === null || saved === undefined) {
+      switchEngineCheckbox.checked = true;
+    } else if (typeof saved === 'boolean') {
+      switchEngineCheckbox.checked = saved;
+    } else {
+      switchEngineCheckbox.checked = saved === 'true' || saved === true;
+    }
     
     switchEngineCheckbox.addEventListener('change', () => {
-      localStorage.setItem('switchEngineOnSelect', switchEngineCheckbox.checked.toString());
+      // Save as boolean
+      window.saveToStorage('switchEngineOnSelect', switchEngineCheckbox.checked);
     });
   }
 
   // Direct visit URLs preference
   if (directVisitUrlsCheckbox) {
     // Load saved preference (default: true)
-    const saved = localStorage.getItem('directVisitUrlsFromSearch');
-    directVisitUrlsCheckbox.checked = saved === null ? true : saved === 'true';
+    const saved = window.loadFromStorage('directVisitUrlsFromSearch');
+    if (saved === null || saved === undefined) {
+      directVisitUrlsCheckbox.checked = true;
+    } else if (typeof saved === 'boolean') {
+      directVisitUrlsCheckbox.checked = saved;
+    } else {
+      directVisitUrlsCheckbox.checked = saved === 'true' || saved === true;
+    }
     
     directVisitUrlsCheckbox.addEventListener('change', () => {
-      localStorage.setItem('directVisitUrlsFromSearch', directVisitUrlsCheckbox.checked.toString());
+      // Save as boolean
+      window.saveToStorage('directVisitUrlsFromSearch', directVisitUrlsCheckbox.checked);
     });
   }
 
@@ -839,18 +872,18 @@ function renderSearchEngines() {
   // Load enabled engines from localStorage - DO NOT auto-add new ones
   let enabledEngines = [];
   try {
-    const saved = localStorage.getItem('enabledSearchEngines');
+    const saved = window.loadFromStorage('enabledSearchEngines');
     if (saved) {
-      enabledEngines = JSON.parse(saved);
+      enabledEngines = saved;
     } else {
       // Only set default if nothing is saved
       enabledEngines = window.engines.map(e => e.name);
-      localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+      window.saveToStorage('enabledSearchEngines', enabledEngines);
     }
   } catch (e) {
     // If error, default to all enabled
     enabledEngines = window.engines.map(e => e.name);
-    localStorage.setItem('enabledSearchEngines', JSON.stringify(enabledEngines));
+    window.saveToStorage('enabledSearchEngines', enabledEngines);
   }
 
   // Render ALL engines - log the count for debugging
@@ -953,7 +986,7 @@ function renderSearchEngines() {
         }
 
         // Save all engine statuses to localStorage
-        localStorage.setItem('enabledSearchEngines', JSON.stringify(enabled));
+        window.saveToStorage('enabledSearchEngines', enabled);
         
         // Update the engines dropdown immediately
         if (window.renderEngines) {
@@ -961,10 +994,10 @@ function renderSearchEngines() {
         }
         
         // If current engine was disabled, switch to first enabled engine
-        const currentEngine = localStorage.getItem('searchEngine');
+        const currentEngine = window.loadFromStorage('searchEngine');
         if (!enabled.includes(currentEngine)) {
           if (enabled.length > 0) {
-            localStorage.setItem('searchEngine', enabled[0]);
+            window.saveToStorage('searchEngine', enabled[0]);
             if (window.updateEngineBtn) {
               window.updateEngineBtn();
             }
@@ -1179,8 +1212,8 @@ function initDebugSettings() {
 
   // Load saved debug preferences
   try {
-    const saved = localStorage.getItem('debugPrefs');
-    const prefs = saved ? JSON.parse(saved) : {};
+    const saved = window.loadFromStorage('debugPrefs');
+    const prefs = saved || {};
     debugModules.forEach(module => {
       const checkbox = document.getElementById(`debug-${module}`);
       if (checkbox) {
@@ -1200,9 +1233,9 @@ function initDebugSettings() {
       if (checkbox) {
       checkbox.addEventListener('change', () => {
         try {
-          const prefs = JSON.parse(localStorage.getItem('debugPrefs') || '{}');
+          const prefs = window.loadFromStorage('debugPrefs', {});
           prefs[module] = checkbox.checked;
-          localStorage.setItem('debugPrefs', JSON.stringify(prefs));
+          window.saveToStorage('debugPrefs', prefs);
           // Sync to IndexedDB for service worker
           if (window.syncDebugPrefsToIndexedDB) {
             window.syncDebugPrefsToIndexedDB();

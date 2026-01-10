@@ -9,9 +9,9 @@ let todos = [];
 // Load todos from localStorage
 function loadTodos() {
   try {
-    const saved = localStorage.getItem('todos');
+    const saved = window.loadFromStorage('todos');
     if (saved) {
-      todos = JSON.parse(saved);
+      todos = saved;
     }
   } catch (e) {
     if (window.debugError) window.debugError('todo', 'Failed to load todos:', e);
@@ -20,7 +20,7 @@ function loadTodos() {
 }
 
 function saveTodos() {
-  localStorage.setItem('todos', JSON.stringify(todos));
+  window.saveToStorage('todos', todos);
 }
 
 // Generate unique ID

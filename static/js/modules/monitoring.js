@@ -7,9 +7,9 @@ const monitorDownSince = {};
 // Load from localStorage
 (function() {
   try {
-    const saved = localStorage.getItem('monitors');
+    const saved = window.loadFromStorage('monitors');
     if (saved) {
-      monitors = JSON.parse(saved);
+      monitors = saved;
     } else {
       monitors = defaultMonitors;
     }
@@ -18,22 +18,24 @@ const monitorDownSince = {};
   }
 
   try {
-    const savedInterval = localStorage.getItem('monitorInterval');
-    if (savedInterval && window.timers) {
-      window.timers.monitoring.interval = parseInt(savedInterval) * 1000;
+    const savedInterval = window.loadFromStorage('monitorInterval');
+    if (savedInterval !== null && savedInterval !== undefined && window.timers) {
+      const interval = typeof savedInterval === 'number' ? savedInterval : parseInt(savedInterval);
+      window.timers.monitoring.interval = interval * 1000;
     }
   } catch (e) {}
 })();
 
 function saveMonitors() {
   try {
-    localStorage.setItem('monitors', JSON.stringify(monitors));
+    window.saveToStorage('monitors', monitors);
   } catch (e) {}
 }
 
 function saveMonitorInterval(seconds) {
   try {
-    localStorage.setItem('monitorInterval', seconds.toString());
+    // Save as number
+    window.saveToStorage('monitorInterval', seconds);
     if (window.timers) {
       window.timers.monitoring.interval = seconds * 1000;
     }

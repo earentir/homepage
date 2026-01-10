@@ -52,6 +52,98 @@ function connect() {
           if (window.onWebSocketUpdate) {
             window.onWebSocketUpdate('system', data);
           }
+        } else if (data.type === 'storage-update') {
+          // Storage update notification - fetch updated data from backend
+          if (window.debugLog) window.debugLog('websocket', 'Storage update received for:', data.key);
+          if (data.key && window.syncFromBackend) {
+            window.syncFromBackend(data.key).then(updated => {
+              if (updated && window.debugLog) {
+                window.debugLog('websocket', 'Updated storage from backend:', data.key);
+              }
+              // Trigger any update handlers if needed
+              if (updated && window.onStorageUpdate) {
+                window.onStorageUpdate(data.key);
+              }
+              
+              // Reload module settings based on which key was updated
+              if (updated) {
+                // Quicklinks settings
+                if (data.key === 'quicklinksIconsOnly' || data.key === 'quicklinksEqualSize' || data.key === 'quicklinks' || data.key === 'quicklinksLayout') {
+                  if (window.reloadQuicklinksSettings) {
+                    window.reloadQuicklinksSettings();
+                  }
+                }
+                // Module preferences
+                if (data.key === 'modulePrefs') {
+                  if (window.loadModulePrefs) {
+                    window.loadModulePrefs();
+                    if (window.applyModuleVisibility) {
+                      window.applyModuleVisibility();
+                    }
+                  }
+                }
+                // Layout config
+                if (data.key === 'layoutConfig' || data.key === 'moduleOrder') {
+                  if (window.loadLayoutConfig) {
+                    window.loadLayoutConfig();
+                    if (window.renderLayout) {
+                      window.renderLayout();
+                    }
+                  }
+                }
+                // Graph settings
+                if (data.key === 'showFullBars' || data.key === 'colorizeBackground' || data.key === 'minBarWidth') {
+                  if (window.initGraphs) {
+                    window.initGraphs();
+                  }
+                }
+                // Search settings
+                if (data.key === 'searchHistory' || data.key === 'enabledSearchEngines' || data.key === 'searchEngine') {
+                  if (window.initSearch) {
+                    window.initSearch();
+                  }
+                }
+                // Calendar/Todo
+                if (data.key === 'calendarEvents' || data.key === 'calendarSettings') {
+                  if (window.initCalendar) {
+                    window.initCalendar();
+                  }
+                }
+                if (data.key === 'todos') {
+                  if (window.initTodo) {
+                    window.initTodo();
+                  }
+                }
+                // Monitoring/SNMP
+                if (data.key === 'monitors' || data.key === 'monitorInterval') {
+                  if (window.initMonitoring) {
+                    window.initMonitoring();
+                  }
+                }
+                if (data.key === 'snmpQueries' || data.key === 'snmpLastValues') {
+                  if (window.initSnmp) {
+                    window.initSnmp();
+                  }
+                }
+                // Module configs
+                if (data.key === 'githubModules') {
+                  if (window.renderGitHubModules) {
+                    window.renderGitHubModules();
+                  }
+                }
+                if (data.key === 'rssModules') {
+                  if (window.initRss) {
+                    window.initRss();
+                  }
+                }
+                if (data.key === 'diskModules') {
+                  if (window.initDisk) {
+                    window.initDisk();
+                  }
+                }
+              }
+            });
+          }
         }
       } catch (err) {
         if (window.debugError) window.debugError('websocket', 'Error parsing message:', err);

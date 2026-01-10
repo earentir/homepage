@@ -12,9 +12,9 @@ let quicklinksEqualSize = false;
 // Load from localStorage
 (function() {
   try {
-    const saved = localStorage.getItem('quicklinks');
+    const saved = window.loadFromStorage('quicklinks');
     if (saved) {
-      quicklinks = JSON.parse(saved);
+      quicklinks = saved;
     } else {
       quicklinks = defaultQuicklinks;
     }
@@ -23,37 +23,89 @@ let quicklinksEqualSize = false;
   }
 
   try {
-    const savedLayout = localStorage.getItem('quicklinksLayout');
-    if (savedLayout) {
-      quicklinksLayout = parseInt(savedLayout) || 1;
+    const savedLayout = window.loadFromStorage('quicklinksLayout');
+    if (savedLayout !== null && savedLayout !== undefined) {
+      quicklinksLayout = typeof savedLayout === 'number' ? savedLayout : parseInt(savedLayout) || 1;
     }
   } catch (e) {}
 
   try {
-    const savedIconsOnly = localStorage.getItem('quicklinksIconsOnly');
-    if (savedIconsOnly !== null) {
-      quicklinksIconsOnly = savedIconsOnly === 'true';
+    const savedIconsOnly = window.loadFromStorage('quicklinksIconsOnly');
+    if (savedIconsOnly !== null && savedIconsOnly !== undefined) {
+      // Handle both string and boolean values
+      if (typeof savedIconsOnly === 'boolean') {
+        quicklinksIconsOnly = savedIconsOnly;
+      } else {
+        quicklinksIconsOnly = savedIconsOnly === 'true' || savedIconsOnly === true;
+      }
     }
   } catch (e) {}
 
   try {
-    const savedEqualSize = localStorage.getItem('quicklinksEqualSize');
-    if (savedEqualSize !== null) {
-      quicklinksEqualSize = savedEqualSize === 'true';
+    const savedEqualSize = window.loadFromStorage('quicklinksEqualSize');
+    if (savedEqualSize !== null && savedEqualSize !== undefined) {
+      // Handle both string and boolean values
+      if (typeof savedEqualSize === 'boolean') {
+        quicklinksEqualSize = savedEqualSize;
+      } else {
+        quicklinksEqualSize = savedEqualSize === 'true' || savedEqualSize === true;
+      }
     }
   } catch (e) {}
 })();
 
+// Function to reload quicklinks settings after backend sync
+function reloadQuicklinksSettings() {
+  try {
+    const savedIconsOnly = window.loadFromStorage('quicklinksIconsOnly');
+    if (savedIconsOnly !== null && savedIconsOnly !== undefined) {
+      if (typeof savedIconsOnly === 'boolean') {
+        quicklinksIconsOnly = savedIconsOnly;
+      } else {
+        quicklinksIconsOnly = savedIconsOnly === 'true' || savedIconsOnly === true;
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const savedEqualSize = window.loadFromStorage('quicklinksEqualSize');
+    if (savedEqualSize !== null && savedEqualSize !== undefined) {
+      if (typeof savedEqualSize === 'boolean') {
+        quicklinksEqualSize = savedEqualSize;
+      } else {
+        quicklinksEqualSize = savedEqualSize === 'true' || savedEqualSize === true;
+      }
+    }
+  } catch (e) {}
+
+  // Re-render quicklinks with updated settings
+  if (window.renderQuicklinks) {
+    window.renderQuicklinks();
+  }
+  
+  // Update checkbox states if preferences modal is open
+  updateEqualSizeCheckboxState();
+  const iconsOnlyCheckbox = document.getElementById('quicklinksIconsOnly');
+  if (iconsOnlyCheckbox) {
+    iconsOnlyCheckbox.checked = quicklinksIconsOnly;
+  }
+  const equalSizeCheckbox = document.getElementById('quicklinksEqualSize');
+  if (equalSizeCheckbox) {
+    equalSizeCheckbox.checked = quicklinksEqualSize;
+  }
+}
+
 function saveQuicklinks() {
   try {
-    localStorage.setItem('quicklinks', JSON.stringify(quicklinks));
+    window.saveToStorage('quicklinks', quicklinks);
   } catch (e) {}
 }
 
 function saveQuicklinksLayout(cols) {
   quicklinksLayout = cols;
   try {
-    localStorage.setItem('quicklinksLayout', cols.toString());
+    // Save as number
+    window.saveToStorage('quicklinksLayout', cols);
   } catch (e) {}
 }
 
@@ -68,8 +120,8 @@ function updateLayoutButtons() {
 // Favicon cache
 function getFaviconCache() {
   try {
-    const cache = localStorage.getItem('faviconCache');
-    return cache ? JSON.parse(cache) : {};
+    const cache = window.loadFromStorage('faviconCache');
+    return cache || {};
   } catch (e) {
     return {};
   }
@@ -77,7 +129,7 @@ function getFaviconCache() {
 
 function saveFaviconCache(cache) {
   try {
-    localStorage.setItem('faviconCache', JSON.stringify(cache));
+    window.saveToStorage('faviconCache', cache);
   } catch (e) {}
 }
 
@@ -309,7 +361,8 @@ function editQuicklink(index) {
 function saveQuicklinksIconsOnly(enabled) {
   quicklinksIconsOnly = enabled;
   try {
-    localStorage.setItem('quicklinksIconsOnly', enabled.toString());
+    // Save as boolean (will be JSON stringified by saveToStorage)
+    window.saveToStorage('quicklinksIconsOnly', enabled);
   } catch (e) {}
   // Update equal size checkbox state
   updateEqualSizeCheckboxState();
@@ -318,7 +371,8 @@ function saveQuicklinksIconsOnly(enabled) {
 function saveQuicklinksEqualSize(enabled) {
   quicklinksEqualSize = enabled;
   try {
-    localStorage.setItem('quicklinksEqualSize', enabled.toString());
+    // Save as boolean (will be JSON stringified by saveToStorage)
+    window.saveToStorage('quicklinksEqualSize', enabled);
   } catch (e) {}
 }
 
@@ -453,3 +507,4 @@ window.saveQuicklinks = saveQuicklinks;
 window.renderQuicklinks = renderQuicklinks;
 window.renderQuicklinksList = renderQuicklinksList;
 window.initQuicklinks = initQuicklinks;
+window.reloadQuicklinksSettings = reloadQuicklinksSettings;

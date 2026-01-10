@@ -33,9 +33,9 @@ async function refreshWeather() {
     let weatherUrl = "/api/weather";
     let locationName = "";
     try {
-      const savedLoc = localStorage.getItem('weatherLocation');
+      const savedLoc = window.loadFromStorage('weatherLocation');
       if (savedLoc) {
-        const loc = JSON.parse(savedLoc);
+        const loc = typeof savedLoc === 'string' ? JSON.parse(savedLoc) : savedLoc;
         weatherUrl += "?lat=" + loc.latitude + "&lon=" + loc.longitude;
         locationName = loc.name || "";
       }

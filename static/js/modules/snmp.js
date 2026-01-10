@@ -5,26 +5,26 @@ let snmpLastValues = {};
 
 function loadSnmpQueries() {
   try {
-    const saved = localStorage.getItem('snmpQueries');
+    const saved = window.loadFromStorage('snmpQueries');
     if (saved) {
-      snmpQueries = JSON.parse(saved);
+      snmpQueries = saved;
     }
-    const savedLastValues = localStorage.getItem('snmpLastValues');
+    const savedLastValues = window.loadFromStorage('snmpLastValues');
     if (savedLastValues) {
-      snmpLastValues = JSON.parse(savedLastValues);
+      snmpLastValues = savedLastValues;
     }
   } catch (e) {}
 }
 
 function saveSnmpLastValues() {
   try {
-    localStorage.setItem('snmpLastValues', JSON.stringify(snmpLastValues));
+    window.saveToStorage('snmpLastValues', snmpLastValues);
   } catch (e) {}
 }
 
 function saveSnmpQueries() {
   try {
-    localStorage.setItem('snmpQueries', JSON.stringify(snmpQueries));
+    window.saveToStorage('snmpQueries', snmpQueries);
   } catch (e) {}
 }
 

@@ -289,6 +289,10 @@ if ('serviceWorker' in navigator) {
       <div class="badge"><span class="mono">/</span><span class="small">focus search</span></div>
       <div class="badge"><span class="mono">Enter</span><span class="small">search</span></div>
       <div class="badge"><span class="mono">E</span><span class="small">engine</span></div>
+      <div id="syncStatus" class="sync-status" style="margin-left: 12px; display: none;" title="Data synced to backend">
+        <span class="sync-icon"></span>
+        <span class="sync-text" style="display: none;"></span>
+      </div>
     </div>
     <div class="right">
       <a class="btn" href="/api/summary" target="_blank" rel="noreferrer"><i class="fas fa-code"></i> API</a>

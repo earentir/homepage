@@ -29,9 +29,9 @@ function setupTimerHandlers() {
 // Module prefs loading/saving
 function loadModulePrefs() {
   try {
-    const saved = localStorage.getItem('modulePrefs');
+    const saved = window.loadFromStorage('modulePrefs');
     if (saved) {
-      const prefs = JSON.parse(saved);
+      const prefs = saved;
       Object.keys(prefs).forEach(key => {
         if (window.moduleConfig && window.moduleConfig[key]) {
           window.moduleConfig[key].enabled = prefs[key].enabled;
@@ -57,7 +57,7 @@ function saveModulePrefs() {
         };
       });
     }
-    localStorage.setItem('modulePrefs', JSON.stringify(prefs));
+    window.saveToStorage('modulePrefs', prefs);
   } catch (e) {
     if (window.debugError) window.debugError('app', 'Failed to save module prefs:', e);
   }
@@ -153,7 +153,7 @@ function initApp() {
   applyModuleVisibility();
 
   // Load saved page title
-  const savedTitle = localStorage.getItem('pageTitle');
+  const savedTitle = window.loadFromStorage('pageTitle');
   if (savedTitle && window.applyPageTitle) {
     window.applyPageTitle(savedTitle);
   }
@@ -188,8 +188,54 @@ function initApp() {
     window.initWebSocket();
   }
 
-  // Initial load
-  initialLoad();
+  // Initialize sync status indicator
+  if (window.updateSyncStatusIndicator) {
+    window.updateSyncStatusIndicator();
+  }
+
+  // Sync storage from backend on initialization
+  if (window.syncAllFromBackend) {
+    window.syncAllFromBackend().then(() => {
+      if (window.debugLog) window.debugLog('app', 'Storage sync from backend completed');
+      
+      // Reload module settings after sync (in case backend had newer values)
+      loadModulePrefs();
+      applyModuleVisibility();
+      
+      // Reload other module settings
+      if (window.reloadQuicklinksSettings) {
+        window.reloadQuicklinksSettings();
+      }
+      
+      // Reload layout if it changed
+      if (window.loadLayoutConfig) {
+        window.loadLayoutConfig();
+        if (window.renderLayout) {
+          window.renderLayout();
+        }
+      }
+      
+      // Reload graphs settings
+      if (window.initGraphs) {
+        window.initGraphs();
+      }
+      
+      // Reload search settings
+      if (window.initSearch) {
+        window.initSearch();
+      }
+      
+      // Initial load after sync completes
+      initialLoad();
+    }).catch(() => {
+      // If sync fails, still do initial load
+      if (window.debugLog) window.debugLog('app', 'Storage sync failed, continuing with initial load');
+      initialLoad();
+    });
+  } else {
+    // Initial load
+    initialLoad();
+  }
 }
 
 // Run when DOM is ready

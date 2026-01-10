@@ -55,6 +55,10 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/config/list", h.HandleConfigList)
 	mux.HandleFunc("/api/config/download", h.HandleConfigDownload)
 	mux.HandleFunc("/api/config/delete", h.HandleConfigDelete)
+	mux.HandleFunc("/api/storage/sync", h.HandleStorageSync)
+	mux.HandleFunc("/api/storage/get", h.HandleStorageGet)
+	mux.HandleFunc("/api/storage/get-all", h.HandleStorageGetAll)
+	mux.HandleFunc("/api/storage/status", h.HandleStorageStatus)
 	mux.HandleFunc("/healthz", h.HandleHealthz)
 }
 
@@ -752,6 +756,100 @@ func (h *Handler) HandleConfigDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, map[string]string{"success": "Config deleted successfully"})
+}
+
+// HandleStorageSync handles storage sync requests from frontend.
+func (h *Handler) HandleStorageSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var syncData struct {
+		Key       string      `json:"key"`
+		Value     interface{} `json:"value"`
+		Version   int64       `json:"version"`
+		Timestamp int64       `json:"timestamp"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&syncData); err != nil {
+		WriteJSON(w, map[string]string{"error": "Invalid JSON: " + err.Error()})
+		return
+	}
+
+	if syncData.Key == "" {
+		WriteJSON(w, map[string]string{"error": "Missing 'key' field"})
+		return
+	}
+
+	// Store in backend storage
+	globalStorage.Set(syncData.Key, syncData.Value, syncData.Version)
+
+	// Get the stored item to return the actual version (in case of conflict resolution)
+	item, exists := globalStorage.Get(syncData.Key)
+	if !exists {
+		WriteJSON(w, map[string]string{"error": "Failed to store data"})
+		return
+	}
+
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"version": item.Version,
+		"key":     syncData.Key,
+	})
+}
+
+// HandleStorageGet handles storage get requests from frontend.
+func (h *Handler) HandleStorageGet(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		WriteJSON(w, map[string]string{"error": "Missing 'key' parameter"})
+		return
+	}
+
+	item, exists := globalStorage.Get(key)
+	if !exists {
+		WriteJSON(w, map[string]string{"error": "Key not found"})
+		return
+	}
+
+	WriteJSON(w, map[string]interface{}{
+		"key":       key,
+		"value":     item.Value,
+		"version":   item.Version,
+		"timestamp": item.LastModified.Unix(),
+	})
+}
+
+// HandleStorageGetAll handles requests to get all stored items.
+func (h *Handler) HandleStorageGetAll(w http.ResponseWriter, _ *http.Request) {
+	allItems := globalStorage.GetAll()
+
+	items := make([]map[string]interface{}, 0, len(allItems))
+	for key, item := range allItems {
+		items = append(items, map[string]interface{}{
+			"key":       key,
+			"value":     item.Value,
+			"version":   item.Version,
+			"timestamp": item.LastModified.Unix(),
+		})
+	}
+
+	WriteJSON(w, map[string]interface{}{
+		"items": items,
+	})
+}
+
+// HandleStorageStatus returns the status of the storage system.
+func (h *Handler) HandleStorageStatus(w http.ResponseWriter, _ *http.Request) {
+	allItems := globalStorage.GetAll()
+	
+	WriteJSON(w, map[string]interface{}{
+		"enabled":    true,
+		"itemCount":  len(allItems),
+		"hasData":    len(allItems) > 0,
+		"wsConnected": true, // This could be enhanced to check actual WS connections
+	})
 }
 
 // HandleHealthz is the health check endpoint.

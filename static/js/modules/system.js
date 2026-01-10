@@ -5,9 +5,9 @@ const defaultDiskModules = [];
 
 let diskModules = [];
 try {
-  const saved = localStorage.getItem('diskModules');
+  const saved = window.loadFromStorage('diskModules');
   if (saved) {
-    diskModules = JSON.parse(saved);
+    diskModules = saved;
   } else {
     diskModules = defaultDiskModules;
   }
@@ -16,7 +16,7 @@ try {
 }
 
 function saveDiskModules() {
-  localStorage.setItem('diskModules', JSON.stringify(diskModules));
+  window.saveToStorage('diskModules', diskModules);
 }
 
 async function refreshCPU() {
