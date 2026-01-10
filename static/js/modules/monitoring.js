@@ -483,33 +483,14 @@ function initMonitoring() {
             alert(data.error || 'Validation failed');
             return;
           }
-        }
-      } catch (e) {
-        // Fallback to client-side validation if backend fails
-        if (!name) {
-          alert('Please enter a name');
+        } else {
+          alert('Validation error: Unable to validate input');
           return;
         }
-        if (type === 'http') {
-          if (!mon.url) {
-            alert('Please enter a URL');
-            return;
-          }
-        } else if (type === 'port') {
-          if (!mon.host) {
-            alert('Please enter a host');
-            return;
-          }
-          if (!mon.port || mon.port < 1 || mon.port > 65535) {
-            alert('Please enter a valid port (1-65535)');
-            return;
-          }
-        } else if (type === 'ping') {
-          if (!mon.host) {
-            alert('Please enter a host');
-            return;
-          }
-        }
+      } catch (e) {
+        if (window.debugError) window.debugError('monitoring', 'Error validating monitoring:', e);
+        alert('Validation error: Unable to connect to server');
+        return;
       }
 
       const editIndex = form.dataset.editIndex;

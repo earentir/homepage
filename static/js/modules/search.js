@@ -144,7 +144,7 @@ async function renderSearchHistory(filter = '') {
   loadSearchHistory();
 
   // Use backend API for filtering
-  let filtered = searchHistory;
+  let filtered = [];
   try {
     const response = await fetch(`/api/search/history/filter?filter=${encodeURIComponent(filter)}`, {
       method: 'POST',
@@ -159,14 +159,11 @@ async function renderSearchHistory(filter = '') {
       if (data.history && Array.isArray(data.history)) {
         filtered = data.history;
       }
+    } else {
+      if (window.debugError) window.debugError('search', 'Error filtering search history: HTTP ' + response.status);
     }
   } catch (e) {
-    // Fallback to client-side filtering if backend fails
     if (window.debugError) window.debugError('search', 'Error filtering search history:', e);
-    const filterLower = filter.toLowerCase();
-    filtered = filterLower
-      ? searchHistory.filter(item => item.term.toLowerCase().includes(filterLower))
-      : searchHistory;
   }
 
   if (filtered.length === 0) {
@@ -338,7 +335,6 @@ async function isValidUrlOrIp(input) {
   const trimmed = input.trim();
   if (!trimmed) return false;
 
-  // Try backend API first
   try {
     const response = await fetch(`/api/utils/validate-url?input=${encodeURIComponent(trimmed)}`);
     if (response.ok) {
@@ -348,11 +344,10 @@ async function isValidUrlOrIp(input) {
       }
     }
   } catch (e) {
-    // Fallback to client-side validation
+    if (window.debugError) window.debugError('search', 'Error validating URL:', e);
   }
 
-  // Fallback to sync version
-  return isValidUrlOrIpSync(trimmed);
+  return false;
 }
 
 // Normalize URL - add http:// if no protocol is present
@@ -435,30 +430,12 @@ async function renderAutocomplete(filter = '') {
         autocompleteItems = [];
       }
     } else {
-      // Fallback to client-side filtering if backend fails
-      throw new Error('Backend request failed');
+      if (window.debugError) window.debugError('search', 'Error getting autocomplete: HTTP ' + response.status);
+      autocompleteItems = [];
     }
   } catch (e) {
-    // Fallback to client-side filtering if backend fails
     if (window.debugError) window.debugError('search', 'Error getting autocomplete:', e);
-    const filterLower = term.toLowerCase();
-    autocompleteItems = searchHistory.filter(item => 
-      item && item.term && item.term.toLowerCase().includes(filterLower)
-    );
-
-    // Remove duplicates and reverse to show newest first
-    const uniqueItems = [];
-    const seen = new Set();
-    for (let i = autocompleteItems.length - 1; i >= 0; i--) {
-      const item = autocompleteItems[i];
-      if (!item || !item.term) continue;
-      const key = item.term.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniqueItems.push(item);
-      }
-    }
-    autocompleteItems = uniqueItems.slice(0, 10); // Limit to 10 items
+    autocompleteItems = [];
   }
 
   if (autocompleteItems.length === 0) {
@@ -579,7 +556,7 @@ function selectAutocompleteItem(index, event = null) {
         sameTab = true;
       }
 
-      const url = normalizeUrlSync(term);
+      const url = normalizeUrl(term);
       if (sameTab) {
         window.location.href = url;
       } else {

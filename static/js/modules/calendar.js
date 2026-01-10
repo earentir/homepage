@@ -51,11 +51,6 @@ function generateEventId() {
   return 'evt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-// Check if a date has events
-function dateHasEvents(dateStr) {
-  return calendarEvents.some(evt => evt.date === dateStr);
-}
-
 // Get events for a specific date - uses backend processing
 async function getEventsForDate(dateStr) {
   if (calendarEvents.length === 0) return [];
@@ -77,8 +72,7 @@ async function getEventsForDate(dateStr) {
     if (window.debugError) window.debugError('calendar', 'Error getting events for date:', e);
   }
 
-  // Fallback to client-side filtering if backend fails
-  return calendarEvents.filter(evt => evt.date === dateStr);
+  return [];
 }
 
 // Get next N upcoming events - uses backend processing
@@ -106,16 +100,7 @@ async function getUpcomingEvents(count = 5) {
   return [];
 }
 
-// Format date for display
-function formatEventDate(dateStr, timeStr) {
-  const date = new Date(dateStr + 'T' + (timeStr || '00:00'));
-  const options = { weekday: 'short', month: 'short', day: 'numeric' };
-  let formatted = date.toLocaleDateString('en-US', options);
-  if (timeStr) {
-    formatted += ' ' + timeStr;
-  }
-  return formatted;
-}
+// Date formatting is now handled by backend - events include formattedDate field
 
 // Render the calendar month view - uses backend processing
 async function renderCalendar() {
@@ -242,15 +227,6 @@ function goToCurrentMonth() {
   renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
 }
 
-// Week calendar functions
-function getWeekStart(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = (day - calendarSettings.startDay + 7) % 7;
-  d.setDate(d.getDate() - diff);
-  return d;
-}
-
 // Render week calendar - uses backend processing
 async function renderWeekCalendar() {
   const container = document.getElementById('weekCalendarGrid');
@@ -335,81 +311,8 @@ async function renderWeekCalendar() {
     return;
   }
 
-  // Fallback to client-side rendering
-  let startIdx = calendarSettings.startDay;
-  if (calendarSettings.workWeekOnly) {
-    startIdx = 1;
-  }
-
-  const weekStart = getWeekStart(currentWeekDate);
-  if (calendarSettings.workWeekOnly && calendarSettings.startDay !== 1) {
-    const day = weekStart.getDay();
-    const diff = (day === 0) ? 1 : (1 - day + 7) % 7;
-    weekStart.setDate(weekStart.getDate() + diff);
-  }
-
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + daysToShow - 1);
-  const titleEl = document.getElementById('weekCalendarTitle');
-  if (titleEl) {
-    const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    titleEl.textContent = startMonth + ' - ' + endMonth;
-  }
-
-  let html = '<div class="week-header">';
-  for (let i = 0; i < daysToShow; i++) {
-    const dayIdx = (startIdx + i) % 7;
-    html += `<div class="week-day-name">${dayNames[dayIdx]}</div>`;
-  }
-  html += '</div><div class="week-days">';
-
-  const currentDay = new Date(weekStart);
-  for (let i = 0; i < daysToShow; i++) {
-    const dateStr = currentDay.toISOString().split('T')[0];
-    const dayNum = currentDay.getDate();
-    const hasEvents = dateHasEvents(dateStr);
-    const isToday = dateStr === todayStr;
-    // Note: In fallback mode, we use client-side filtering for events
-    const events = calendarEvents.filter(evt => evt.date === dateStr);
-
-    let classes = 'week-day';
-    if (hasEvents) classes += ' has-event';
-    if (isToday) classes += ' today';
-
-    let eventsHtml = '';
-    if (events.length > 0) {
-      events.slice(0, 3).forEach(evt => {
-        eventsHtml += `<div class="week-event" title="${window.escapeHtml(evt.title)}">${evt.time ? evt.time + ' ' : ''}${window.escapeHtml(evt.title)}</div>`;
-      });
-      if (events.length > 3) {
-        eventsHtml += `<div class="week-event more">+${events.length - 3} more</div>`;
-      }
-    }
-
-    html += `
-      <div class="${classes}" data-date="${dateStr}">
-        <div class="week-day-num">${dayNum}</div>
-        <div class="week-events">${eventsHtml}</div>
-      </div>
-    `;
-
-    currentDay.setDate(currentDay.getDate() + 1);
-  }
-
-  html += '</div>';
-  container.innerHTML = html;
-
-  container.querySelectorAll('.week-day').forEach(el => {
-    el.addEventListener('click', () => {
-      const date = el.getAttribute('data-date');
-      showDayEvents(date); // showDayEvents is now async but we don't await it (fire and forget)
-    });
-  });
+  // Backend data not available - show error
+  container.innerHTML = '<div class="muted" style="padding:8px 0;">Unable to load week calendar</div>';
 }
 
 function prevWeek() {
@@ -626,13 +529,14 @@ async function saveEventFromForm() {
         alert(data.error || 'Validation failed');
         return;
       }
-    }
-  } catch (e) {
-    // Fallback to client-side validation if backend fails
-    if (!title || !date) {
-      alert('Title and date are required');
+    } else {
+      alert('Validation error: Unable to validate input');
       return;
     }
+  } catch (e) {
+    if (window.debugError) window.debugError('calendar', 'Error validating event:', e);
+    alert('Validation error: Unable to connect to server');
+    return;
   }
 
   if (id) {

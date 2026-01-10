@@ -306,10 +306,10 @@ async function refresh() {
       if (clientInfoDiv) clientInfoDiv.style.display = "none";
 
       document.getElementById("host").textContent = j.server.hostname;
-      // Use formatted uptime from backend if available, fallback to client-side formatting
+      // Use formatted uptime from backend
       const uptimeEl = document.getElementById("uptime");
       if (uptimeEl) {
-        uptimeEl.textContent = j.server.uptimeFormatted || (window.fmtUptime ? window.fmtUptime(j.server.uptimeSec) : j.server.uptimeSec);
+        uptimeEl.textContent = j.server.uptimeFormatted || j.server.uptimeSec;
       }
       document.getElementById("time").textContent = j.server.time;
 
@@ -414,8 +414,8 @@ function updateServerInfo(server) {
   if (server.uptimeSec !== undefined) {
     const uptimeEl = document.getElementById("uptime");
     if (uptimeEl) {
-      // Use formatted uptime from backend if available, fallback to client-side formatting
-      uptimeEl.textContent = server.uptimeFormatted || (window.fmtUptime ? window.fmtUptime(server.uptimeSec) : server.uptimeSec);
+      // Use formatted uptime from backend
+      uptimeEl.textContent = server.uptimeFormatted || server.uptimeSec;
     }
   }
 }
@@ -443,10 +443,10 @@ function updateSystemMetrics(system) {
   if (system.ram) {
     const ramSummaryEl = document.getElementById("ramSummary");
     if (ramSummaryEl && system.ram.total && system.ram.used && system.ram.available && system.ram.percent !== undefined) {
-      // Use formatted values from backend if available, fallback to client-side formatting
-      const total = system.ram.totalFormatted || (window.formatBytes ? window.formatBytes(system.ram.total) : system.ram.total);
-      const used = system.ram.usedFormatted || (window.formatBytes ? window.formatBytes(system.ram.used) : system.ram.used);
-      const free = system.ram.freeFormatted || (window.formatBytes ? window.formatBytes(system.ram.available) : system.ram.available);
+      // Use formatted values from backend
+      const total = system.ram.totalFormatted || system.ram.total;
+      const used = system.ram.usedFormatted || system.ram.used;
+      const free = system.ram.freeFormatted || system.ram.available;
       const usedPercent = system.ram.percent;
       const freePercent = 100 - usedPercent;
       
@@ -469,10 +469,10 @@ function updateSystemMetrics(system) {
     const safeMount = '/'.replace(/[^a-zA-Z0-9]/g, '_');
     const summaryEl = document.getElementById("diskSummary_" + safeMount);
     if (summaryEl) {
-      // Use formatted values from backend if available, fallback to client-side formatting
-      const total = system.disk.totalFormatted || (window.formatBytes ? window.formatBytes(system.disk.total || 0) : system.disk.total || 0);
-      const used = system.disk.usedFormatted || (window.formatBytes ? window.formatBytes(system.disk.used || 0) : system.disk.used || 0);
-      const free = system.disk.freeFormatted || (window.formatBytes ? window.formatBytes(system.disk.free || 0) : system.disk.free || 0);
+      // Use formatted values from backend
+      const total = system.disk.totalFormatted || system.disk.total || 0;
+      const used = system.disk.usedFormatted || system.disk.used || 0;
+      const free = system.disk.freeFormatted || system.disk.free || 0;
       const usedPercent = system.disk.percent;
       const freePercent = 100 - usedPercent;
       

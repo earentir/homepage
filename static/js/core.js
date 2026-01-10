@@ -85,31 +85,12 @@ function updateTimerStatus(timerStatus, timestamp) {
   });
 }
 
-function formatBytes(bytes) {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return (bytes / Math.pow(k, i)).toFixed(2) + " " + sizes[i];
-}
+// formatBytes and fmtUptime removed - backend always provides formatted values
 
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
-}
-
-function fmtUptime(sec) {
-  const d = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
-  let parts = [];
-  if (d) parts.push(d + "d");
-  if (h) parts.push(h + "h");
-  if (m) parts.push(m + "m");
-  if (s || parts.length === 0) parts.push(s + "s");
-  return parts.join(" ");
 }
 
 function isModalOpen() {
@@ -760,9 +741,8 @@ window.timers = timers;
 window.updateTimer = updateTimer;
 window.startTimer = startTimer;
 window.updateTimerStatus = updateTimerStatus;
-window.formatBytes = formatBytes;
+// formatBytes and fmtUptime removed - backend always provides formatted values
 window.escapeHtml = escapeHtml;
-window.fmtUptime = fmtUptime;
 window.isModalOpen = isModalOpen;
 window.fetchWithTimeout = fetchWithTimeout;
 window.saveToStorage = saveToStorage;

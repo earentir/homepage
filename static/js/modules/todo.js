@@ -53,23 +53,7 @@ async function getNextTodos(count = 5) {
   return [];
 }
 
-// Format date for display
-function formatTodoDate(dateStr) {
-  if (!dateStr) return '';
-  const date = new Date(dateStr + 'T00:00:00');
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffTime = date - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Tomorrow';
-  if (diffDays === -1) return 'Yesterday';
-  if (diffDays < 0) return `${Math.abs(diffDays)} days ago`;
-  if (diffDays <= 7) return `In ${diffDays} days`;
-
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
+// Date formatting is now handled by backend - todos include formattedDueDate field
 
 // Get priority color class
 function getPriorityClass(priority) {
@@ -167,7 +151,7 @@ function moveTodo(fromIndex, toIndex) {
 }
 
 // Render todos list in preferences
-function renderTodosPreferenceList() {
+async function renderTodosPreferenceList() {
   const list = document.getElementById('todosList');
   if (!list) return;
 
@@ -177,6 +161,29 @@ function renderTodosPreferenceList() {
     list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No todos yet. Click "Add" to create one.</div>';
     return;
   }
+
+  // Get formatted dates from backend for all todos
+  let formattedTodos = [];
+  try {
+    const res = await fetch(`/api/todos/process?count=${todos.length}&includeCompleted=true`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(todos),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.todos && Array.isArray(data.todos)) {
+        formattedTodos = data.todos;
+      }
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('todo', 'Error getting formatted todos:', e);
+  }
+
+  // Create a map of formatted todos by ID for quick lookup
+  const formattedMap = new Map();
+  formattedTodos.forEach(t => formattedMap.set(t.id, t));
 
   todos.forEach((todo, index) => {
     const item = document.createElement('div');
@@ -188,7 +195,9 @@ function renderTodosPreferenceList() {
     const canMoveDown = index < todos.length - 1;
     const priorityClass = getPriorityClass(todo.priority);
     const priorityBadge = todo.priority ? `<span class="todo-priority ${priorityClass}">${todo.priority}</span>` : '';
-    const dueDateText = todo.dueDate ? ` - ${formatTodoDate(todo.dueDate)}` : '';
+    // Use formatted date from backend if available
+    const formattedTodo = formattedMap.get(todo.id);
+    const dueDateText = formattedTodo && formattedTodo.formattedDueDate ? ` - ${formattedTodo.formattedDueDate}` : (todo.dueDate ? ` - ${todo.dueDate}` : '');
 
     item.innerHTML = `
       <div class="module-icon drag-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder">
@@ -308,13 +317,14 @@ async function saveTodoFromForm() {
         alert(data.error || 'Validation failed');
         return;
       }
-    }
-  } catch (e) {
-    // Fallback to client-side validation if backend fails
-    if (!title) {
-      alert('Title is required');
+    } else {
+      alert('Validation error: Unable to validate input');
       return;
     }
+  } catch (e) {
+    if (window.debugError) window.debugError('todo', 'Error validating todo:', e);
+    alert('Validation error: Unable to connect to server');
+    return;
   }
 
   if (id) {
