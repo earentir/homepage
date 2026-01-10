@@ -1210,7 +1210,7 @@ window.renderTodoModuleList = renderTodoModuleList;
 let debugSettingsInitialized = false;
 
 function initDebugSettings() {
-  const debugModules = ['sw', 'network', 'websocket', 'search', 'app', 'core', 'system', 'weather', 'github', 'rss', 'layout', 'preferences', 'config', 'calendar', 'todo', 'quicklinks'];
+  const debugModules = ['sw', 'network', 'websocket', 'search', 'app', 'core', 'system', 'weather', 'github', 'rss', 'layout', 'preferences', 'config', 'calendar', 'todo', 'quicklinks', 'timer'];
 
   // Load saved debug preferences
   try {

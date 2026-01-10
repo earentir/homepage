@@ -309,7 +309,7 @@ func (h *Handler) HandleGitHub(w http.ResponseWriter, r *http.Request) {
 	resp.UserRepos = userRepos
 	resp.OrgRepos = orgRepos
 	if err != nil {
-		log.Printf("GitHub fetch error: %v", err)
+		GetDebugLogger().Logf("github", "fetch error: %v", err)
 		if userRepos.Error == "" {
 			resp.UserRepos.Error = err.Error()
 		}

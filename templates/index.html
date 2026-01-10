@@ -893,7 +893,7 @@ if ('serviceWorker' in navigator) {
         <div class="tab-content" id="tab-debug">
           <div class="pref-section">
             <h3>Console Logging</h3>
-            <p class="small" style="color:var(--muted); margin-bottom:16px;">Enable console logging for specific modules to debug issues. Logs will only appear in the browser console when enabled.</p>
+            <p class="small" style="color:var(--muted); margin-bottom:16px;">Enable console logging for specific modules to debug issues. Logs will appear in the browser console (frontend) and server logs (backend) when enabled. All debug logging is disabled by default.</p>
             <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
               <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
                 <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
@@ -989,6 +989,12 @@ if ('serviceWorker' in navigator) {
                 <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                   <input type="checkbox" id="debug-quicklinks">
                   <span>Quicklinks</span>
+                </label>
+              </div>
+              <div class="pref-row" style="flex-direction:column; align-items:flex-start; padding:8px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="debug-timer">
+                  <span>Timer</span>
                 </label>
               </div>
             </div>

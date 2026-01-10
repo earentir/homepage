@@ -47,6 +47,11 @@ func (s *Storage) Set(key string, value interface{}, version int64) {
 	// Broadcast update if data was actually updated
 	if shouldUpdate {
 		GetWSManager().BroadcastStorageUpdate(key, storedVersion)
+		
+		// Update debug logger preferences if debugPrefs changed
+		if key == "debugPrefs" {
+			GetDebugLogger().UpdatePrefs()
+		}
 	}
 }
 

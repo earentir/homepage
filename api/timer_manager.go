@@ -47,20 +47,25 @@ func (tm *TimerManager) Start() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	// Also check for preference changes periodically
-	prefTicker := time.NewTicker(5 * time.Second)
-	defer prefTicker.Stop()
+		// Also check for preference changes periodically
+		prefTicker := time.NewTicker(5 * time.Second)
+		defer prefTicker.Stop()
 
-	for {
-		select {
-		case <-tm.stopCh:
-			return
-		case <-ticker.C:
-			tm.checkTimers()
-		case <-prefTicker.C:
-			tm.loadPreferences()
+		// Update debug preferences on startup
+		GetDebugLogger().UpdatePrefs()
+
+		for {
+			select {
+			case <-tm.stopCh:
+				return
+			case <-ticker.C:
+				tm.checkTimers()
+			case <-prefTicker.C:
+				tm.loadPreferences()
+				// Also update debug preferences periodically
+				GetDebugLogger().UpdatePrefs()
+			}
 		}
-	}
 }
 
 // Stop stops the timer manager
@@ -233,9 +238,8 @@ func (tm *TimerManager) checkTimers() {
 			// Update last refresh time
 			timer.LastRefresh = now
 
-			if log.Printf != nil {
-				log.Printf("Timer: Sending refresh notification for module: %s (interval: %ds)", timerKey, timer.Interval)
-			}
+			// Debug logging (controlled by preferences)
+			GetDebugLogger().Logf("timer", "Sending refresh notification for module: %s (interval: %ds)", timerKey, timer.Interval)
 		}
 	}
 }

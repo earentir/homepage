@@ -33,12 +33,12 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 	}
 
 	if hasCachedData && timeSinceLastFetch < minWaitTime {
-		log.Printf("GitHub: returning cached data (last fetch: %v ago)", timeSinceLastFetch)
+		GetDebugLogger().Logf("github", "returning cached data (last fetch: %v ago)", timeSinceLastFetch)
 		return cachedUserRepos, cachedOrgRepos, nil
 	}
 
 	if timeSinceLastFetch < 5*time.Minute {
-		log.Printf("GitHub: too soon since last call (%v), returning cached data", timeSinceLastFetch)
+		GetDebugLogger().Logf("github", "too soon since last call (%v), returning cached data", timeSinceLastFetch)
 		if hasCachedData {
 			return cachedUserRepos, cachedOrgRepos, nil
 		}
@@ -60,7 +60,7 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 	orgRepos = fetchOrgRepos(cctx, "network-plane")
 
 	if (userRepos.Error != "" || orgRepos.Error != "") && hasCachedData {
-		log.Printf("GitHub: API call failed but returning cached data")
+		GetDebugLogger().Logf("github", "API call failed but returning cached data")
 		return cachedUserRepos, cachedOrgRepos, nil
 	}
 
@@ -79,7 +79,7 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 		githubCache.hasData = true
 		githubCache.mu.Unlock()
 
-		log.Printf("GitHub: cached %d user repos and %d org repos", len(userRepos.Repos), len(orgRepos.Repos))
+		GetDebugLogger().Logf("github", "cached %d user repos and %d org repos", len(userRepos.Repos), len(orgRepos.Repos))
 	}
 
 	return userRepos, orgRepos, nil
@@ -94,7 +94,7 @@ func fetchUserRepos(ctx context.Context, username string) GitHubUserRepos {
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	res, err := githubHTTPClient.Do(req)
 	if err != nil {
-		log.Printf("GitHub API error (user repos): %v", err)
+		GetDebugLogger().Logf("github", "API error (user repos): %v", err)
 		userRepos.Error = "Failed to fetch user repos: " + err.Error()
 		return userRepos
 	}

@@ -809,6 +809,9 @@ func main() {
 		listenPort = "8080"
 	}
 
+	// Initialize debug logger and load preferences
+	api.GetDebugLogger().UpdatePrefs()
+	
 	// Start timer manager
 	log.Printf("Starting timer manager...")
 	timerManager := api.GetTimerManager()
