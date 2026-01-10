@@ -58,6 +58,12 @@ function connect() {
           if (data.module && window.onModuleRefresh) {
             window.onModuleRefresh(data.module);
           }
+        } else if (data.type === 'module-update') {
+          // Module data update (includes data, no need to fetch)
+          if (window.debugLog) window.debugLog('websocket', 'Module data update received for:', data.module);
+          if (data.module && data.data && window.onModuleUpdate) {
+            window.onModuleUpdate(data.module, data.data);
+          }
         } else if (data.type === 'timer-status') {
           // Timer status update - update timer UI
           if (data.timerStatus && window.updateTimerStatus) {

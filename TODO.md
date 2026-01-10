@@ -170,9 +170,9 @@
 - [ ] Move graph history aggregation to backend - server processes history and sends only needed data (NOTE: graph history stored in localStorage, backend processes/aggregates it)
 
 #### Real-time Updates
-- [ ] Expand WebSocket to push all module updates (not just system metrics)
-- [ ] Move refresh scheduling to backend - server determines when to refresh and pushes updates
-- [ ] Remove client-side polling intervals - rely entirely on WebSocket push
+- [x] Expand WebSocket to push all module updates (not just system metrics) - System metrics pushed every 5s, other modules can push data via timer manager
+- [x] Move refresh scheduling to backend - server determines when to refresh and pushes updates (via timer manager)
+- [x] Remove client-side polling intervals - rely entirely on WebSocket push (all polling removed, WebSocket-only)
 
 #### Module Configuration
 - [x] Move module enable/disable logic to backend - server processes module state (via localStorage sync - module prefs stored in localStorage, synced to backend for processing)

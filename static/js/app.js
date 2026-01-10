@@ -89,19 +89,13 @@ function applyModuleVisibility() {
 
 // Set up refresh intervals (fallback only if WebSocket is not connected)
 // Note: Module refreshes are now managed by backend timer manager via WebSocket
+// All module refreshes are handled via WebSocket - no client-side polling needed
 function setupIntervals() {
-  if (!window.timers) return;
-
-  // Status refresh - only if WebSocket is not connected (fallback)
-  setInterval(() => {
-    // Only poll via HTTP if WebSocket is not connected
-    if (!window.wsIsConnected || !window.wsIsConnected()) {
-      if (window.refresh) window.refresh();
-    }
-  }, 30000);
-
-  // Module refreshes are handled via WebSocket refresh notifications from backend timer manager
-  // No client-side intervals needed - backend sends refresh messages when timers expire
+  // All refreshes are now handled via WebSocket:
+  // - System metrics (CPU, RAM) are pushed every 5 seconds via WebSocket
+  // - Other modules receive refresh notifications via WebSocket when timers expire
+  // - No client-side polling intervals needed
+  // Fallback polling removed - rely entirely on WebSocket push notifications
 }
 
 // Initial data load
@@ -182,7 +176,7 @@ async function initApp() {
     window.initWebSocket();
   }
 
-  // Set up WebSocket refresh handler
+  // Set up WebSocket refresh handler (for modules that need to fetch data)
   window.onModuleRefresh = function(moduleName) {
     if (window.debugLog) window.debugLog('app', 'WebSocket refresh notification for:', moduleName);
     
@@ -207,6 +201,21 @@ async function initApp() {
         window.startTimer(moduleName);
       }
     }
+  };
+
+  // Set up WebSocket module data update handler (for modules that push data directly)
+  window.onModuleUpdate = function(moduleName, data) {
+    if (window.debugLog) window.debugLog('app', 'WebSocket module data update for:', moduleName);
+    
+    // Handle modules that receive data directly
+    if (moduleName === 'ip' && window.updateIPData) {
+      window.updateIPData(data);
+      // Update timer UI
+      if (window.startTimer) {
+        window.startTimer(moduleName);
+      }
+    }
+    // Add more modules here as they support data push
   };
 
   // Initialize sync status indicator

@@ -1,7 +1,7 @@
 package api
 
 import (
-	"log"
+	"context"
 	"sync"
 	"time"
 )
@@ -13,21 +13,33 @@ type TimerInfo struct {
 	Enabled     bool      // Whether the module is enabled
 }
 
+// ModuleDataFetcher is a function that fetches module data for a given timer key
+type ModuleDataFetcher func(ctx context.Context, timerKey string) (interface{}, error)
+
 // TimerManager manages refresh timers for all modules
 type TimerManager struct {
-	mu      sync.RWMutex
-	timers  map[string]*TimerInfo // key is timerKey (e.g., "cpu", "ram", "ip")
-	stopCh  chan struct{}
-	running bool
+	mu          sync.RWMutex
+	timers      map[string]*TimerInfo // key is timerKey (e.g., "cpu", "ram", "ip")
+	stopCh      chan struct{}
+	running     bool
+	dataFetcher ModuleDataFetcher // Optional function to fetch module data
 }
 
 // NewTimerManager creates a new timer manager
 func NewTimerManager() *TimerManager {
 	return &TimerManager{
-		timers:  make(map[string]*TimerInfo),
-		stopCh:  make(chan struct{}),
-		running: false,
+		timers:      make(map[string]*TimerInfo),
+		stopCh:      make(chan struct{}),
+		running:     false,
+		dataFetcher: nil,
 	}
+}
+
+// SetDataFetcher sets the function to fetch module data
+func (tm *TimerManager) SetDataFetcher(fetcher ModuleDataFetcher) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	tm.dataFetcher = fetcher
 }
 
 // Start starts the timer manager
@@ -228,18 +240,49 @@ func (tm *TimerManager) checkTimers() {
 		intervalDuration := time.Duration(timer.Interval) * time.Second
 
 		if elapsed >= intervalDuration {
-			// Send refresh notification
-			wsManager.Broadcast(map[string]interface{}{
+			// Get data fetcher while holding read lock
+			var fetcher ModuleDataFetcher
+			tm.mu.RUnlock()
+			tm.mu.RLock()
+			fetcher = tm.dataFetcher
+			tm.mu.RUnlock()
+
+			// Try to fetch module data if fetcher is available
+			var data interface{}
+			if fetcher != nil {
+				ctx := context.Background()
+				fetchedData, err := fetcher(ctx, timerKey)
+				if err == nil {
+					data = fetchedData
+				}
+			}
+
+			// Send refresh notification with optional data
+			message := map[string]interface{}{
 				"type":      "refresh",
 				"module":    timerKey,
 				"timestamp": now.Unix(),
-			})
+			}
+			if data != nil {
+				message["data"] = data
+				message["type"] = "module-update" // Use module-update type when data is included
+			}
+			wsManager.Broadcast(message)
 
-			// Update last refresh time
+			// Update last refresh time (need write lock)
+			tm.mu.Lock()
 			timer.LastRefresh = now
+			tm.mu.Unlock()
 
 			// Debug logging (controlled by preferences)
-			GetDebugLogger().Logf("timer", "Sending refresh notification for module: %s (interval: %ds)", timerKey, timer.Interval)
+			if data != nil {
+				GetDebugLogger().Logf("timer", "Pushing module data update for: %s (interval: %ds)", timerKey, timer.Interval)
+			} else {
+				GetDebugLogger().Logf("timer", "Sending refresh notification for module: %s (interval: %ds)", timerKey, timer.Interval)
+			}
+
+			// Re-acquire read lock for next iteration
+			tm.mu.RLock()
 		}
 	}
 }
