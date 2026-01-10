@@ -39,6 +39,12 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/systeminfo", h.HandleSystemInfo)
 	mux.HandleFunc("/api/baseboard", h.HandleBaseboard)
 	mux.HandleFunc("/api/weather", h.HandleWeather)
+	mux.HandleFunc("/api/search-engines", h.HandleSearchEngines)
+	mux.HandleFunc("/api/modules", h.HandleModules)
+	mux.HandleFunc("/api/calendar/process", h.HandleCalendarProcess)
+	mux.HandleFunc("/api/calendar/month", h.HandleCalendarMonth)
+	mux.HandleFunc("/api/calendar/week", h.HandleCalendarWeek)
+	mux.HandleFunc("/api/todos/process", h.HandleTodosProcess)
 	mux.HandleFunc("/api/geocode", h.HandleGeocode)
 	mux.HandleFunc("/api/github", h.HandleGitHub)
 	mux.HandleFunc("/api/github/repos", h.HandleGitHubRepos)
@@ -853,6 +859,121 @@ func (h *Handler) HandleStorageStatus(w http.ResponseWriter, _ *http.Request) {
 		"hasData":    len(allItems) > 0,
 		"wsConnected": true, // This could be enhanced to check actual WS connections
 	})
+}
+
+// HandleSearchEngines returns the list of available search engines.
+func (h *Handler) HandleSearchEngines(w http.ResponseWriter, _ *http.Request) {
+	engines := GetSearchEngines()
+	WriteJSON(w, map[string]any{"engines": engines})
+}
+
+// HandleModules returns metadata for all available modules.
+func (h *Handler) HandleModules(w http.ResponseWriter, _ *http.Request) {
+	modules := GetModuleMetadata()
+	WriteJSON(w, map[string]any{"modules": modules})
+}
+
+// HandleCalendarProcess processes calendar events and returns calculated data.
+func (h *Handler) HandleCalendarProcess(w http.ResponseWriter, r *http.Request) {
+	var events []CalendarEvent
+	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	count := 5
+	if countStr := r.URL.Query().Get("count"); countStr != "" {
+		if parsed, err := strconv.Atoi(countStr); err == nil && parsed > 0 {
+			count = parsed
+		}
+	}
+
+	processed := ProcessCalendarEvents(events, count)
+	WriteJSON(w, processed)
+}
+
+// HandleCalendarMonth returns month calendar data.
+func (h *Handler) HandleCalendarMonth(w http.ResponseWriter, r *http.Request) {
+	yearStr := r.URL.Query().Get("year")
+	monthStr := r.URL.Query().Get("month")
+	var events []CalendarEvent
+
+	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	now := time.Now()
+	year := now.Year()
+	month := int(now.Month()) - 1
+
+	if yearStr != "" {
+		if parsed, err := strconv.Atoi(yearStr); err == nil {
+			year = parsed
+		}
+	}
+	if monthStr != "" {
+		if parsed, err := strconv.Atoi(monthStr); err == nil && parsed >= 0 && parsed < 12 {
+			month = parsed
+		}
+	}
+
+	data := GetMonthCalendarData(year, month, events)
+	WriteJSON(w, data)
+}
+
+// HandleCalendarWeek returns week calendar data.
+func (h *Handler) HandleCalendarWeek(w http.ResponseWriter, r *http.Request) {
+	var events []CalendarEvent
+	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	weekStartStr := r.URL.Query().Get("weekStart")
+	workWeekOnly := r.URL.Query().Get("workWeekOnly") == "true"
+	startDay := 1 // Default Monday
+	if startDayStr := r.URL.Query().Get("startDay"); startDayStr != "" {
+		if parsed, err := strconv.Atoi(startDayStr); err == nil && parsed >= 0 && parsed <= 6 {
+			startDay = parsed
+		}
+	}
+
+	var weekStart time.Time
+	if weekStartStr != "" {
+		parsed, err := time.Parse("2006-01-02", weekStartStr)
+		if err == nil {
+			weekStart = parsed
+		} else {
+			weekStart = time.Now()
+		}
+	} else {
+		weekStart = time.Now()
+	}
+
+	data := GetWeekCalendarData(weekStart, workWeekOnly, startDay, events)
+	WriteJSON(w, data)
+}
+
+// HandleTodosProcess processes todos and returns sorted/prioritized todos.
+func (h *Handler) HandleTodosProcess(w http.ResponseWriter, r *http.Request) {
+	var todos []Todo
+	if err := json.NewDecoder(r.Body).Decode(&todos); err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	count := 5
+	if countStr := r.URL.Query().Get("count"); countStr != "" {
+		if parsed, err := strconv.Atoi(countStr); err == nil && parsed > 0 {
+			count = parsed
+		}
+	}
+
+	includeCompleted := r.URL.Query().Get("includeCompleted") == "true"
+
+	processed := ProcessTodos(todos, count, includeCompleted)
+	WriteJSON(w, map[string]any{"todos": processed})
 }
 
 // HandleValidateURL validates if a string is a valid URL or IP address.

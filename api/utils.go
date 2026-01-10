@@ -153,3 +153,41 @@ func NormalizeURL(url string) string {
 	// Otherwise return as-is (might be a search term)
 	return url
 }
+
+// WeatherIconInfo contains icon information for weather codes.
+type WeatherIconInfo struct {
+	Icon string `json:"icon"`
+	Desc string `json:"desc"`
+}
+
+// GetWeatherIcon maps a weather code to an icon class and description.
+func GetWeatherIcon(code int) WeatherIconInfo {
+	icons := map[int]WeatherIconInfo{
+		0:  {Icon: "fa-sun", Desc: "Clear sky"},
+		1:  {Icon: "fa-sun", Desc: "Mainly clear"},
+		2:  {Icon: "fa-cloud-sun", Desc: "Partly cloudy"},
+		3:  {Icon: "fa-cloud", Desc: "Overcast"},
+		45: {Icon: "fa-smog", Desc: "Fog"},
+		48: {Icon: "fa-smog", Desc: "Depositing rime fog"},
+		51: {Icon: "fa-cloud-rain", Desc: "Light drizzle"},
+		53: {Icon: "fa-cloud-rain", Desc: "Moderate drizzle"},
+		55: {Icon: "fa-cloud-rain", Desc: "Dense drizzle"},
+		61: {Icon: "fa-cloud-showers-heavy", Desc: "Slight rain"},
+		63: {Icon: "fa-cloud-showers-heavy", Desc: "Moderate rain"},
+		65: {Icon: "fa-cloud-showers-heavy", Desc: "Heavy rain"},
+		71: {Icon: "fa-snowflake", Desc: "Slight snow"},
+		73: {Icon: "fa-snowflake", Desc: "Moderate snow"},
+		75: {Icon: "fa-snowflake", Desc: "Heavy snow"},
+		80: {Icon: "fa-cloud-showers-heavy", Desc: "Slight showers"},
+		81: {Icon: "fa-cloud-showers-heavy", Desc: "Moderate showers"},
+		82: {Icon: "fa-cloud-showers-heavy", Desc: "Violent showers"},
+		95: {Icon: "fa-bolt", Desc: "Thunderstorm"},
+		96: {Icon: "fa-bolt", Desc: "Thunderstorm with hail"},
+		99: {Icon: "fa-bolt", Desc: "Thunderstorm with heavy hail"},
+	}
+
+	if icon, exists := icons[code]; exists {
+		return icon
+	}
+	return WeatherIconInfo{Icon: "fa-question", Desc: "Unknown"}
+}

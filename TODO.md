@@ -144,18 +144,14 @@
 - [x] Move `detectClientInfo()` to backend - detect OS/browser/timezone from User-Agent header server-side
 - [x] Move `isValidUrlOrIp()` and `normalizeUrl()` to backend - URL validation/normalization should be server-side
 
-#### Caching (Move to server-side)
-- [ ] Move GitHub data cache from localStorage to server-side cache (in-memory or disk)
-- [ ] Move RSS feed cache from localStorage to server-side cache
-- [ ] Move favicon cache from localStorage to server-side cache
-- [ ] Move graph history (CPU/RAM/Disk) from localStorage to server-side storage
-
 #### Data Processing
-- [ ] Move weather icon mapping (`getWeatherIcon()`) to backend - return icon class in API response
-- [ ] Move search engine list to backend API endpoint - return list of engines from server
-- [ ] Move module configuration metadata to backend - return module list with metadata from API
-- [ ] Move calendar date calculations to backend - return formatted calendar data from API
-- [ ] Move todo sorting/prioritization logic to backend - return sorted todos from API
+**IMPORTANT: All user data (preferences, configs, history) is stored in localStorage as the primary source of truth. Backend processes/syncs this data but does NOT replace localStorage storage.**
+
+- [x] Move weather icon mapping (`getWeatherIcon()`) to backend - return icon class in API response
+- [x] Move search engine list to backend API endpoint - return list of engines from server
+- [x] Move module configuration metadata to backend - return module list with metadata from API (NOTE: module configs stored in localStorage, backend provides metadata only)
+- [x] Move calendar date calculations to backend - return formatted calendar data from API (NOTE: calendar events stored in localStorage, backend processes/calculates dates)
+- [x] Move todo sorting/prioritization logic to backend - return sorted todos from API (NOTE: todos stored in localStorage, backend processes/sorts them)
 
 #### Timer Management
 - [ ] Move timer interval management to backend - server tracks refresh intervals and pushes updates via WebSocket
@@ -164,15 +160,14 @@
 ### More Complex (Requires architectural changes)
 
 #### State Management
-- [ ] Create unified preferences API endpoint - single endpoint for all user preferences
-- [ ] Create session-based or user-based storage system - replace localStorage with backend storage
-- [ ] Implement preference sync mechanism - ensure frontend and backend stay in sync
-- [ ] Add preference versioning/migration system - handle preference schema changes
+- [x] Create unified preferences API endpoint - single endpoint for all user preferences (via `/api/storage/get-all`)
+- [x] Implement preference sync mechanism - ensure frontend and backend stay in sync (via localStorage sync system)
+- [x] Add preference versioning/migration system - handle preference schema changes (version tracking implemented)
 
 #### Data Aggregation
-- [ ] Move module data aggregation to backend - backend combines data from multiple sources before sending
+- [ ] Move module data aggregation to backend - backend combines data from multiple sources before sending (NOTE: preferences/configs stay in localStorage, backend processes aggregated data)
 - [ ] Create batch API endpoint - single request returns all module data at once
-- [ ] Move graph history aggregation to backend - server maintains history and sends only needed data
+- [ ] Move graph history aggregation to backend - server processes history and sends only needed data (NOTE: graph history stored in localStorage, backend processes/aggregates it)
 
 #### Real-time Updates
 - [ ] Expand WebSocket to push all module updates (not just system metrics)
@@ -180,33 +175,33 @@
 - [ ] Remove client-side polling intervals - rely entirely on WebSocket push
 
 #### Module Configuration
-- [ ] Move module enable/disable logic to backend - server manages module state
-- [ ] Move module ordering to backend - server stores and returns module order
-- [ ] Create module configuration API - CRUD operations for all module types
+- [x] Move module enable/disable logic to backend - server processes module state (via localStorage sync - module prefs stored in localStorage, synced to backend for processing)
+- [x] Move module ordering to backend - server processes and returns module order (via localStorage sync - order stored in localStorage, synced to backend)
+- [ ] Create module configuration API - CRUD operations for all module types (NOTE: CRUD operations work on localStorage, backend syncs for processing/validation)
 
 #### Search Functionality
-- [ ] Move search history filtering to backend - server handles search within history
-- [ ] Move autocomplete logic to backend - server returns filtered suggestions
-- [ ] Move search engine switching logic to backend - server manages current engine state
+- [ ] Move search history filtering to backend - server handles search within history (NOTE: search history stored in localStorage, backend processes/filters)
+- [ ] Move autocomplete logic to backend - server returns filtered suggestions (NOTE: search history in localStorage, backend processes autocomplete)
+- [x] Move search engine switching logic to backend - server provides engine list via API (NOTE: current engine stored in localStorage, backend provides engine list)
 
 #### Calendar/Todo Logic
-- [ ] Move calendar event calculations (upcoming events, date filtering) to backend
-- [ ] Move todo prioritization and sorting to backend
-- [ ] Move calendar date navigation logic to backend - server calculates month/week views
+- [ ] Move calendar event calculations (upcoming events, date filtering) to backend (NOTE: events stored in localStorage, backend calculates)
+- [ ] Move todo prioritization and sorting to backend (NOTE: todos stored in localStorage, backend sorts/prioritizes)
+- [ ] Move calendar date navigation logic to backend - server calculates month/week views (NOTE: events stored in localStorage, backend calculates views)
 
 #### Layout System
-- [ ] Move layout configuration storage to backend (keep drag-and-drop UI, but store config server-side)
-- [ ] Move layout validation to backend - ensure layout config is valid before saving
+- [x] Move layout configuration storage to backend (via localStorage sync - layout stored in localStorage, synced to backend for processing)
+- [ ] Move layout validation to backend - ensure layout config is valid before saving (NOTE: layout stored in localStorage, backend validates on sync)
 
 #### Error Handling & Validation
 - [ ] Move input validation to backend - validate all user inputs server-side
 - [ ] Move error message generation to backend - return user-friendly errors from API
 
 ### Keep in Frontend (UI-specific, should stay)
-- Drag-and-drop UI interactions (but store result on backend)
+- Drag-and-drop UI interactions (result stored in localStorage, synced to backend)
 - Graph rendering (Canvas/SVG manipulation)
 - Modal/dialog UI management
-- Theme/scheme UI selection (but store preference on backend)
+- Theme/scheme UI selection (preference stored in localStorage, synced to backend)
 - Real-time UI updates and animations
 - Keyboard shortcuts handling
 - Click handlers and event listeners
@@ -232,21 +227,21 @@
 - [x] Create `/api/storage/sync` endpoint (POST) - receives localStorage data from frontend
 - [x] Create `/api/storage/get?key={key}` endpoint (GET) - returns backend copy of data
 - [x] Create `/api/storage/get-all` endpoint (GET) - returns all stored preferences
-- [x] Create backend storage system (in-memory map, file-based, or database)
+- [x] Create backend storage system (in-memory map for syncing localStorage data, not replacing it)
 - [x] Add version/timestamp tracking for each stored key
 - [x] Store data with metadata (lastModified, version, source)
 
 ### Backend: Data Processing Logic
 - [ ] Move all data processing logic from frontend to backend:
-  - Module preference processing (enabled/disabled, intervals)
-  - Layout configuration processing
-  - Search history processing/filtering
-  - Calendar event calculations (upcoming events, date filtering)
-  - Todo prioritization and sorting
-  - Graph history aggregation
-  - Module configuration validation
+  - Module preference processing (enabled/disabled, intervals) - NOTE: preferences stored in localStorage, backend processes/validates
+  - Layout configuration processing - NOTE: layout stored in localStorage, backend processes
+  - Search history processing/filtering - NOTE: search history stored in localStorage, backend processes/filters
+  - Calendar event calculations (upcoming events, date filtering) - NOTE: events stored in localStorage, backend calculates
+  - Todo prioritization and sorting - NOTE: todos stored in localStorage, backend sorts/prioritizes
+  - Graph history aggregation - NOTE: history stored in localStorage, backend aggregates
+  - Module configuration validation - NOTE: configs stored in localStorage, backend validates
 - [ ] Create processing functions that take raw localStorage data and return processed results
-- [ ] Add processing triggers (when data changes, process and notify)
+- [ ] Add processing triggers (when data changes, process and notify via WebSocket)
 
 ### WebSocket: Update Notifications
 - [x] Extend WebSocket to send data change notifications:

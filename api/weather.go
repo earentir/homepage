@@ -88,6 +88,7 @@ func OpenMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error)
 		}
 	}
 
+	iconInfo := GetWeatherIcon(raw.Current.WeatherCode)
 	current := &WeatherCurrent{
 		Temperature:       raw.Current.Temperature,
 		TempUnit:          raw.CurrentUnits.Temperature,
@@ -103,6 +104,8 @@ func OpenMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error)
 		DewPoint:          raw.Current.DewPoint,
 		PrecipitationProb: raw.Current.PrecipitationProb,
 		WeatherCode:       raw.Current.WeatherCode,
+		Icon:              iconInfo.Icon,
+		IconDescription:   iconInfo.Desc,
 	}
 
 	tempUnit := raw.DailyUnits.TemperatureMax
@@ -112,12 +115,15 @@ func OpenMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error)
 
 	var today, tomorrow *WeatherDay
 	if len(raw.Daily.TemperatureMax) > 0 && len(raw.Daily.TemperatureMin) > 0 && len(raw.Daily.WeatherCode) > 0 {
+		todayIcon := GetWeatherIcon(raw.Daily.WeatherCode[0])
 		today = &WeatherDay{
 			TempMax:           raw.Daily.TemperatureMax[0],
 			TempMin:           raw.Daily.TemperatureMin[0],
 			TempUnit:          tempUnit,
 			PrecipitationProb: 0,
 			WeatherCode:       raw.Daily.WeatherCode[0],
+			Icon:              todayIcon.Icon,
+			IconDescription:   todayIcon.Desc,
 		}
 		if len(raw.Daily.PrecipitationProbMax) > 0 {
 			today.PrecipitationProb = raw.Daily.PrecipitationProbMax[0]
@@ -133,12 +139,15 @@ func OpenMeteoSummary(ctx context.Context, lat, lon string) (WeatherData, error)
 		}
 	}
 	if len(raw.Daily.TemperatureMax) > 1 && len(raw.Daily.TemperatureMin) > 1 && len(raw.Daily.WeatherCode) > 1 {
+		tomorrowIcon := GetWeatherIcon(raw.Daily.WeatherCode[1])
 		tomorrow = &WeatherDay{
 			TempMax:           raw.Daily.TemperatureMax[1],
 			TempMin:           raw.Daily.TemperatureMin[1],
 			TempUnit:          tempUnit,
 			PrecipitationProb: 0,
 			WeatherCode:       raw.Daily.WeatherCode[1],
+			Icon:              tomorrowIcon.Icon,
+			IconDescription:   tomorrowIcon.Desc,
 		}
 		if len(raw.Daily.PrecipitationProbMax) > 1 {
 			tomorrow.PrecipitationProb = raw.Daily.PrecipitationProbMax[1]
@@ -230,19 +239,25 @@ func OpenWeatherMapSummary(ctx context.Context, lat, lon, apiKey string) (Weathe
 			}
 			if err := json.NewDecoder(forecastRes.Body).Decode(&forecastResp); err == nil && len(forecastResp.List) > 0 {
 				if len(forecastResp.List) > 0 && len(forecastResp.List[0].Weather) > 0 {
+					todayIcon := GetWeatherIcon(forecastResp.List[0].Weather[0].ID)
 					today = &WeatherDay{
-						TempMax:     forecastResp.List[0].Main.Temp,
-						TempMin:     forecastResp.List[0].Main.Temp,
-						TempUnit:    "°C",
-						WeatherCode: forecastResp.List[0].Weather[0].ID,
+						TempMax:         forecastResp.List[0].Main.Temp,
+						TempMin:         forecastResp.List[0].Main.Temp,
+						TempUnit:        "°C",
+						WeatherCode:     forecastResp.List[0].Weather[0].ID,
+						Icon:            todayIcon.Icon,
+						IconDescription: todayIcon.Desc,
 					}
 				}
 				if len(forecastResp.List) > 1 && len(forecastResp.List[1].Weather) > 0 {
+					tomorrowIcon := GetWeatherIcon(forecastResp.List[1].Weather[0].ID)
 					tomorrow = &WeatherDay{
-						TempMax:     forecastResp.List[1].Main.Temp,
-						TempMin:     forecastResp.List[1].Main.Temp,
-						TempUnit:    "°C",
-						WeatherCode: forecastResp.List[1].Weather[0].ID,
+						TempMax:         forecastResp.List[1].Main.Temp,
+						TempMin:         forecastResp.List[1].Main.Temp,
+						TempUnit:        "°C",
+						WeatherCode:     forecastResp.List[1].Weather[0].ID,
+						Icon:            tomorrowIcon.Icon,
+						IconDescription: tomorrowIcon.Desc,
 					}
 				}
 			}
@@ -258,18 +273,21 @@ func OpenWeatherMapSummary(ctx context.Context, lat, lon, apiKey string) (Weathe
 		currentResp.Main.Temp, currentResp.Main.Humidity, currentResp.Wind.Speed)
 
 	visibilityKm := float64(currentResp.Visibility) / 1000.0
+	iconInfo := GetWeatherIcon(weatherCode)
 	current := &WeatherCurrent{
-		Temperature:   currentResp.Main.Temp,
-		TempUnit:      "°C",
-		FeelsLike:     currentResp.Main.FeelsLike,
-		Humidity:      currentResp.Main.Humidity,
-		WindSpeed:     currentResp.Wind.Speed,
-		WindUnit:      "m/s",
-		WindDirection: currentResp.Wind.Deg,
-		Pressure:      currentResp.Main.Pressure,
-		CloudCover:    currentResp.Clouds.All,
-		Visibility:    visibilityKm,
-		WeatherCode:   weatherCode,
+		Temperature:     currentResp.Main.Temp,
+		TempUnit:        "°C",
+		FeelsLike:       currentResp.Main.FeelsLike,
+		Humidity:        currentResp.Main.Humidity,
+		WindSpeed:       currentResp.Wind.Speed,
+		WindUnit:        "m/s",
+		WindDirection:   currentResp.Wind.Deg,
+		Pressure:        currentResp.Main.Pressure,
+		CloudCover:      currentResp.Clouds.All,
+		Visibility:      visibilityKm,
+		WeatherCode:     weatherCode,
+		Icon:            iconInfo.Icon,
+		IconDescription: iconInfo.Desc,
 	}
 
 	return WeatherData{
@@ -354,37 +372,43 @@ func WeatherAPISummary(ctx context.Context, lat, lon, apiKey string) (WeatherDat
 		}
 	}
 
+	iconInfo := GetWeatherIcon(raw.Current.Condition.Code)
 	current := &WeatherCurrent{
-		Temperature:   raw.Current.TempC,
-		TempUnit:      "°C",
-		FeelsLike:     raw.Current.FeelsLikeC,
-		Humidity:      raw.Current.Humidity,
-		WindSpeed:     raw.Current.WindKph,
-		WindUnit:      "km/h",
-		WindDirection: raw.Current.WindDegree,
-		Pressure:      raw.Current.PressureMb,
-		UVIndex:       raw.Current.UV,
-		CloudCover:    raw.Current.Cloud,
-		Visibility:    raw.Current.VisKm,
-		DewPoint:      raw.Current.DewpointC,
+		Temperature:     raw.Current.TempC,
+		TempUnit:        "°C",
+		FeelsLike:       raw.Current.FeelsLikeC,
+		Humidity:        raw.Current.Humidity,
+		WindSpeed:       raw.Current.WindKph,
+		WindUnit:        "km/h",
+		WindDirection:   raw.Current.WindDegree,
+		Pressure:        raw.Current.PressureMb,
+		UVIndex:         raw.Current.UV,
+		CloudCover:      raw.Current.Cloud,
+		Visibility:      raw.Current.VisKm,
+		DewPoint:        raw.Current.DewpointC,
 		PrecipitationProb: func() float64 {
 			if raw.Current.PrecipMm > 0 {
 				return 100.0
 			}
 			return 0.0
 		}(),
-		WeatherCode: raw.Current.Condition.Code,
+		WeatherCode:     raw.Current.Condition.Code,
+		Icon:            iconInfo.Icon,
+		IconDescription: iconInfo.Desc,
 	}
 
 	var today, tomorrow *WeatherDay
 	if len(raw.Forecast.Forecastday) > 0 {
 		day0 := raw.Forecast.Forecastday[0]
+		todayIcon := GetWeatherIcon(day0.Day.Condition.Code)
 		today = &WeatherDay{
 			TempMax:           day0.Day.MaxtempC,
 			TempMin:           day0.Day.MintempC,
 			TempUnit:          "°C",
 			PrecipitationProb: day0.Day.DailyChanceOfRain,
 			WeatherCode:       day0.Day.Condition.Code,
+			Icon:              todayIcon.Icon,
+			IconDescription:   todayIcon.Desc,
 		}
 		if day0.Astro.Sunrise != "" {
 			today.Sunrise = day0.Astro.Sunrise
@@ -395,12 +419,15 @@ func WeatherAPISummary(ctx context.Context, lat, lon, apiKey string) (WeatherDat
 	}
 	if len(raw.Forecast.Forecastday) > 1 {
 		day1 := raw.Forecast.Forecastday[1]
+		tomorrowIcon := GetWeatherIcon(day1.Day.Condition.Code)
 		tomorrow = &WeatherDay{
 			TempMax:           day1.Day.MaxtempC,
 			TempMin:           day1.Day.MintempC,
 			TempUnit:          "°C",
 			PrecipitationProb: day1.Day.DailyChanceOfRain,
 			WeatherCode:       day1.Day.Condition.Code,
+			Icon:              tomorrowIcon.Icon,
+			IconDescription:   tomorrowIcon.Desc,
 		}
 		if day1.Astro.Sunrise != "" {
 			tomorrow.Sunrise = day1.Astro.Sunrise

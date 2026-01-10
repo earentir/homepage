@@ -61,23 +61,29 @@ function getEventsForDate(dateStr) {
   return calendarEvents.filter(evt => evt.date === dateStr);
 }
 
-// Get next N upcoming events
-function getUpcomingEvents(count = 5) {
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
-  const nowTime = now.toTimeString().slice(0, 5);
+// Get next N upcoming events - uses backend processing
+async function getUpcomingEvents(count = 5) {
+  if (calendarEvents.length === 0) return [];
 
-  return calendarEvents
-    .filter(evt => {
-      if (evt.date > todayStr) return true;
-      if (evt.date === todayStr && evt.time >= nowTime) return true;
-      return false;
-    })
-    .sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return a.time.localeCompare(b.time);
-    })
-    .slice(0, count);
+  try {
+    const res = await fetch(`/api/calendar/process?count=${count}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calendarEvents),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.upcomingEvents) {
+        return data.upcomingEvents;
+      }
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('calendar', 'Error processing upcoming events:', e);
+  }
+
+  // Backend processing failed - return empty array
+  return [];
 }
 
 // Format date for display
@@ -91,27 +97,45 @@ function formatEventDate(dateStr, timeStr) {
   return formatted;
 }
 
-// Render the calendar month view
-function renderCalendar() {
+// Render the calendar month view - uses backend processing
+async function renderCalendar() {
   const container = document.getElementById('calendarGrid');
   if (!container) return;
 
   const year = currentCalendarDate.getFullYear();
   const month = currentCalendarDate.getMonth();
 
-  // Update month/year display
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                      'July', 'August', 'September', 'October', 'November', 'December'];
-  const titleEl = document.getElementById('calendarTitle');
-  if (titleEl) {
-    titleEl.textContent = monthNames[month] + ' ' + year;
+  // Try to get month data from backend
+  let monthData = null;
+  try {
+    const res = await fetch(`/api/calendar/month?year=${year}&month=${month}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calendarEvents),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      monthData = await res.json();
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('calendar', 'Error processing month calendar:', e);
   }
 
-  // First day of month and number of days
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  // If backend data not available, show error
+  if (!monthData) {
+    container.innerHTML = '<div class="muted" style="padding:8px 0;">Unable to load calendar</div>';
+    return;
+  }
+
+  const titleEl = document.getElementById('calendarTitle');
+  if (titleEl) {
+    titleEl.textContent = monthData.monthName + ' ' + year;
+  }
+
+  const firstDayOfMonth = monthData.firstDay;
+  const daysInMonth = monthData.daysInMonth;
+  const todayStr = monthData.today;
+  const datesWithEvents = monthData.datesWithEvents;
 
   // Adjust day names based on startDay setting
   const startDay = calendarSettings.startDay || 0; // 0 = Sunday, 1 = Monday
@@ -131,7 +155,6 @@ function renderCalendar() {
   html += '</div><div class="cal-days">';
 
   // Calculate offset for first day of month based on startDay
-  // If startDay is 1 (Monday), we need to adjust firstDayOfMonth
   let offset = firstDayOfMonth - startDay;
   if (offset < 0) offset += 7;
 
@@ -148,7 +171,7 @@ function renderCalendar() {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const dayOfWeek = new Date(year, month, day).getDay();
     const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-    const hasEvents = dateHasEvents(dateStr);
+    const hasEvents = datesWithEvents.includes(dateStr);
     const isToday = dateStr === todayStr;
 
     let classes = 'cal-day';
@@ -186,17 +209,17 @@ function showDayEvents(dateStr) {
 // Navigate calendar
 function prevMonth() {
   currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
-  renderCalendar();
+  renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
 }
 
 function nextMonth() {
   currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
-  renderCalendar();
+  renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
 }
 
 function goToCurrentMonth() {
   currentCalendarDate = new Date();
-  renderCalendar();
+  renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
 }
 
 // Week calendar functions
@@ -208,25 +231,98 @@ function getWeekStart(date) {
   return d;
 }
 
-function renderWeekCalendar() {
+// Render week calendar - uses backend processing
+async function renderWeekCalendar() {
   const container = document.getElementById('weekCalendarGrid');
   if (!container) return;
 
   const daysToShow = calendarSettings.workWeekOnly ? 5 : 7;
-
-  // Set data attribute for CSS grid columns
   container.setAttribute('data-cols', daysToShow);
 
-  // Determine which days to show
-  let startIdx = calendarSettings.startDay;
-  if (calendarSettings.workWeekOnly) {
-    startIdx = 1; // Always start Monday for work week
+  // Try to get week data from backend
+  let weekData = null;
+  try {
+    const weekStartStr = currentWeekDate.toISOString().split('T')[0];
+    const res = await fetch(`/api/calendar/week?weekStart=${weekStartStr}&workWeekOnly=${calendarSettings.workWeekOnly}&startDay=${calendarSettings.startDay || 1}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calendarEvents),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      weekData = await res.json();
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('calendar', 'Error processing week calendar:', e);
   }
 
-  // Calculate actual week start based on startIdx
+  // Use backend data if available
+  if (weekData && weekData.days) {
+    const titleEl = document.getElementById('weekCalendarTitle');
+    if (titleEl) {
+      const startDate = new Date(weekData.weekStart);
+      const endDate = new Date(weekData.weekEnd);
+      const startMonth = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const endMonth = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      titleEl.textContent = startMonth + ' - ' + endMonth;
+    }
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let html = '<div class="week-header">';
+    
+    for (let i = 0; i < daysToShow; i++) {
+      const day = weekData.days[i];
+      if (day) {
+        html += `<div class="week-day-name">${day.dayName}</div>`;
+      }
+    }
+    html += '</div><div class="week-days">';
+
+    for (let i = 0; i < daysToShow && i < weekData.days.length; i++) {
+      const day = weekData.days[i];
+      let classes = 'week-day';
+      if (day.hasEvents) classes += ' has-event';
+      if (day.isToday) classes += ' today';
+
+      let eventsHtml = '';
+      if (day.events && day.events.length > 0) {
+        day.events.slice(0, 3).forEach(evt => {
+          eventsHtml += `<div class="week-event" title="${window.escapeHtml(evt.title)}">${evt.time ? evt.time + ' ' : ''}${window.escapeHtml(evt.title)}</div>`;
+        });
+        if (day.events.length > 3) {
+          eventsHtml += `<div class="week-event more">+${day.events.length - 3} more</div>`;
+        }
+      }
+
+      html += `
+        <div class="${classes}" data-date="${day.date}">
+          <div class="week-day-num">${day.dayNumber}</div>
+          <div class="week-events">${eventsHtml}</div>
+        </div>
+      `;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Click handlers
+    container.querySelectorAll('.week-day').forEach(el => {
+      el.addEventListener('click', () => {
+        const date = el.getAttribute('data-date');
+        showDayEvents(date);
+      });
+    });
+    return;
+  }
+
+  // Fallback to client-side rendering
+  let startIdx = calendarSettings.startDay;
+  if (calendarSettings.workWeekOnly) {
+    startIdx = 1;
+  }
+
   const weekStart = getWeekStart(currentWeekDate);
   if (calendarSettings.workWeekOnly && calendarSettings.startDay !== 1) {
-    // For work week, always start from Monday
     const day = weekStart.getDay();
     const diff = (day === 0) ? 1 : (1 - day + 7) % 7;
     weekStart.setDate(weekStart.getDate() + diff);
@@ -234,11 +330,8 @@ function renderWeekCalendar() {
 
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
-
-  // Day names
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // Update week range display
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + daysToShow - 1);
   const titleEl = document.getElementById('weekCalendarTitle');
@@ -249,17 +342,13 @@ function renderWeekCalendar() {
   }
 
   let html = '<div class="week-header">';
-
-  // Generate headers
   for (let i = 0; i < daysToShow; i++) {
     const dayIdx = (startIdx + i) % 7;
     html += `<div class="week-day-name">${dayNames[dayIdx]}</div>`;
   }
   html += '</div><div class="week-days">';
 
-  // Generate day cells - start from weekStart which already accounts for work week
   const currentDay = new Date(weekStart);
-
   for (let i = 0; i < daysToShow; i++) {
     const dateStr = currentDay.toISOString().split('T')[0];
     const dayNum = currentDay.getDate();
@@ -294,7 +383,6 @@ function renderWeekCalendar() {
   html += '</div>';
   container.innerHTML = html;
 
-  // Click handlers
   container.querySelectorAll('.week-day').forEach(el => {
     el.addEventListener('click', () => {
       const date = el.getAttribute('data-date');
@@ -305,40 +393,43 @@ function renderWeekCalendar() {
 
 function prevWeek() {
   currentWeekDate.setDate(currentWeekDate.getDate() - 7);
-  renderWeekCalendar();
+  renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
 }
 
 function nextWeek() {
   currentWeekDate.setDate(currentWeekDate.getDate() + 7);
-  renderWeekCalendar();
+  renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
 }
 
 function goToCurrentWeek() {
   currentWeekDate = new Date();
-  renderWeekCalendar();
+  renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
 }
 
-// Render upcoming events module
-function renderUpcomingEvents() {
+// Render upcoming events module - uses backend processing
+async function renderUpcomingEvents() {
   const container = document.getElementById('upcomingEventsList');
   if (!container) return;
 
-  const events = getUpcomingEvents(5);
+  const events = await getUpcomingEvents(5);
 
   if (events.length === 0) {
     container.innerHTML = '<div class="muted" style="padding:8px 0;">No upcoming events</div>';
     return;
   }
 
+  // Format dates from backend
   let html = '';
-  events.forEach(evt => {
+  for (const evt of events) {
+    // Backend provides formattedDate, but if missing use basic format
+    const formattedDate = evt.formattedDate || (evt.date + (evt.time ? ' ' + evt.time : ''));
     html += `
       <div class="kv" style="flex-direction:column; align-items:flex-start; gap:4px;">
         <div class="v" style="font-weight:500;">${window.escapeHtml(evt.title)}</div>
-        <div class="muted" style="font-size:0.85em;">${formatEventDate(evt.date, evt.time)}</div>
+        <div class="muted" style="font-size:0.85em;">${formattedDate}</div>
       </div>
     `;
-  });
+  }
   container.innerHTML = html;
 }
 
@@ -348,9 +439,9 @@ function moveEventUp(index) {
   if (window.moveArrayItemUp && window.moveArrayItemUp(calendarEvents, index)) {
     saveEvents();
     renderEventsPreferenceList();
-    renderCalendar();
-    renderWeekCalendar();
-    renderUpcomingEvents();
+    renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
+    renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
+    renderUpcomingEvents(); // renderUpcomingEvents is now async but we don't await it (fire and forget)
   }
 }
 
@@ -358,9 +449,9 @@ function moveEventDown(index) {
   if (window.moveArrayItemDown && window.moveArrayItemDown(calendarEvents, index)) {
     saveEvents();
     renderEventsPreferenceList();
-    renderCalendar();
-    renderWeekCalendar();
-    renderUpcomingEvents();
+    renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
+    renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
+    renderUpcomingEvents(); // renderUpcomingEvents is now async but we don't await it (fire and forget)
   }
 }
 
@@ -368,9 +459,9 @@ function moveEvent(fromIndex, toIndex) {
   if (window.moveArrayItem && window.moveArrayItem(calendarEvents, fromIndex, toIndex)) {
     saveEvents();
     renderEventsPreferenceList();
-    renderCalendar();
-    renderWeekCalendar();
-    renderUpcomingEvents();
+    renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
+    renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
+    renderUpcomingEvents(); // renderUpcomingEvents is now async but we don't await it (fire and forget)
   }
 }
 
@@ -423,9 +514,9 @@ function renderEventsPreferenceList() {
       }, () => {
         saveEvents();
         renderEventsPreferenceList();
-        renderCalendar();
-        renderWeekCalendar();
-        renderUpcomingEvents();
+        renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
+        renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
+        renderUpcomingEvents(); // renderUpcomingEvents is now async but we don't await it (fire and forget)
       });
     }
 
@@ -487,9 +578,9 @@ function deleteEvent(id) {
   calendarEvents = calendarEvents.filter(e => e.id !== id);
   saveEvents();
   renderEventsPreferenceList();
-  renderCalendar();
-  renderWeekCalendar();
-  renderUpcomingEvents();
+  renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
+  renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
+  renderUpcomingEvents(); // renderUpcomingEvents is now async but we don't await it (fire and forget)
 }
 
 function saveEventFromForm() {
@@ -578,7 +669,7 @@ function initCalendar() {
     workWeekCheckbox.addEventListener('change', () => {
       calendarSettings.workWeekOnly = workWeekCheckbox.checked;
       saveCalendarSettings();
-      renderWeekCalendar();
+      renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
     });
   }
 
@@ -587,7 +678,7 @@ function initCalendar() {
     startDaySelect.addEventListener('change', () => {
       calendarSettings.startDay = parseInt(startDaySelect.value, 10);
       saveCalendarSettings();
-      renderWeekCalendar();
+      renderWeekCalendar(); // renderWeekCalendar is now async but we don't await it (fire and forget)
     });
   }
 
@@ -598,7 +689,7 @@ function initCalendar() {
     dimWeekendsCheckbox.addEventListener('change', () => {
       calendarSettings.dimWeekends = dimWeekendsCheckbox.checked;
       saveCalendarSettings();
-      renderCalendar();
+      renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
     });
   }
 }

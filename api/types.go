@@ -84,6 +84,8 @@ type WeatherCurrent struct {
 	DewPoint          float64 `json:"dewPoint,omitempty"`
 	PrecipitationProb float64 `json:"precipitationProb,omitempty"`
 	WeatherCode       int     `json:"weatherCode"`
+	Icon              string  `json:"icon,omitempty"`
+	IconDescription   string  `json:"iconDescription,omitempty"`
 }
 
 // WeatherDay contains weather forecast for a single day.
@@ -94,6 +96,8 @@ type WeatherDay struct {
 	PrecipitationProb float64 `json:"precipitationProb,omitempty"`
 	UVIndexMax        float64 `json:"uvIndexMax,omitempty"`
 	WeatherCode       int     `json:"weatherCode"`
+	Icon              string  `json:"icon,omitempty"`
+	IconDescription   string  `json:"iconDescription,omitempty"`
 	Sunrise           string  `json:"sunrise,omitempty"`
 	Sunset            string  `json:"sunset,omitempty"`
 }

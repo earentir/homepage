@@ -1,26 +1,43 @@
 // Layout system and drag-and-drop
 
-// Module configuration
-const moduleConfig = {
-  status: { name: 'Status', icon: 'fa-server', desc: 'System status and uptime', hasTimer: false, enabled: true },
-  network: { name: 'Network', icon: 'fa-network-wired', desc: 'LAN and public IP addresses', hasTimer: true, timerKey: 'ip', defaultInterval: 7200, enabled: true },
-  weather: { name: 'Weather', icon: 'fa-cloud-sun', desc: 'Current weather and forecast', hasTimer: true, timerKey: 'weather', defaultInterval: 1800, enabled: true },
-  cpu: { name: 'CPU', icon: 'fa-microchip', desc: 'CPU usage with history graph', hasTimer: true, timerKey: 'cpu', defaultInterval: 5, enabled: true },
-  cpuid: { name: 'CPU Info', icon: 'fa-info-circle', desc: 'CPU model and specifications', hasTimer: false, enabled: true },
-  ram: { name: 'RAM', icon: 'fa-memory', desc: 'Memory usage with history graph', hasTimer: true, timerKey: 'ram', defaultInterval: 5, enabled: true },
-  raminfo: { name: 'RAM Info', icon: 'fa-memory', desc: 'SMBIOS RAM module information', hasTimer: false, enabled: true },
-  firmware: { name: 'Firmware', icon: 'fa-microchip', desc: 'BIOS/Firmware information', hasTimer: false, enabled: true },
-  systeminfo: { name: 'System', icon: 'fa-desktop', desc: 'SMBIOS System information', hasTimer: false, enabled: true },
-  baseboard: { name: 'Baseboard', icon: 'fa-server', desc: 'SMBIOS Baseboard information', hasTimer: false, enabled: true },
-  disk: { name: 'Disk', icon: 'fa-hdd', desc: 'Disk usage with history graph', hasTimer: true, timerKey: 'disk', defaultInterval: 15, enabled: true },
-  links: { name: 'Quick Links', icon: 'fa-link', desc: 'Quick access links', hasTimer: false, enabled: true },
-  monitoring: { name: 'Monitoring', icon: 'fa-heartbeat', desc: 'Service health monitoring', hasTimer: true, timerKey: 'monitoring', defaultInterval: 60, enabled: true },
-  snmp: { name: 'SNMP', icon: 'fa-network-wired', desc: 'SNMP device queries', hasTimer: true, timerKey: 'snmp', defaultInterval: 60, enabled: true },
-  calendar: { name: 'Calendar', icon: 'fa-calendar-alt', desc: 'Month calendar view', hasTimer: false, enabled: true },
-  weekcalendar: { name: 'Week Calendar', icon: 'fa-calendar-week', desc: 'Week view with events', hasTimer: false, enabled: true },
-  events: { name: 'Upcoming Events', icon: 'fa-calendar-check', desc: 'Next 5 upcoming events', hasTimer: false, enabled: true },
-  todo: { name: 'Todo', icon: 'fa-tasks', desc: 'Next 5 todos', hasTimer: false, enabled: true }
-};
+// Module configuration - loaded from backend API
+let moduleConfig = {};
+
+// Load module metadata from backend API
+async function loadModuleMetadata() {
+  try {
+    const res = await fetch("/api/modules", {cache:"no-store"});
+    if (res.ok) {
+      const data = await res.json();
+      if (data.modules && typeof data.modules === 'object') {
+        // Convert backend format to frontend format (camelCase)
+        const converted = {};
+        Object.keys(data.modules).forEach(key => {
+          const mod = data.modules[key];
+          converted[key] = {
+            name: mod.name || mod.Name,
+            icon: mod.icon || mod.Icon,
+            desc: mod.desc || mod.Desc,
+            hasTimer: mod.hasTimer !== undefined ? mod.hasTimer : (mod.HasTimer !== undefined ? mod.HasTimer : false),
+            timerKey: mod.timerKey || mod.TimerKey,
+            defaultInterval: mod.defaultInterval || mod.DefaultInterval,
+            enabled: mod.enabled !== undefined ? mod.enabled : (mod.Enabled !== undefined ? mod.Enabled : true)
+          };
+        });
+        moduleConfig = converted;
+        window.moduleConfig = moduleConfig;
+        return true;
+      }
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('layout', 'Error loading module metadata from backend:', e);
+  }
+  
+  // Fallback: use empty object if backend fails
+  moduleConfig = {};
+  window.moduleConfig = moduleConfig;
+  return false;
+}
 
 let layoutConfig = {
   maxWidth: 80,
@@ -1420,6 +1437,7 @@ function initLayout() {
 
 // Expose to window
 window.moduleConfig = moduleConfig;
+window.loadModuleMetadata = loadModuleMetadata;
 window.layoutSystem = {
   renderLayout,
   renderLayoutEditor,

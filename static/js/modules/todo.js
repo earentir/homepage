@@ -28,30 +28,29 @@ function generateTodoId() {
   return 'todo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-// Get next N incomplete todos, sorted by priority and due date
-function getNextTodos(count = 5) {
-  const incomplete = todos.filter(t => !t.completed);
+// Get next N incomplete todos, sorted by priority and due date - uses backend processing
+async function getNextTodos(count = 5) {
+  if (todos.length === 0) return [];
 
-  // Sort by: priority (high > medium > low), then due date (earliest first), then creation order
-  const priorityOrder = { high: 3, medium: 2, low: 1 };
-
-  return incomplete
-    .sort((a, b) => {
-      // Priority first
-      const aPriority = priorityOrder[a.priority] || 0;
-      const bPriority = priorityOrder[b.priority] || 0;
-      if (aPriority !== bPriority) return bPriority - aPriority;
-
-      // Then due date
-      if (a.dueDate && b.dueDate) {
-        return a.dueDate.localeCompare(b.dueDate);
+  try {
+    const res = await fetch(`/api/todos/process?count=${count}&includeCompleted=false`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(todos),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.todos) {
+        return data.todos;
       }
-      if (a.dueDate) return -1;
-      if (b.dueDate) return 1;
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('todo', 'Error processing todos:', e);
+  }
 
-      return 0;
-    })
-    .slice(0, count);
+  // Backend processing failed - return empty array
+  return [];
 }
 
 // Format date for display
@@ -89,12 +88,12 @@ function getPriorityIcon(priority) {
   return icons[priority] || '';
 }
 
-// Render next todos module
-function renderNextTodos() {
+// Render next todos module - uses backend processing
+async function renderNextTodos() {
   const container = document.getElementById('nextTodosList');
   if (!container) return;
 
-  const nextTodos = getNextTodos(5);
+  const nextTodos = await getNextTodos(5);
 
   if (nextTodos.length === 0) {
     container.innerHTML = '<div class="muted" style="padding:8px 0;">No todos</div>';
@@ -102,10 +101,12 @@ function renderNextTodos() {
   }
 
   let html = '';
-  nextTodos.forEach(todo => {
+  for (const todo of nextTodos) {
     const priorityClass = getPriorityClass(todo.priority);
     const priorityIcon = getPriorityIcon(todo.priority);
-    const dueDateHtml = todo.dueDate ? `<div class="muted" style="font-size:0.85em; margin-top:4px;">${formatTodoDate(todo.dueDate)}</div>` : '';
+    // Use formatted date from backend
+    const formattedDate = todo.formattedDueDate || '';
+    const dueDateHtml = formattedDate ? `<div class="muted" style="font-size:0.85em; margin-top:4px;">${formattedDate}</div>` : '';
     const priorityIconHtml = todo.priority ? `<i class="fas ${priorityIcon} todo-priority-icon ${priorityClass}" title="${todo.priority} priority"></i>` : '';
 
     html += `
@@ -118,7 +119,7 @@ function renderNextTodos() {
         ${dueDateHtml}
       </div>
     `;
-  });
+  }
   container.innerHTML = html;
 
   // Attach checkbox handlers
@@ -136,7 +137,7 @@ function toggleTodo(id) {
   if (todo) {
     todo.completed = !todo.completed;
     saveTodos();
-    renderNextTodos();
+    renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
     renderTodosPreferenceList();
   }
 }
@@ -145,7 +146,7 @@ function moveTodoUp(index) {
   if (window.moveArrayItemUp && window.moveArrayItemUp(todos, index)) {
     saveTodos();
     renderTodosPreferenceList();
-    renderNextTodos();
+    renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
   }
 }
 
@@ -153,7 +154,7 @@ function moveTodoDown(index) {
   if (window.moveArrayItemDown && window.moveArrayItemDown(todos, index)) {
     saveTodos();
     renderTodosPreferenceList();
-    renderNextTodos();
+    renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
   }
 }
 
@@ -161,7 +162,7 @@ function moveTodo(fromIndex, toIndex) {
   if (window.moveArrayItem && window.moveArrayItem(todos, fromIndex, toIndex)) {
     saveTodos();
     renderTodosPreferenceList();
-    renderNextTodos();
+    renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
   }
 }
 
@@ -222,7 +223,7 @@ function renderTodosPreferenceList() {
       }, () => {
         saveTodos();
         renderTodosPreferenceList();
-        renderNextTodos();
+        renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
       });
     }
 
@@ -282,7 +283,7 @@ function deleteTodo(id) {
   todos = todos.filter(t => t.id !== id);
   saveTodos();
   renderTodosPreferenceList();
-  renderNextTodos();
+  renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
 }
 
 function saveTodoFromForm() {
@@ -321,15 +322,15 @@ function saveTodoFromForm() {
   saveTodos();
   hideTodoForm();
   renderTodosPreferenceList();
-  renderNextTodos();
+  renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
 }
 
 // Using escapeHtml from core.js
 
 // Initialize todo module
-function initTodo() {
+async function initTodo() {
   loadTodos();
-  renderNextTodos();
+  await renderNextTodos();
 
   // Add todo button in preferences
   const addBtn = document.getElementById('addTodoBtn');

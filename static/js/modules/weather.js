@@ -1,32 +1,5 @@
 // Weather module
 
-function getWeatherIcon(code) {
-  const icons = {
-    0: { icon: 'fa-sun', desc: 'Clear sky' },
-    1: { icon: 'fa-sun', desc: 'Mainly clear' },
-    2: { icon: 'fa-cloud-sun', desc: 'Partly cloudy' },
-    3: { icon: 'fa-cloud', desc: 'Overcast' },
-    45: { icon: 'fa-smog', desc: 'Fog' },
-    48: { icon: 'fa-smog', desc: 'Depositing rime fog' },
-    51: { icon: 'fa-cloud-rain', desc: 'Light drizzle' },
-    53: { icon: 'fa-cloud-rain', desc: 'Moderate drizzle' },
-    55: { icon: 'fa-cloud-rain', desc: 'Dense drizzle' },
-    61: { icon: 'fa-cloud-showers-heavy', desc: 'Slight rain' },
-    63: { icon: 'fa-cloud-showers-heavy', desc: 'Moderate rain' },
-    65: { icon: 'fa-cloud-showers-heavy', desc: 'Heavy rain' },
-    71: { icon: 'fa-snowflake', desc: 'Slight snow' },
-    73: { icon: 'fa-snowflake', desc: 'Moderate snow' },
-    75: { icon: 'fa-snowflake', desc: 'Heavy snow' },
-    80: { icon: 'fa-cloud-showers-heavy', desc: 'Slight showers' },
-    81: { icon: 'fa-cloud-showers-heavy', desc: 'Moderate showers' },
-    82: { icon: 'fa-cloud-showers-heavy', desc: 'Violent showers' },
-    95: { icon: 'fa-bolt', desc: 'Thunderstorm' },
-    96: { icon: 'fa-bolt', desc: 'Thunderstorm with hail' },
-    99: { icon: 'fa-bolt', desc: 'Thunderstorm with heavy hail' }
-  };
-  return icons[code] || { icon: 'fa-question', desc: 'Unknown' };
-}
-
 async function refreshWeather() {
   try {
     // Get saved location from localStorage
@@ -52,11 +25,13 @@ async function refreshWeather() {
 
     // Now - current weather
     if (j.current) {
-      const nowWeather = getWeatherIcon(j.current.weatherCode);
+      // Icons are provided by backend
+      const nowIcon = j.current.icon || 'fa-question';
+      const nowDesc = j.current.iconDescription || 'Unknown';
       const nowIconEl = document.getElementById("weatherNowIcon");
       if (nowIconEl) {
-        nowIconEl.innerHTML = '<i class="fas ' + nowWeather.icon + '" title="' + nowWeather.desc + '"></i>';
-        nowIconEl.setAttribute('title', nowWeather.desc);
+        nowIconEl.innerHTML = '<i class="fas ' + nowIcon + '" title="' + nowDesc + '"></i>';
+        nowIconEl.setAttribute('title', nowDesc);
       }
       const nowDataEl = document.getElementById("weatherNowData");
       if (nowDataEl) {
@@ -110,11 +85,13 @@ async function refreshWeather() {
 
     // Today
     if (j.today) {
-      const todayWeather = getWeatherIcon(j.today.weatherCode);
+      // Use icon from backend if available, fallback to client-side mapping
+      const todayIcon = j.today.icon || 'fa-question';
+      const todayDesc = j.today.iconDescription || 'Unknown';
       const todayIconEl = document.getElementById("weatherTodayIcon");
       if (todayIconEl) {
-        todayIconEl.innerHTML = '<i class="fas ' + todayWeather.icon + '" title="' + todayWeather.desc + '"></i>';
-        todayIconEl.setAttribute('title', todayWeather.desc);
+        todayIconEl.innerHTML = '<i class="fas ' + todayIcon + '" title="' + todayDesc + '"></i>';
+        todayIconEl.setAttribute('title', todayDesc);
       }
       const todayDataEl = document.getElementById("weatherTodayData");
       if (todayDataEl) {
@@ -163,11 +140,13 @@ async function refreshWeather() {
 
     // Tomorrow
     if (j.tomorrow) {
-      const tomorrowWeather = getWeatherIcon(j.tomorrow.weatherCode);
+      // Use icon from backend if available, fallback to client-side mapping
+      const tomorrowIcon = j.tomorrow.icon || 'fa-question';
+      const tomorrowDesc = j.tomorrow.iconDescription || 'Unknown';
       const tomorrowIconEl = document.getElementById("weatherTomorrowIcon");
       if (tomorrowIconEl) {
-        tomorrowIconEl.innerHTML = '<i class="fas ' + tomorrowWeather.icon + '" title="' + tomorrowWeather.desc + '"></i>';
-        tomorrowIconEl.setAttribute('title', tomorrowWeather.desc);
+        tomorrowIconEl.innerHTML = '<i class="fas ' + tomorrowIcon + '" title="' + tomorrowDesc + '"></i>';
+        tomorrowIconEl.setAttribute('title', tomorrowDesc);
       }
       const tomorrowDataEl = document.getElementById("weatherTomorrowData");
       if (tomorrowDataEl) {
@@ -221,5 +200,4 @@ async function refreshWeather() {
 }
 
 // Export to window
-window.getWeatherIcon = getWeatherIcon;
 window.refreshWeather = refreshWeather;

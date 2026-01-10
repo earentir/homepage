@@ -1,87 +1,80 @@
 // Search module: Search engines and history management
 
-// Search engines organized by category
-const engines = [
-  // General Search Engines
-  {name: "Google", url: "https://www.google.com/search?q=%s", icon: "fab fa-google", category: "general"},
-  {name: "DuckDuckGo", url: "https://duckduckgo.com/?q=%s", icon: "fas fa-duck", category: "general"},
-  {name: "Bing", url: "https://www.bing.com/search?q=%s", icon: "fab fa-microsoft", category: "general"},
-  {name: "Brave", url: "https://search.brave.com/search?q=%s", icon: "fas fa-shield-alt", category: "general"},
-  {name: "Startpage", url: "https://www.startpage.com/sp/search?query=%s", icon: "fas fa-search", category: "general"},
-  {name: "Ecosia", url: "https://www.ecosia.org/search?q=%s", icon: "fas fa-leaf", category: "general"},
-  {name: "Qwant", url: "https://www.qwant.com/?q=%s", icon: "fas fa-search", category: "general"},
-  {name: "SearXNG", url: "https://searx.org/search?q=%s", icon: "fas fa-search", category: "general"},
-  {name: "Wikipedia", url: "https://en.wikipedia.org/w/index.php?search=%s", icon: "fab fa-wikipedia-w", category: "general"},
-  
-  // LLM / AI Search
-  {name: "Perplexity", url: "https://www.perplexity.ai/search?q=%s", icon: "fas fa-brain", category: "llm"},
-  {name: "ChatGPT", url: "https://chat.openai.com/?q=%s", icon: "fas fa-robot", category: "llm"},
-  {name: "DeepSeek", url: "https://www.deepseek.com/chat?q=%s", icon: "fas fa-brain", category: "llm"},
-  {name: "Kimi", url: "https://kimi.moonshot.cn/search?q=%s", icon: "fas fa-sparkles", category: "llm"},
-  {name: "Claude", url: "https://claude.ai/chat?q=%s", icon: "fas fa-comments", category: "llm"},
-  
-  // Social
-  {name: "Reddit", url: "https://www.reddit.com/search/?q=%s", icon: "fab fa-reddit", category: "social"},
-  
-  // Media
-  {name: "YouTube", url: "https://www.youtube.com/results?search_query=%s", icon: "fab fa-youtube", category: "media"},
-  {name: "Genius", url: "https://genius.com/search?q=%s", icon: "fas fa-music", category: "media"},
-  {name: "AZLyrics", url: "https://search.azlyrics.com/search.php?q=%s", icon: "fas fa-music", category: "media"},
-  {name: "Lyrics.com", url: "https://www.lyrics.com/lyrics/%s", icon: "fas fa-music", category: "media"},
-  
-  // Shopping
-  {name: "Skroutz", url: "https://www.skroutz.gr/search?keyphrase=%s", icon: "fas fa-shopping-bag", category: "shopping"},
-  {name: "Amazon", url: "https://www.amazon.com/s?k=%s", icon: "fab fa-amazon", category: "shopping"},
-  {name: "eBay", url: "https://www.ebay.com/sch/i.html?_nkw=%s", icon: "fab fa-ebay", category: "shopping"},
-  
-  // Maps
-  {name: "Google Maps", url: "https://www.google.com/maps/search/%s", icon: "fas fa-map-marker-alt", category: "maps"},
-  {name: "OpenStreetMap", url: "https://www.openstreetmap.org/search?query=%s", icon: "fas fa-map", category: "maps"},
-  
-  // Development
-  {name: "GitHub", url: "https://github.com/search?q=%s", icon: "fab fa-github", category: "development"},
-  {name: "Stack Overflow", url: "https://stackoverflow.com/search?q=%s", icon: "fab fa-stack-overflow", category: "development"}
-];
-
+// Search engines - loaded from backend API
+let engines = [];
 let currentEngineIndex = 0;
 let searchHistory = [];
 let autocompleteItems = [];
 let selectedAutocompleteIndex = -1;
 
-// Load saved engine
-try {
-  const saved = window.loadFromStorage('searchEngine');
-  if (saved) {
-    // Check if saved engine is enabled
-    let enabledEngines = [];
-    try {
-      const enabledSaved = window.loadFromStorage('enabledSearchEngines');
-      if (enabledSaved) {
-        enabledEngines = enabledSaved;
-      } else {
-        // Default: all engines enabled
+// Load search engines from backend API
+async function loadSearchEngines() {
+  try {
+    const res = await fetch("/api/search-engines", {cache:"no-store"});
+    if (res.ok) {
+      const data = await res.json();
+      if (data.engines && Array.isArray(data.engines)) {
+        // Convert backend format (Name, URL, Icon, Category) to frontend format (name, url, icon, category)
+        engines = data.engines.map(e => ({
+          name: e.name || e.Name,
+          url: e.url || e.URL,
+          icon: e.icon || e.Icon,
+          category: e.category || e.Category
+        }));
+        window.engines = engines;
+        return true;
+      }
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('search', 'Error loading search engines from backend:', e);
+  }
+  
+  // Fallback: use empty array if backend fails
+  engines = [];
+  window.engines = engines;
+  return false;
+}
+
+// Initialize search engines and load saved engine
+async function initSearchEngines() {
+  // Load engines from backend
+  await loadSearchEngines();
+  
+  // Load saved engine
+  try {
+    const saved = window.loadFromStorage('searchEngine');
+    if (saved && engines.length > 0) {
+      // Check if saved engine is enabled
+      let enabledEngines = [];
+      try {
+        const enabledSaved = window.loadFromStorage('enabledSearchEngines');
+        if (enabledSaved) {
+          enabledEngines = enabledSaved;
+        } else {
+          // Default: all engines enabled
+          enabledEngines = engines.map(e => e.name);
+        }
+      } catch (e) {
         enabledEngines = engines.map(e => e.name);
       }
-    } catch (e) {
-      enabledEngines = engines.map(e => e.name);
-    }
 
-    // If saved engine is enabled, use it
-    if (enabledEngines.includes(saved)) {
-      const idx = engines.findIndex(e => e.name === saved);
-      if (idx >= 0) currentEngineIndex = idx;
-    } else {
-      // Otherwise, use first enabled engine
-      if (enabledEngines.length > 0) {
-        const firstEnabled = engines.findIndex(e => e.name === enabledEngines[0]);
-        if (firstEnabled >= 0) {
-          currentEngineIndex = firstEnabled;
-          window.saveToStorage('searchEngine', enabledEngines[0]);
+      // If saved engine is enabled, use it
+      if (enabledEngines.includes(saved)) {
+        const idx = engines.findIndex(e => e.name === saved);
+        if (idx >= 0) currentEngineIndex = idx;
+      } else {
+        // Otherwise, use first enabled engine
+        if (enabledEngines.length > 0) {
+          const firstEnabled = engines.findIndex(e => e.name === enabledEngines[0]);
+          if (firstEnabled >= 0) {
+            currentEngineIndex = firstEnabled;
+            window.saveToStorage('searchEngine', enabledEngines[0]);
+          }
         }
       }
     }
-  }
-} catch (e) {}
+  } catch (e) {}
+}
 
 function loadSearchHistory() {
   try {
@@ -718,7 +711,10 @@ function initKeyboardShortcuts() {
   setTimeout(tryInit, 100);
 })();
 
-function initSearch() {
+async function initSearch() {
+  // Load search engines from backend first
+  await initSearchEngines();
+  
   loadSearchHistory();
 
   const q = document.getElementById("q");

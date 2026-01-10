@@ -147,8 +147,14 @@ function initialLoad() {
 }
 
 // Main initialization
-function initApp() {
+async function initApp() {
   if (window.debugLog) window.debugLog('app', 'initApp() called, readyState:', document.readyState);
+  
+  // Load module metadata from backend first
+  if (window.loadModuleMetadata) {
+    await window.loadModuleMetadata();
+  }
+  
   loadModulePrefs();
   applyModuleVisibility();
 
