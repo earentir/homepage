@@ -19,13 +19,14 @@ type APIRoot struct {
 
 // ServerInfo contains server system information.
 type ServerInfo struct {
-	Hostname  string `json:"hostname"`
-	OS        string `json:"os"`
-	Arch      string `json:"arch"`
-	GoVersion string `json:"goVersion"`
-	UptimeSec int64  `json:"uptimeSec"`
-	Time      string `json:"time"`
-	IsLocal   bool   `json:"isLocal"`
+	Hostname        string `json:"hostname"`
+	OS              string `json:"os"`
+	Arch            string `json:"arch"`
+	GoVersion       string `json:"goVersion"`
+	UptimeSec       int64  `json:"uptimeSec"`
+	UptimeFormatted string `json:"uptimeFormatted,omitempty"`
+	Time            string `json:"time"`
+	IsLocal         bool   `json:"isLocal"`
 }
 
 // ClientInfo contains client information extracted from the request.
@@ -33,6 +34,9 @@ type ClientInfo struct {
 	IP       string `json:"ip"`
 	Hostname string `json:"hostname"`
 	IsLocal  bool   `json:"isLocal"`
+	OS       string `json:"os,omitempty"`
+	Browser  string `json:"browser,omitempty"`
+	Timezone string `json:"timezone,omitempty"`
 }
 
 // NetworkInfo contains network interface information.
@@ -124,21 +128,27 @@ type CPUInfo struct {
 
 // RAMInfo contains RAM/memory usage information.
 type RAMInfo struct {
-	Total     uint64  `json:"total"`
-	Used      uint64  `json:"used"`
-	Available uint64  `json:"available"`
-	Percent   float64 `json:"percent"`
-	Error     string  `json:"error,omitempty"`
+	Total          uint64  `json:"total"`
+	Used           uint64  `json:"used"`
+	Available      uint64  `json:"available"`
+	Percent        float64 `json:"percent"`
+	TotalFormatted string  `json:"totalFormatted,omitempty"`
+	UsedFormatted  string  `json:"usedFormatted,omitempty"`
+	FreeFormatted  string  `json:"freeFormatted,omitempty"`
+	Error          string  `json:"error,omitempty"`
 }
 
 // DiskInfo contains disk storage usage information.
 type DiskInfo struct {
-	MountPoint string  `json:"mountPoint,omitempty"`
-	Total      uint64  `json:"total"`
-	Used       uint64  `json:"used"`
-	Free       uint64  `json:"free"`
-	Percent    float64 `json:"percent"`
-	Error      string  `json:"error,omitempty"`
+	MountPoint     string  `json:"mountPoint,omitempty"`
+	Total          uint64  `json:"total"`
+	Used           uint64  `json:"used"`
+	Free           uint64  `json:"free"`
+	Percent        float64 `json:"percent"`
+	TotalFormatted string  `json:"totalFormatted,omitempty"`
+	UsedFormatted  string  `json:"usedFormatted,omitempty"`
+	FreeFormatted  string  `json:"freeFormatted,omitempty"`
+	Error          string  `json:"error,omitempty"`
 }
 
 // DiskPartition represents a disk partition/mount point.

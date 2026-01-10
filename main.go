@@ -761,10 +761,15 @@ func main() {
 				return
 			case <-systemTicker.C:
 				metrics := api.GetSystemMetrics(ctx)
+				uptimeSec := api.GetSystemUptime()
 				if err := conn.WriteJSON(map[string]any{
 					"type":   "system",
 					"system": metrics,
-					"server": api.ServerInfo{Time: time.Now().Format(time.RFC3339), UptimeSec: api.GetSystemUptime()},
+					"server": api.ServerInfo{
+						Time:            time.Now().Format(time.RFC3339),
+						UptimeSec:       uptimeSec,
+						UptimeFormatted: api.FmtUptime(uptimeSec),
+					},
 				}); err != nil {
 					log.Printf("WebSocket system update error: %v", err)
 					return

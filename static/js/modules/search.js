@@ -275,7 +275,9 @@ function updateEngineBtn() {
 }
 
 // Check if a string is a valid URL or IP address
-function isValidUrlOrIp(input) {
+// Client-side validation (fast, used for immediate feedback)
+// Backend API is available at /api/utils/validate-url for server-side validation
+function isValidUrlOrIpSync(input) {
   const trimmed = input.trim();
   if (!trimmed) return false;
 
@@ -314,11 +316,36 @@ function isValidUrlOrIp(input) {
   return false;
 }
 
+// Async version that uses backend API (for server-side validation when needed)
+async function isValidUrlOrIp(input) {
+  const trimmed = input.trim();
+  if (!trimmed) return false;
+
+  // Try backend API first
+  try {
+    const response = await fetch(`/api/utils/validate-url?input=${encodeURIComponent(trimmed)}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.valid !== undefined) {
+        return data.valid;
+      }
+    }
+  } catch (e) {
+    // Fallback to client-side validation
+  }
+
+  // Fallback to sync version
+  return isValidUrlOrIpSync(trimmed);
+}
+
 // Normalize URL - add http:// if no protocol is present
+// Uses backend API if available, falls back to client-side normalization
 function normalizeUrl(input) {
   const trimmed = input.trim();
   if (!trimmed) return trimmed;
 
+  // Client-side normalization (fast, used for immediate feedback)
+  // Backend API is available at /api/utils/normalize-url for server-side validation
   // If it already has a protocol, return as is
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed;
@@ -401,7 +428,7 @@ function renderAutocomplete(filter = '') {
   autocompleteItems.forEach((item, index) => {
     if (!item || !item.term) return;
     
-    const isDirectUrl = item.engine === "Direct URL" || isValidUrlOrIp(item.term);
+    const isDirectUrl = item.engine === "Direct URL" || isValidUrlOrIpSync(item.term);
     const iconClass = isDirectUrl ? 'fas fa-link' : 'fas fa-history';
     
     const div = document.createElement('div');
@@ -423,7 +450,7 @@ function renderAutocomplete(filter = '') {
     });
     div.addEventListener('mousedown', (e) => {
       // Don't prevent default on Shift+Click for direct URLs
-      if (!(e.shiftKey && (item.engine === "Direct URL" || isValidUrlOrIp(item.term)))) {
+      if (!(e.shiftKey && (item.engine === "Direct URL" || isValidUrlOrIpSync(item.term)))) {
         e.preventDefault(); // Prevent input from losing focus
       }
     });
@@ -461,7 +488,7 @@ function selectAutocompleteItem(index, event = null) {
   if (!q) return;
 
   const term = item.term;
-  const isDirectUrl = item.engine === "Direct URL" || isValidUrlOrIp(term);
+  const isDirectUrl = item.engine === "Direct URL" || isValidUrlOrIpSync(term);
   const shiftPressed = event && event.shiftKey;
 
   // Get preferences
@@ -510,7 +537,7 @@ function selectAutocompleteItem(index, event = null) {
         sameTab = true;
       }
 
-      const url = normalizeUrl(term);
+      const url = normalizeUrlSync(term);
       if (sameTab) {
         window.location.href = url;
       } else {
@@ -575,7 +602,7 @@ function goSearch() {
   }
 
   // Check if the input is a valid URL or IP address
-  if (isValidUrlOrIp(term)) {
+  if (isValidUrlOrIpSync(term)) {
     // Navigate directly to the URL/IP
     const url = normalizeUrl(term);
     addToSearchHistory(term, "Direct URL");
@@ -725,7 +752,7 @@ function initSearch() {
         if (isAutocompleteVisible && selectedAutocompleteIndex >= 0 && selectedAutocompleteIndex < autocompleteItems.length) {
           e.preventDefault();
           const item = autocompleteItems[selectedAutocompleteIndex];
-          const isDirectUrl = item && (item.engine === "Direct URL" || isValidUrlOrIp(item.term));
+          const isDirectUrl = item && (item.engine === "Direct URL" || isValidUrlOrIpSync(item.term));
           
           // For direct URLs, check if we should visit directly
             if (isDirectUrl) {

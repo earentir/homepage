@@ -306,7 +306,11 @@ async function refresh() {
       if (clientInfoDiv) clientInfoDiv.style.display = "none";
 
       document.getElementById("host").textContent = j.server.hostname;
-      document.getElementById("uptime").textContent = window.fmtUptime(j.server.uptimeSec);
+      // Use formatted uptime from backend if available, fallback to client-side formatting
+      const uptimeEl = document.getElementById("uptime");
+      if (uptimeEl) {
+        uptimeEl.textContent = j.server.uptimeFormatted || (window.fmtUptime ? window.fmtUptime(j.server.uptimeSec) : j.server.uptimeSec);
+      }
       document.getElementById("time").textContent = j.server.time;
 
       // Convert server time to UTC
@@ -409,8 +413,9 @@ function updateServerInfo(server) {
 
   if (server.uptimeSec !== undefined) {
     const uptimeEl = document.getElementById("uptime");
-    if (uptimeEl && window.fmtUptime) {
-      uptimeEl.textContent = window.fmtUptime(server.uptimeSec);
+    if (uptimeEl) {
+      // Use formatted uptime from backend if available, fallback to client-side formatting
+      uptimeEl.textContent = server.uptimeFormatted || (window.fmtUptime ? window.fmtUptime(server.uptimeSec) : server.uptimeSec);
     }
   }
 }
@@ -438,17 +443,16 @@ function updateSystemMetrics(system) {
   if (system.ram) {
     const ramSummaryEl = document.getElementById("ramSummary");
     if (ramSummaryEl && system.ram.total && system.ram.used && system.ram.available && system.ram.percent !== undefined) {
-      if (window.formatBytes) {
-        const total = window.formatBytes(system.ram.total);
-        const used = window.formatBytes(system.ram.used);
-        const free = window.formatBytes(system.ram.available);
-        const usedPercent = system.ram.percent;
-        const freePercent = 100 - usedPercent;
-        
-        // Format: "31.1GB / 19.52(62%)GB / 11.56(38%)GB"
-        ramSummaryEl.textContent = 
-          total + ' / ' + used + '(' + usedPercent.toFixed(0) + '%) / ' + free + '(' + freePercent.toFixed(0) + '%)';
-      }
+      // Use formatted values from backend if available, fallback to client-side formatting
+      const total = system.ram.totalFormatted || (window.formatBytes ? window.formatBytes(system.ram.total) : system.ram.total);
+      const used = system.ram.usedFormatted || (window.formatBytes ? window.formatBytes(system.ram.used) : system.ram.used);
+      const free = system.ram.freeFormatted || (window.formatBytes ? window.formatBytes(system.ram.available) : system.ram.available);
+      const usedPercent = system.ram.percent;
+      const freePercent = 100 - usedPercent;
+      
+      // Format: "31.1GB / 19.52(62%)GB / 11.56(38%)GB"
+      ramSummaryEl.textContent = 
+        total + ' / ' + used + '(' + usedPercent.toFixed(0) + '%) / ' + free + '(' + freePercent.toFixed(0) + '%)';
     }
     // Update RAM graph if available
     if (window.updateRamGraph && system.ram.percent !== undefined) {
@@ -464,10 +468,11 @@ function updateSystemMetrics(system) {
   if (system.disk && system.disk.percent !== undefined) {
     const safeMount = '/'.replace(/[^a-zA-Z0-9]/g, '_');
     const summaryEl = document.getElementById("diskSummary_" + safeMount);
-    if (summaryEl && window.formatBytes) {
-      const total = window.formatBytes(system.disk.total || 0);
-      const used = window.formatBytes(system.disk.used || 0);
-      const free = window.formatBytes(system.disk.free || 0);
+    if (summaryEl) {
+      // Use formatted values from backend if available, fallback to client-side formatting
+      const total = system.disk.totalFormatted || (window.formatBytes ? window.formatBytes(system.disk.total || 0) : system.disk.total || 0);
+      const used = system.disk.usedFormatted || (window.formatBytes ? window.formatBytes(system.disk.used || 0) : system.disk.used || 0);
+      const free = system.disk.freeFormatted || (window.formatBytes ? window.formatBytes(system.disk.free || 0) : system.disk.free || 0);
       const usedPercent = system.disk.percent;
       const freePercent = 100 - usedPercent;
       

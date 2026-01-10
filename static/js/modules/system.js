@@ -45,9 +45,10 @@ async function refreshRAM() {
     const res = await fetch("/api/system", {cache:"no-store"});
     const j = await res.json();
     if (j.ram && j.ram.percent !== undefined) {
-      const total = window.formatBytes(j.ram.total);
-      const used = window.formatBytes(j.ram.used);
-      const free = window.formatBytes(j.ram.available);
+      // Use formatted values from backend if available, fallback to client-side formatting
+      const total = j.ram.totalFormatted || (window.formatBytes ? window.formatBytes(j.ram.total) : j.ram.total);
+      const used = j.ram.usedFormatted || (window.formatBytes ? window.formatBytes(j.ram.used) : j.ram.used);
+      const free = j.ram.freeFormatted || (window.formatBytes ? window.formatBytes(j.ram.available) : j.ram.available);
       const usedPercent = j.ram.percent;
       const freePercent = 100 - usedPercent;
 
@@ -81,9 +82,10 @@ async function refreshDiskSingle(mountPoint) {
     }
 
     if (j.percent !== undefined) {
-      const total = window.formatBytes(j.total);
-      const used = window.formatBytes(j.used);
-      const free = window.formatBytes(j.free);
+      // Use formatted values from backend if available, fallback to client-side formatting
+      const total = j.totalFormatted || (window.formatBytes ? window.formatBytes(j.total) : j.total);
+      const used = j.usedFormatted || (window.formatBytes ? window.formatBytes(j.used) : j.used);
+      const free = j.freeFormatted || (window.formatBytes ? window.formatBytes(j.free) : j.free);
       const usedPercent = j.percent;
       const freePercent = 100 - usedPercent;
 

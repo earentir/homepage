@@ -59,6 +59,8 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/storage/get", h.HandleStorageGet)
 	mux.HandleFunc("/api/storage/get-all", h.HandleStorageGetAll)
 	mux.HandleFunc("/api/storage/status", h.HandleStorageStatus)
+	mux.HandleFunc("/api/utils/validate-url", h.HandleValidateURL)
+	mux.HandleFunc("/api/utils/normalize-url", h.HandleNormalizeURL)
 	mux.HandleFunc("/healthz", h.HandleHealthz)
 }
 
@@ -68,24 +70,22 @@ func (h *Handler) HandleSummary(w http.ResponseWriter, r *http.Request) {
 	isLocal := IsLocalRequest(r)
 
 	clientIP := GetClientIP(r)
-	clientInfo := ClientInfo{
-		IP:      clientIP,
-		IsLocal: isLocal,
-	}
-
+	clientInfo := DetectClientInfo(r)
 	if !isLocal && clientIP != "" {
 		clientInfo.Hostname = ReverseDNS(clientIP, "1.1.1.1")
 	}
 
+	uptimeSec := GetSystemUptime()
 	resp := APIRoot{
 		Server: ServerInfo{
-			Hostname:  MustHostname(),
-			OS:        runtime.GOOS,
-			Arch:      runtime.GOARCH,
-			GoVersion: runtime.Version(),
-			UptimeSec: GetSystemUptime(),
-			Time:      time.Now().Format(time.RFC3339),
-			IsLocal:   isLocal,
+			Hostname:        MustHostname(),
+			OS:              runtime.GOOS,
+			Arch:            runtime.GOARCH,
+			GoVersion:       runtime.Version(),
+			UptimeSec:       uptimeSec,
+			UptimeFormatted: FmtUptime(uptimeSec),
+			Time:            time.Now().Format(time.RFC3339),
+			IsLocal:         isLocal,
 		},
 		Client: clientInfo,
 		Network: NetworkInfo{
@@ -184,11 +184,14 @@ func (h *Handler) HandleDisk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, DiskInfo{
-		MountPoint: mountPoint,
-		Total:      usage.Total,
-		Used:       usage.Used,
-		Free:       usage.Free,
-		Percent:    usage.UsedPercent,
+		MountPoint:     mountPoint,
+		Total:          usage.Total,
+		Used:           usage.Used,
+		Free:           usage.Free,
+		Percent:        usage.UsedPercent,
+		TotalFormatted: FormatBytes(usage.Total),
+		UsedFormatted:  FormatBytes(usage.Used),
+		FreeFormatted:  FormatBytes(usage.Free),
 	})
 }
 
@@ -850,6 +853,30 @@ func (h *Handler) HandleStorageStatus(w http.ResponseWriter, _ *http.Request) {
 		"hasData":    len(allItems) > 0,
 		"wsConnected": true, // This could be enhanced to check actual WS connections
 	})
+}
+
+// HandleValidateURL validates if a string is a valid URL or IP address.
+func (h *Handler) HandleValidateURL(w http.ResponseWriter, r *http.Request) {
+	input := r.URL.Query().Get("input")
+	if input == "" {
+		WriteJSON(w, map[string]any{"valid": false, "error": "Missing 'input' parameter"})
+		return
+	}
+
+	valid := IsValidURLOrIP(input)
+	WriteJSON(w, map[string]any{"valid": valid, "input": input})
+}
+
+// HandleNormalizeURL normalizes a URL by adding http:// if no protocol is present.
+func (h *Handler) HandleNormalizeURL(w http.ResponseWriter, r *http.Request) {
+	input := r.URL.Query().Get("input")
+	if input == "" {
+		WriteJSON(w, map[string]any{"normalized": "", "error": "Missing 'input' parameter"})
+		return
+	}
+
+	normalized := NormalizeURL(input)
+	WriteJSON(w, map[string]any{"normalized": normalized, "input": input})
 }
 
 // HandleHealthz is the health check endpoint.

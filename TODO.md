@@ -138,11 +138,11 @@
 ### Easy Pickings (Simple to implement)
 
 #### Data Formatting & Utilities
-- [ ] Move `formatBytes()` to backend - format byte values server-side before sending to frontend
-- [ ] Move `fmtUptime()` to backend - format uptime strings server-side
-- [ ] Move `escapeHtml()` to backend - HTML escaping should happen server-side (or use template escaping)
-- [ ] Move `detectClientInfo()` to backend - detect OS/browser/timezone from User-Agent header server-side
-- [ ] Move `isValidUrlOrIp()` and `normalizeUrl()` to backend - URL validation/normalization should be server-side
+- [x] Move `formatBytes()` to backend - format byte values server-side before sending to frontend
+- [x] Move `fmtUptime()` to backend - format uptime strings server-side
+- [x] Move `escapeHtml()` to backend - HTML escaping should happen server-side (or use template escaping)
+- [x] Move `detectClientInfo()` to backend - detect OS/browser/timezone from User-Agent header server-side
+- [x] Move `isValidUrlOrIp()` and `normalizeUrl()` to backend - URL validation/normalization should be server-side
 
 #### Caching (Move to server-side)
 - [ ] Move GitHub data cache from localStorage to server-side cache (in-memory or disk)

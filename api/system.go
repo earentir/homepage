@@ -38,6 +38,10 @@ func GetSystemMetrics(ctx context.Context) SystemMetrics {
 		metrics.RAM.Used = vm.Used
 		metrics.RAM.Available = vm.Available
 		metrics.RAM.Percent = vm.UsedPercent
+		// Add formatted values
+		metrics.RAM.TotalFormatted = FormatBytes(vm.Total)
+		metrics.RAM.UsedFormatted = FormatBytes(vm.Used)
+		metrics.RAM.FreeFormatted = FormatBytes(vm.Available)
 	}
 
 	// Disk metrics (root filesystem)
@@ -49,6 +53,10 @@ func GetSystemMetrics(ctx context.Context) SystemMetrics {
 		metrics.Disk.Used = usage.Used
 		metrics.Disk.Free = usage.Free
 		metrics.Disk.Percent = usage.UsedPercent
+		// Add formatted values
+		metrics.Disk.TotalFormatted = FormatBytes(usage.Total)
+		metrics.Disk.UsedFormatted = FormatBytes(usage.Used)
+		metrics.Disk.FreeFormatted = FormatBytes(usage.Free)
 	}
 
 	return metrics
