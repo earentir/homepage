@@ -72,6 +72,8 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/layout/validate", h.HandleLayoutValidate)
 	mux.HandleFunc("/api/layout/process", h.HandleLayoutProcess)
 	mux.HandleFunc("/api/modules/process-prefs", h.HandleModulePrefsProcess)
+	mux.HandleFunc("/api/modules/batch", h.HandleModulesBatch)
+	mux.HandleFunc("/api/modules/config", h.HandleModuleConfig)
 	mux.HandleFunc("/api/graphs/aggregate", h.HandleGraphHistoryAggregate)
 	mux.HandleFunc("/api/storage/process", h.HandleStorageProcess)
 	mux.HandleFunc("/api/utils/validate-url", h.HandleValidateURL)
@@ -1843,6 +1845,258 @@ func (h *Handler) HandleStorageProcess(w http.ResponseWriter, r *http.Request) {
 			"processed": req.Value, // Return as-is if no processing needed
 		})
 	}
+}
+
+// ModuleConfigRequest represents a request for module configuration operations.
+type ModuleConfigRequest struct {
+	Type   string      `json:"type"`   // "github", "rss", "disk", "monitoring", "snmp", "quicklinks"
+	Action string      `json:"action"`  // "create", "update", "delete", "validate", "list"
+	Data   interface{} `json:"data"`    // Module configuration data
+	ID     string      `json:"id,omitempty"` // Module ID for update/delete
+}
+
+// HandleModuleConfig handles CRUD operations for module configurations.
+func (h *Handler) HandleModuleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		// List all module configs
+		configType := r.URL.Query().Get("type")
+		if configType == "" {
+			WriteJSON(w, map[string]any{"error": "Missing 'type' parameter"})
+			return
+		}
+
+		// Get from storage
+		storage := GetStorage()
+		var configs interface{}
+		switch configType {
+		case "github":
+			if item, exists := storage.Get("githubModules"); exists {
+				configs = item.Value
+			}
+		case "rss":
+			if item, exists := storage.Get("rssModules"); exists {
+				configs = item.Value
+			}
+		case "disk":
+			if item, exists := storage.Get("diskModules"); exists {
+				configs = item.Value
+			}
+		case "monitoring":
+			if item, exists := storage.Get("monitors"); exists {
+				configs = item.Value
+			}
+		case "snmp":
+			if item, exists := storage.Get("snmpQueries"); exists {
+				configs = item.Value
+			}
+		case "quicklinks":
+			if item, exists := storage.Get("quickLinks"); exists {
+				configs = item.Value
+			}
+		default:
+			WriteJSON(w, map[string]any{"error": "Invalid module type"})
+			return
+		}
+
+		WriteJSON(w, map[string]any{"configs": configs})
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ModuleConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid JSON: " + err.Error()})
+		return
+	}
+
+	// Validate module type
+	validTypes := map[string]bool{
+		"github": true, "rss": true, "disk": true,
+		"monitoring": true, "snmp": true, "quicklinks": true,
+	}
+	if !validTypes[req.Type] {
+		WriteJSON(w, map[string]any{"error": "Invalid module type"})
+		return
+	}
+
+	// Get storage key for this module type
+	var storageKey string
+	switch req.Type {
+	case "github":
+		storageKey = "githubModules"
+	case "rss":
+		storageKey = "rssModules"
+	case "disk":
+		storageKey = "diskModules"
+	case "monitoring":
+		storageKey = "monitors"
+	case "snmp":
+		storageKey = "snmpQueries"
+	case "quicklinks":
+		storageKey = "quickLinks"
+	}
+
+	storage := GetStorage()
+
+	switch req.Action {
+	case "validate":
+		// Validate module configuration
+		valid, errorMsg := ValidateModuleConfig(req.Type, req.Data)
+		WriteJSON(w, map[string]any{
+			"valid": valid,
+			"error": errorMsg,
+		})
+		return
+
+	case "list":
+		// List all configs for this type
+		if item, exists := storage.Get(storageKey); exists {
+			WriteJSON(w, map[string]any{"configs": item.Value})
+		} else {
+			WriteJSON(w, map[string]any{"configs": []interface{}{}})
+		}
+		return
+
+	case "create", "update", "delete":
+		// These operations are handled by localStorage sync
+		// The backend validates and processes the data
+		WriteJSON(w, map[string]any{
+			"message": "Module config operations are handled via localStorage sync. Use /api/storage/sync endpoint.",
+		})
+		return
+
+	default:
+		WriteJSON(w, map[string]any{"error": "Invalid action"})
+		return
+	}
+}
+
+// ValidateModuleConfig validates a module configuration based on type.
+func ValidateModuleConfig(moduleType string, data interface{}) (bool, string) {
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		return false, "Invalid data format"
+	}
+
+	switch moduleType {
+	case "github":
+		repo, _ := dataMap["repo"].(string)
+		if repo == "" {
+			return false, "Repository is required"
+		}
+	case "rss":
+		url, _ := dataMap["url"].(string)
+		if url == "" {
+			return false, "URL is required"
+		}
+		if valid := IsValidURLOrIP(url); !valid {
+			return false, "Invalid URL"
+		}
+	case "disk":
+		mountPoint, _ := dataMap["mountPoint"].(string)
+		if mountPoint == "" {
+			return false, "Mount point is required"
+		}
+	case "monitoring":
+		return validateMonitoring(dataMap)
+	case "snmp":
+		host, _ := dataMap["host"].(string)
+		oid, _ := dataMap["oid"].(string)
+		if host == "" {
+			return false, "Host is required"
+		}
+		if oid == "" {
+			return false, "OID is required"
+		}
+	case "quicklinks":
+		url, _ := dataMap["url"].(string)
+		title, _ := dataMap["title"].(string)
+		if url == "" {
+			return false, "URL is required"
+		}
+		if title == "" {
+			return false, "Title is required"
+		}
+		if valid := IsValidURLOrIP(url); !valid {
+			return false, "Invalid URL"
+		}
+	default:
+		return false, "Unknown module type"
+	}
+
+	return true, ""
+}
+
+// ModulesBatchRequest represents a request for batch module data.
+type ModulesBatchRequest struct {
+	Types []string `json:"types,omitempty"` // Optional: specific module types to fetch
+}
+
+// HandleModulesBatch returns aggregated module data in a single request.
+func (h *Handler) HandleModulesBatch(w http.ResponseWriter, r *http.Request) {
+	var req ModulesBatchRequest
+	if r.Method == http.MethodPost {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// Ignore decode errors, use empty request
+			req = ModulesBatchRequest{}
+		}
+	}
+
+	storage := GetStorage()
+	result := make(map[string]interface{})
+
+	// If specific types requested, only return those
+	if len(req.Types) > 0 {
+		for _, moduleType := range req.Types {
+			var storageKey string
+			switch moduleType {
+			case "github":
+				storageKey = "githubModules"
+			case "rss":
+				storageKey = "rssModules"
+			case "disk":
+				storageKey = "diskModules"
+			case "monitoring":
+				storageKey = "monitors"
+			case "snmp":
+				storageKey = "snmpQueries"
+			case "quicklinks":
+				storageKey = "quickLinks"
+			default:
+				continue
+			}
+
+			if item, exists := storage.Get(storageKey); exists {
+				result[moduleType] = item.Value
+			} else {
+				result[moduleType] = []interface{}{}
+			}
+		}
+	} else {
+		// Return all module configs
+		moduleTypes := map[string]string{
+			"github":     "githubModules",
+			"rss":        "rssModules",
+			"disk":       "diskModules",
+			"monitoring": "monitors",
+			"snmp":       "snmpQueries",
+			"quicklinks": "quickLinks",
+		}
+
+		for moduleType, storageKey := range moduleTypes {
+			if item, exists := storage.Get(storageKey); exists {
+				result[moduleType] = item.Value
+			} else {
+				result[moduleType] = []interface{}{}
+			}
+		}
+	}
+
+	WriteJSON(w, map[string]any{"modules": result})
 }
 
 // HandleHealthz is the health check endpoint.

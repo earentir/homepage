@@ -165,9 +165,9 @@
 - [x] Add preference versioning/migration system - handle preference schema changes (version tracking implemented)
 
 #### Data Aggregation
-- [ ] Move module data aggregation to backend - backend combines data from multiple sources before sending (NOTE: preferences/configs stay in localStorage, backend processes aggregated data)
-- [ ] Create batch API endpoint - single request returns all module data at once
-- [ ] Move graph history aggregation to backend - server processes history and sends only needed data (NOTE: graph history stored in localStorage, backend processes/aggregates it)
+- [x] Move module data aggregation to backend - backend combines data from multiple sources before sending (NOTE: preferences/configs stay in localStorage, backend processes aggregated data)
+- [x] Create batch API endpoint - single request returns all module data at once
+- [x] Move graph history aggregation to backend - server processes history and sends only needed data (NOTE: graph history stored in localStorage, backend processes/aggregates it)
 
 #### Real-time Updates (tested, its stupid)
 - [x] Expand WebSocket to push all module updates (not just system metrics) - System metrics pushed every 5s, other modules can push data via timer manager
@@ -177,7 +177,7 @@
 #### Module Configuration
 - [x] Move module enable/disable logic to backend - server processes module state (via localStorage sync - module prefs stored in localStorage, synced to backend for processing)
 - [x] Move module ordering to backend - server processes and returns module order (via localStorage sync - order stored in localStorage, synced to backend)
-- [ ] Create module configuration API - CRUD operations for all module types (NOTE: CRUD operations work on localStorage, backend syncs for processing/validation)
+- [x] Create module configuration API - CRUD operations for all module types (NOTE: CRUD operations work on localStorage, backend syncs for processing/validation)
 
 #### Search Functionality
 - [x] Move search history filtering to backend - server handles search within history (NOTE: search history stored in localStorage, backend processes/filters)
