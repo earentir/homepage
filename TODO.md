@@ -68,7 +68,7 @@
 - [x] Add tab autocomplete for search engine (ie youtube tab, switch the engine)
 
 ## Calendar & Todo
-- [ ] Sync with ics calendar (read only for now)
+- [x] Sync with ics calendar (read only for now)
 - [ ] Sync with a todo system localy
 
 ## WiKi

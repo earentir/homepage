@@ -179,6 +179,7 @@ async function initApp() {
   if (window.initGitHub) window.initGitHub();
   if (window.renderGitHubModules) window.renderGitHubModules();
   if (window.initQuicklinks) window.initQuicklinks();
+  if (window.initICSCalendars) window.initICSCalendars();
   if (window.initMonitoring) window.initMonitoring();
   if (window.initSnmp) window.initSnmp();
   if (window.initRss) window.initRss();

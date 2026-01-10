@@ -49,6 +49,9 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/calendar/month", h.HandleCalendarMonth)
 	mux.HandleFunc("/api/calendar/week", h.HandleCalendarWeek)
 	mux.HandleFunc("/api/calendar/events-for-date", h.HandleCalendarEventsForDate)
+	mux.HandleFunc("/api/calendar/ics", h.HandleICSCalendars)
+	mux.HandleFunc("/api/calendar/ics/fetch", h.HandleICSFetch)
+	mux.HandleFunc("/api/calendar/ics/refresh", h.HandleICSRefresh)
 	mux.HandleFunc("/api/todos/process", h.HandleTodosProcess)
 	mux.HandleFunc("/api/geocode", h.HandleGeocode)
 	mux.HandleFunc("/api/github", h.HandleGitHub)
@@ -1146,6 +1149,16 @@ func (h *Handler) HandleCalendarProcess(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Get ICS calendars and fetch their events
+	icsCalendars, err := GetICSCalendars()
+	if err == nil {
+		icsEvents, err := GetICSEvents(icsCalendars, false)
+		if err == nil {
+			// Merge local events with ICS events
+			events = MergeCalendarEvents(events, icsEvents)
+		}
+	}
+
 	count := 5
 	if countStr := r.URL.Query().Get("count"); countStr != "" {
 		if parsed, err := strconv.Atoi(countStr); err == nil && parsed > 0 {
@@ -1166,6 +1179,16 @@ func (h *Handler) HandleCalendarMonth(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
 		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
 		return
+	}
+
+	// Get ICS calendars and fetch their events
+	icsCalendars, err := GetICSCalendars()
+	if err == nil {
+		icsEvents, err := GetICSEvents(icsCalendars, false)
+		if err == nil {
+			// Merge local events with ICS events
+			events = MergeCalendarEvents(events, icsEvents)
+		}
 	}
 
 	now := time.Now()
@@ -1193,6 +1216,16 @@ func (h *Handler) HandleCalendarWeek(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
 		WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
 		return
+	}
+
+	// Get ICS calendars and fetch their events
+	icsCalendars, err := GetICSCalendars()
+	if err == nil {
+		icsEvents, err := GetICSEvents(icsCalendars, false)
+		if err == nil {
+			// Merge local events with ICS events
+			events = MergeCalendarEvents(events, icsEvents)
+		}
 	}
 
 	weekStartStr := r.URL.Query().Get("weekStart")
@@ -1234,8 +1267,135 @@ func (h *Handler) HandleCalendarEventsForDate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Get ICS calendars and fetch their events
+	icsCalendars, err := GetICSCalendars()
+	if err == nil {
+		icsEvents, err := GetICSEvents(icsCalendars, false)
+		if err == nil {
+			// Merge local events with ICS events
+			events = MergeCalendarEvents(events, icsEvents)
+		}
+	}
+
 	dayEvents := GetEventsForDate(events, dateStr)
 	WriteJSON(w, map[string]any{"events": dayEvents})
+}
+
+// HandleICSCalendars handles CRUD operations for ICS calendars.
+func (h *Handler) HandleICSCalendars(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		calendars, err := GetICSCalendars()
+		if err != nil {
+			WriteJSON(w, map[string]any{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, map[string]any{"calendars": calendars})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var calendars []ICSCalendar
+		if err := json.NewDecoder(r.Body).Decode(&calendars); err != nil {
+			GetDebugLogger().Logf("calendar", "HandleICSCalendars POST: Failed to decode request body: %v", err)
+			WriteJSON(w, map[string]any{"error": "Invalid request body: " + err.Error()})
+			return
+		}
+
+		GetDebugLogger().Logf("calendar", "HandleICSCalendars POST: Saving %d calendar(s) to storage", len(calendars))
+		for i, cal := range calendars {
+			GetDebugLogger().Logf("calendar", "  Calendar %d: %s (%s) - Enabled: %v", i+1, cal.Name, cal.URL, cal.Enabled)
+		}
+
+		if err := SaveICSCalendars(calendars); err != nil {
+			GetDebugLogger().Logf("calendar", "HandleICSCalendars POST: Failed to save calendars: %v", err)
+			WriteJSON(w, map[string]any{"error": err.Error()})
+			return
+		}
+
+		GetDebugLogger().Logf("calendar", "HandleICSCalendars POST: Successfully saved %d calendar(s)", len(calendars))
+		WriteJSON(w, map[string]any{"success": true, "calendars": calendars})
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// HandleICSFetch fetches and validates an ICS calendar URL.
+func (h *Handler) HandleICSFetch(w http.ResponseWriter, r *http.Request) {
+	url := r.URL.Query().Get("url")
+	if url == "" {
+		WriteJSON(w, map[string]any{"error": "Missing 'url' parameter"})
+		return
+	}
+
+	content, err := FetchICSCalendar(url)
+	if err != nil {
+		WriteJSON(w, map[string]any{"error": err.Error(), "valid": false})
+		return
+	}
+
+	// Try to parse it to validate
+	_, err = ParseICS(content, "test", "#000000")
+	if err != nil {
+		WriteJSON(w, map[string]any{"error": "Invalid ICS format: " + err.Error(), "valid": false})
+		return
+	}
+
+	WriteJSON(w, map[string]any{"valid": true, "message": "ICS calendar is valid"})
+}
+
+// HandleICSRefresh manually refreshes ICS calendar cache.
+func (h *Handler) HandleICSRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	calendars, err := GetICSCalendars()
+	GetDebugLogger().Logf("calendar", "HandleICSRefresh: Loaded %d calendar(s) from storage", len(calendars))
+	if err != nil {
+		GetDebugLogger().Logf("calendar", "HandleICSRefresh: Error loading calendars: %v", err)
+		WriteJSON(w, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if len(calendars) == 0 {
+		GetDebugLogger().Logf("calendar", "HandleICSRefresh: No calendars found in storage")
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   "No ICS calendars configured. Please add calendars in preferences first.",
+			"events":  0,
+			"message": "No calendars to refresh",
+		})
+		return
+	}
+
+	enabledCount := 0
+	for _, cal := range calendars {
+		if cal.Enabled {
+			enabledCount++
+			GetDebugLogger().Logf("calendar", "HandleICSRefresh: Calendar enabled - %s (%s)", cal.Name, cal.URL)
+		} else {
+			GetDebugLogger().Logf("calendar", "HandleICSRefresh: Calendar disabled - %s", cal.Name)
+		}
+	}
+
+	// Force refresh by passing true
+	events, err := GetICSEvents(calendars, true)
+	if err != nil {
+		GetDebugLogger().Logf("calendar", "HandleICSRefresh: Error fetching events: %v", err)
+		WriteJSON(w, map[string]any{"error": err.Error()})
+		return
+	}
+
+	GetDebugLogger().Logf("calendar", "HandleICSRefresh: Successfully refreshed %d events from %d enabled calendar(s)", len(events), enabledCount)
+	WriteJSON(w, map[string]any{
+		"success": true,
+		"events":  len(events),
+		"calendars": len(calendars),
+		"enabled": enabledCount,
+		"message": fmt.Sprintf("Refreshed %d events from %d enabled calendar(s) (out of %d total)", len(events), enabledCount, len(calendars)),
+	})
 }
 
 // HandleTodosProcess processes todos and returns sorted/prioritized todos.

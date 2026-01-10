@@ -410,6 +410,9 @@ a{color:inherit}
 }
 
 /* Week Calendar */
+.week-calendar-grid{
+  min-height:150px;
+}
 .week-calendar-grid .week-header{
   display:grid;
   gap:4px;

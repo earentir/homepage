@@ -407,52 +407,106 @@ if ('serviceWorker' in navigator) {
 
         <!-- Calendar Tab -->
         <div class="tab-content" id="tab-calendar">
-          <div class="pref-section">
-            <h3>Month View Settings</h3>
-            <div class="pref-row">
-              <label>Dim weekends</label>
-              <input type="checkbox" id="pref-dim-weekends" title="Show Saturday and Sunday dimmer">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
+            <!-- Left Column: Settings and Events -->
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div class="pref-section">
+                <h3>Month View Settings</h3>
+                <div class="pref-row">
+                  <label>Dim weekends</label>
+                  <input type="checkbox" id="pref-dim-weekends" title="Show Saturday and Sunday dimmer">
+                </div>
+              </div>
+              <div class="pref-section">
+                <h3>Week View Settings</h3>
+                <div class="pref-row">
+                  <label>Work week only</label>
+                  <input type="checkbox" id="pref-work-week" title="Show only Monday to Friday">
+                </div>
+                <div class="pref-row">
+                  <label>Week starts on</label>
+                  <select id="pref-week-start-day">
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </div>
+              </div>
+              <div class="pref-section">
+                <h3>Events <button class="btn-small" id="addEventBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="module-list" id="eventsList" style="max-height:300px; overflow-y:auto;"></div>
+              </div>
+              <div class="pref-section" id="eventForm" style="display:none;">
+                <h3>Add / Edit Event</h3>
+                <input type="hidden" id="event-id">
+                <div class="pref-row">
+                  <label>Title</label>
+                  <input type="text" id="event-title" placeholder="Event title" style="flex:1;">
+                </div>
+                <div class="pref-row">
+                  <label>Date</label>
+                  <input type="date" id="event-date" style="width:180px;">
+                </div>
+                <div class="pref-row">
+                  <label>Time</label>
+                  <input type="time" id="event-time" style="width:120px;">
+                </div>
+                <div class="pref-row">
+                  <label></label>
+                  <div>
+                    <button class="btn-small" id="saveEventBtn"><i class="fas fa-check"></i> Save</button>
+                    <button class="btn-small" id="cancelEventBtn"><i class="fas fa-times"></i> Cancel</button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="pref-section">
-            <h3>Week View Settings</h3>
-            <div class="pref-row">
-              <label>Work week only</label>
-              <input type="checkbox" id="pref-work-week" title="Show only Monday to Friday">
-            </div>
-            <div class="pref-row">
-              <label>Week starts on</label>
-              <select id="pref-week-start-day">
-                <option value="0">Sunday</option>
-                <option value="1">Monday</option>
-                <option value="6">Saturday</option>
-              </select>
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>Events <button class="btn-small" id="addEventBtn"><i class="fas fa-plus"></i> Add</button></h3>
-            <div class="module-list" id="eventsList" style="max-height:300px; overflow-y:auto;"></div>
-          </div>
-          <div class="pref-section" id="eventForm" style="display:none;">
-            <h3>Add / Edit Event</h3>
-            <input type="hidden" id="event-id">
-            <div class="pref-row">
-              <label>Title</label>
-              <input type="text" id="event-title" placeholder="Event title" style="flex:1;">
-            </div>
-            <div class="pref-row">
-              <label>Date</label>
-              <input type="date" id="event-date" style="width:180px;">
-            </div>
-            <div class="pref-row">
-              <label>Time</label>
-              <input type="time" id="event-time" style="width:120px;">
-            </div>
-            <div class="pref-row">
-              <label></label>
-              <div>
-                <button class="btn-small" id="saveEventBtn"><i class="fas fa-check"></i> Save</button>
-                <button class="btn-small" id="cancelEventBtn"><i class="fas fa-times"></i> Cancel</button>
+            
+            <!-- Right Column: ICS Calendars -->
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div class="pref-section">
+                <h3>ICS Calendar Cache</h3>
+                <div class="pref-row">
+                  <label>Cache Duration (minutes)</label>
+                  <input type="number" id="ics-cache-ttl" min="1" max="1440" value="15" style="width:100px;">
+                </div>
+                <div class="pref-row">
+                  <label></label>
+                  <button class="btn-small" id="refreshICSCalendarsBtn"><i class="fas fa-sync-alt"></i> Refresh Now</button>
+                </div>
+                <p class="small" style="color:var(--muted); margin-top:8px;">ICS calendars are cached to reduce API calls. Use refresh to update immediately.</p>
+              </div>
+              <div class="pref-section">
+                <h3>ICS Calendars <button class="btn-small" id="addICSCalendarBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <p class="small" style="color:var(--muted); margin-bottom:16px;">Add external ICS calendar sources. Events from enabled calendars will be merged with your local events.</p>
+                <div class="module-list" id="icsCalendarsList" style="max-height:400px; overflow-y:auto;"></div>
+              </div>
+              <div class="pref-section" id="icsCalendarForm" style="display:none;">
+                <h3>Add / Edit ICS Calendar</h3>
+                <input type="hidden" id="ics-calendar-id">
+                <div class="pref-row">
+                  <label>Name</label>
+                  <input type="text" id="ics-calendar-name" placeholder="Calendar name" style="flex:1;">
+                </div>
+                <div class="pref-row">
+                  <label>URL</label>
+                  <input type="url" id="ics-calendar-url" placeholder="https://example.com/calendar.ics" style="flex:1;">
+                </div>
+                <div class="pref-row">
+                  <label>Color</label>
+                  <input type="color" id="ics-calendar-color" value="#3b88c3" style="width:80px;">
+                </div>
+                <div class="pref-row">
+                  <label>Enabled</label>
+                  <input type="checkbox" id="ics-calendar-enabled" checked>
+                </div>
+                <div class="pref-row">
+                  <label></label>
+                  <div>
+                    <button class="btn-small" id="testICSCalendarBtn"><i class="fas fa-check-circle"></i> Test</button>
+                    <button class="btn-small" id="saveICSCalendarBtn"><i class="fas fa-check"></i> Save</button>
+                    <button class="btn-small" id="cancelICSCalendarBtn"><i class="fas fa-times"></i> Cancel</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -639,9 +639,339 @@ function initCalendar() {
   }
 }
 
+// ICS Calendar Management
+let icsCalendars = [];
+
+function loadICSCalendars() {
+  try {
+    const saved = window.loadFromStorage('icsCalendars');
+    if (saved && Array.isArray(saved)) {
+      icsCalendars = saved;
+    } else {
+      icsCalendars = [];
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('calendar', 'Failed to load ICS calendars:', e);
+    icsCalendars = [];
+  }
+}
+
+function saveICSCalendars() {
+  window.saveToStorage('icsCalendars', icsCalendars);
+  // Sync to backend via both endpoints
+  // 1. Direct ICS endpoint
+  fetch('/api/calendar/ics', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(icsCalendars)
+  }).then(res => {
+    if (res.ok) {
+      if (window.debugLog) window.debugLog('calendar', 'Successfully synced ICS calendars to backend');
+    } else {
+      if (window.debugError) window.debugError('calendar', 'Failed to sync ICS calendars to backend:', res.status, res.statusText);
+    }
+  }).catch(err => {
+    if (window.debugError) window.debugError('calendar', 'Failed to sync ICS calendars to backend:', err);
+  });
+  
+  // 2. Also sync via storage sync endpoint (for consistency)
+  const version = Date.now();
+  fetch('/api/storage/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      key: 'icsCalendars',
+      value: icsCalendars,
+      version: version
+    })
+  }).catch(err => {
+    if (window.debugError) window.debugError('calendar', 'Failed to sync ICS calendars via storage sync:', err);
+  });
+}
+
+function generateICSCalendarId() {
+  return 'ics_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function renderICSCalendarsList() {
+  const list = document.getElementById('icsCalendarsList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (icsCalendars.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No ICS calendars yet. Click "Add" to add one.</div>';
+    return;
+  }
+
+  icsCalendars.forEach((cal, index) => {
+    const item = document.createElement('div');
+    item.className = 'module-item';
+    item.innerHTML = `
+      <div class="module-icon" style="color: ${cal.color || '#3b88c3'}">
+        <i class="fas fa-calendar"></i>
+      </div>
+      <div class="module-info">
+        <div class="module-name">${window.escapeHtml ? window.escapeHtml(cal.name) : cal.name}</div>
+        <div class="module-desc" style="font-size:11px; color:var(--muted);">${window.escapeHtml ? window.escapeHtml(cal.url) : cal.url}</div>
+      </div>
+      <div class="module-controls">
+        <input type="checkbox" class="ics-calendar-toggle" data-index="${index}" ${cal.enabled ? 'checked' : ''} title="Enable/Disable">
+        <button class="btn-small edit-ics-calendar-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
+        <button class="btn-small delete-ics-calendar-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
+      </div>
+    `;
+    list.appendChild(item);
+
+    // Toggle enabled/disabled
+    const toggle = item.querySelector('.ics-calendar-toggle');
+    toggle.addEventListener('change', () => {
+      icsCalendars[index].enabled = toggle.checked;
+      saveICSCalendars();
+    });
+
+    // Edit button
+    const editBtn = item.querySelector('.edit-ics-calendar-btn');
+    editBtn.addEventListener('click', () => {
+      showICSCalendarForm(index);
+    });
+
+    // Delete button
+    const deleteBtn = item.querySelector('.delete-ics-calendar-btn');
+    deleteBtn.addEventListener('click', () => {
+      if (confirm(`Delete calendar "${cal.name}"?`)) {
+        icsCalendars.splice(index, 1);
+        saveICSCalendars();
+        renderICSCalendarsList();
+      }
+    });
+  });
+}
+
+function showICSCalendarForm(editIndex = -1) {
+  const form = document.getElementById('icsCalendarForm');
+  if (!form) return;
+
+  const idInput = document.getElementById('ics-calendar-id');
+  const nameInput = document.getElementById('ics-calendar-name');
+  const urlInput = document.getElementById('ics-calendar-url');
+  const colorInput = document.getElementById('ics-calendar-color');
+  const enabledInput = document.getElementById('ics-calendar-enabled');
+
+  if (editIndex >= 0 && editIndex < icsCalendars.length) {
+    const cal = icsCalendars[editIndex];
+    idInput.value = cal.id;
+    nameInput.value = cal.name || '';
+    urlInput.value = cal.url || '';
+    colorInput.value = cal.color || '#3b88c3';
+    enabledInput.checked = cal.enabled !== false;
+    form.dataset.editIndex = editIndex;
+  } else {
+    idInput.value = '';
+    nameInput.value = '';
+    urlInput.value = '';
+    colorInput.value = '#3b88c3';
+    enabledInput.checked = true;
+    form.dataset.editIndex = -1;
+  }
+
+  form.style.display = 'block';
+}
+
+function hideICSCalendarForm() {
+  const form = document.getElementById('icsCalendarForm');
+  if (form) {
+    form.style.display = 'none';
+  }
+}
+
+async function testICSCalendar() {
+  const urlInput = document.getElementById('ics-calendar-url');
+  const url = urlInput.value.trim();
+  
+  if (!url) {
+    alert('Please enter a URL');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/calendar/ics/fetch?url=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    
+    if (data.valid) {
+      alert('ICS calendar is valid!');
+    } else {
+      alert('Error: ' + (data.error || 'Invalid ICS calendar'));
+    }
+  } catch (e) {
+    alert('Error testing calendar: ' + e.message);
+  }
+}
+
+function saveICSCalendarFromForm() {
+  const idInput = document.getElementById('ics-calendar-id');
+  const nameInput = document.getElementById('ics-calendar-name');
+  const urlInput = document.getElementById('ics-calendar-url');
+  const colorInput = document.getElementById('ics-calendar-color');
+  const enabledInput = document.getElementById('ics-calendar-enabled');
+  const form = document.getElementById('icsCalendarForm');
+
+  const name = nameInput.value.trim();
+  const url = urlInput.value.trim();
+  const color = colorInput.value;
+  const enabled = enabledInput.checked;
+  const editIndex = parseInt(form.dataset.editIndex);
+
+  if (!name || !url) {
+    alert('Please enter a name and URL');
+    return;
+  }
+
+  const calendar = {
+    id: idInput.value || generateICSCalendarId(),
+    name: name,
+    url: url,
+    color: color,
+    enabled: enabled
+  };
+
+  if (editIndex >= 0) {
+    icsCalendars[editIndex] = calendar;
+  } else {
+    icsCalendars.push(calendar);
+  }
+
+  saveICSCalendars();
+  renderICSCalendarsList();
+  hideICSCalendarForm();
+  
+  // Refresh calendar views to show new events
+  renderCalendar();
+  renderWeekCalendar();
+  renderUpcomingEvents();
+}
+
+// Load ICS cache TTL setting
+function loadICSCacheTTL() {
+  const ttlInput = document.getElementById('ics-cache-ttl');
+  if (!ttlInput) return;
+  
+  const saved = window.loadFromStorage('icsCacheTTL');
+  if (saved !== null && saved !== undefined) {
+    ttlInput.value = saved;
+  } else {
+    ttlInput.value = 15; // Default 15 minutes
+  }
+}
+
+// Save ICS cache TTL setting
+function saveICSCacheTTL() {
+  const ttlInput = document.getElementById('ics-cache-ttl');
+  if (!ttlInput) return;
+  
+  const ttl = parseInt(ttlInput.value, 10);
+  if (isNaN(ttl) || ttl < 1) {
+    alert('Cache TTL must be at least 1 minute');
+    ttlInput.value = 15;
+    return;
+  }
+  
+  window.saveToStorage('icsCacheTTL', ttl);
+  
+  // Sync to backend
+  fetch('/api/storage/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      key: 'icsCacheTTL',
+      value: ttl,
+      version: Date.now()
+    })
+  }).catch(err => {
+    if (window.debugError) window.debugError('calendar', 'Failed to sync ICS cache TTL to backend:', err);
+  });
+}
+
+// Refresh ICS calendars manually
+async function refreshICSCalendars() {
+  const refreshBtn = document.getElementById('refreshICSCalendarsBtn');
+  if (!refreshBtn) return;
+  
+  const originalHTML = refreshBtn.innerHTML;
+  refreshBtn.disabled = true;
+  refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+  
+  try {
+    const res = await fetch('/api/calendar/ics/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await res.json();
+    
+    if (data.success) {
+      if (window.debugLog) window.debugLog('calendar', `ICS calendars refreshed: ${data.message}`);
+      alert(`ICS calendars refreshed successfully!\n\n${data.message}`);
+      
+      // Refresh calendar views
+      renderCalendar();
+      renderWeekCalendar();
+      renderUpcomingEvents();
+    } else {
+      alert('Error refreshing ICS calendars: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('calendar', 'Failed to refresh ICS calendars:', e);
+    alert('Error refreshing ICS calendars: ' + e.message);
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.innerHTML = originalHTML;
+  }
+}
+
+// Initialize ICS calendar management
+function initICSCalendars() {
+  loadICSCalendars();
+  loadICSCacheTTL();
+  renderICSCalendarsList();
+
+  const addBtn = document.getElementById('addICSCalendarBtn');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => showICSCalendarForm());
+  }
+
+  const saveBtn = document.getElementById('saveICSCalendarBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveICSCalendarFromForm);
+  }
+
+  const cancelBtn = document.getElementById('cancelICSCalendarBtn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', hideICSCalendarForm);
+  }
+
+  const testBtn = document.getElementById('testICSCalendarBtn');
+  if (testBtn) {
+    testBtn.addEventListener('click', testICSCalendar);
+  }
+
+  // Cache TTL input
+  const ttlInput = document.getElementById('ics-cache-ttl');
+  if (ttlInput) {
+    ttlInput.addEventListener('change', saveICSCacheTTL);
+    ttlInput.addEventListener('blur', saveICSCacheTTL);
+  }
+
+  // Refresh button
+  const refreshBtn = document.getElementById('refreshICSCalendarsBtn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', refreshICSCalendars);
+  }
+}
+
 // Expose functions globally
 window.initCalendar = initCalendar;
 window.renderCalendar = renderCalendar;
 window.renderWeekCalendar = renderWeekCalendar;
 window.renderUpcomingEvents = renderUpcomingEvents;
 window.renderEventsPreferenceList = renderEventsPreferenceList;
+window.initICSCalendars = initICSCalendars;

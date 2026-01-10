@@ -461,6 +461,7 @@ a{color:inherit}
 .btn-icon:hover{color:var(--accent);}
 
 /* Week Calendar */
+.week-calendar-grid{min-height:150px;}
 .week-calendar-grid .week-header{display:grid;gap:4px;margin-bottom:8px;}
 .week-calendar-grid .week-day-name{text-align:center;font-size:11px;color:var(--muted);text-transform:uppercase;padding:4px 0;}
 .week-calendar-grid .week-days{display:grid;gap:4px;}

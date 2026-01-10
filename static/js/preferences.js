@@ -24,6 +24,7 @@ function initPreferencesModal() {
     if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
     if (window.renderCalendarModuleList) window.renderCalendarModuleList();
     if (window.renderTodoModuleList) window.renderTodoModuleList();
+    if (window.initICSCalendars) window.initICSCalendars();
     renderModuleList();
     // Initialize debug settings when modal opens
     initDebugSettings();
