@@ -359,8 +359,9 @@ function renderMonitorsList() {
       editMonitor(index);
     });
 
-    item.querySelector('.delete-mon-btn').addEventListener('click', () => {
-      if (confirm('Delete monitor "' + mon.name + '"?')) {
+    item.querySelector('.delete-mon-btn').addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm('Delete monitor "' + mon.name + '"?', 'Confirm Delete');
+      if (confirmed) {
         delete monitorDownSince[index];
         monitors.splice(index, 1);
         saveMonitors();
@@ -480,16 +481,16 @@ function initMonitoring() {
         if (res.ok) {
           const data = await res.json();
           if (!data.valid) {
-            alert(data.error || 'Validation failed');
+            await window.popup.alert(data.error || 'Validation failed', 'Validation Error');
             return;
           }
         } else {
-          alert('Validation error: Unable to validate input');
+          await window.popup.alert('Validation error: Unable to validate input', 'Error');
           return;
         }
       } catch (e) {
         if (window.debugError) window.debugError('monitoring', 'Error validating monitoring:', e);
-        alert('Validation error: Unable to connect to server');
+        await window.popup.alert('Validation error: Unable to connect to server', 'Error');
         return;
       }
 

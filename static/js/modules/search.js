@@ -120,8 +120,9 @@ function removeFromSearchHistory(index) {
   }
 }
 
-function clearSearchHistory() {
-  if (confirm("Are you sure you want to clear all search history?")) {
+async function clearSearchHistory() {
+  const confirmed = await window.popup.confirm("Are you sure you want to clear all search history?", "Confirm Clear");
+  if (confirmed) {
     searchHistory = [];
     saveSearchHistory();
     if (window.renderSearchHistory) {

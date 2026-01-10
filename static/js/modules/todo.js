@@ -286,8 +286,9 @@ function editTodo(id) {
   }
 }
 
-function deleteTodo(id) {
-  if (!confirm('Delete this todo?')) return;
+async function deleteTodo(id) {
+  const confirmed = await window.popup.confirm('Delete this todo?', 'Confirm Delete');
+  if (!confirmed) return;
 
   todos = todos.filter(t => t.id !== id);
   saveTodos();
@@ -314,16 +315,16 @@ async function saveTodoFromForm() {
     if (res.ok) {
       const data = await res.json();
       if (!data.valid) {
-        alert(data.error || 'Validation failed');
+        await window.popup.alert(data.error || 'Validation failed', 'Validation Error');
         return;
       }
     } else {
-      alert('Validation error: Unable to validate input');
+      await window.popup.alert('Validation error: Unable to validate input', 'Error');
       return;
     }
   } catch (e) {
     if (window.debugError) window.debugError('todo', 'Error validating todo:', e);
-    alert('Validation error: Unable to connect to server');
+    await window.popup.alert('Validation error: Unable to connect to server', 'Error');
     return;
   }
 

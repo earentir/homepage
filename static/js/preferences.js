@@ -443,14 +443,15 @@ function initGeneralSettings() {
   // Clear cache button
   const clearCacheBtn = document.getElementById('clearCacheBtn');
   if (clearCacheBtn) {
-    clearCacheBtn.addEventListener('click', () => {
-      if (confirm('Clear all cached data? This will reset history graphs and module preferences.')) {
+    clearCacheBtn.addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm('Clear all cached data? This will reset history graphs and module preferences.', 'Confirm Clear');
+      if (confirmed) {
         localStorage.removeItem('cpuHistory');
         localStorage.removeItem('ramHistory');
         localStorage.removeItem('diskHistory');
         localStorage.removeItem('faviconCache');
         localStorage.removeItem('rssCache');
-        alert('Cache cleared. Refresh the page to see changes.');
+        await window.popup.alert('Cache cleared. Refresh the page to see changes.', 'Cache Cleared');
       }
     });
   }
@@ -458,8 +459,9 @@ function initGeneralSettings() {
   // Reset order button
   const resetOrderBtn = document.getElementById('resetOrderBtn');
   if (resetOrderBtn) {
-    resetOrderBtn.addEventListener('click', () => {
-      if (confirm('Reset module layout to default?')) {
+    resetOrderBtn.addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm('Reset module layout to default?', 'Confirm Reset');
+      if (confirmed) {
         localStorage.removeItem('layoutConfig');
         location.reload();
       }
@@ -606,7 +608,7 @@ function initWeatherSettings() {
 
       // Check for error response
       if (data.error) {
-        alert('Error: ' + data.error);
+        await window.popup.alert('Error: ' + data.error, 'Error');
         return;
       }
 
@@ -633,11 +635,11 @@ function initWeatherSettings() {
         });
         if (locationResultsRow) locationResultsRow.style.display = 'flex';
       } else {
-        alert('No locations found for "' + query + '"');
+        await window.popup.alert('No locations found for "' + query + '"', 'No Results');
       }
     } catch (e) {
       if (window.debugError) window.debugError('preferences', 'Error searching location:', e);
-      alert('Error searching location: ' + e.message);
+      await window.popup.alert('Error searching location: ' + e.message, 'Error');
     } finally {
       searchLocationBtn.disabled = false;
       searchLocationBtn.innerHTML = originalHTML;
@@ -657,10 +659,10 @@ function initWeatherSettings() {
   }
 
   if (setLocationBtn && locationResults && currentLocationDisplay) {
-    setLocationBtn.addEventListener('click', () => {
+    setLocationBtn.addEventListener('click', async () => {
       const selected = locationResults.value;
       if (!selected || selected === '') {
-        alert('Please select a location from the dropdown');
+        await window.popup.alert('Please select a location from the dropdown', 'Input Required');
         return;
       }
 
@@ -681,7 +683,7 @@ function initWeatherSettings() {
         }
       } catch (e) {
         if (window.debugError) window.debugError('preferences', 'Error setting location:', e);
-        alert('Error setting location: ' + e.message);
+        await window.popup.alert('Error setting location: ' + e.message, 'Error');
       }
     });
 

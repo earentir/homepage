@@ -171,8 +171,9 @@ function editSnmpQuery(index) {
   document.getElementById('snmpForm').dataset.editIndex = index;
 }
 
-function deleteSnmpQuery(index) {
-  if (confirm('Delete this SNMP query?')) {
+async function deleteSnmpQuery(index) {
+  const confirmed = await window.popup.confirm('Delete this SNMP query?', 'Confirm Delete');
+  if (confirmed) {
     const query = snmpQueries[index];
     const queryKey = `${query.host}:${query.port}:${query.oid}`;
     delete snmpLastValues[queryKey];
@@ -355,7 +356,7 @@ function initSnmp() {
       const siUnits = document.getElementById('snmp-si-units').checked;
 
       if (!title || !host || !community || !oid) {
-        alert('Please fill in all required fields');
+        window.popup.alert('Please fill in all required fields', 'Input Required');
         return;
       }
 

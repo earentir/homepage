@@ -256,8 +256,9 @@ function renderRssModuleList() {
     });
 
     const deleteBtn = item.querySelector('.delete-rss-btn');
-    deleteBtn.addEventListener('click', () => {
-      if (confirm(`Delete RSS module "${mod.name || 'RSS Feed'}"?`)) {
+    deleteBtn.addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm(`Delete RSS module "${mod.name || 'RSS Feed'}"?`, 'Confirm Delete');
+      if (confirmed) {
         rssModules.splice(index, 1);
         saveRssModules();
         renderRssModuleList();
@@ -340,7 +341,7 @@ function showRssEditDialog(index) {
     const showDate = document.getElementById('rss-edit-date').checked;
 
     if (!url) {
-      alert('RSS Feed URL is required');
+      window.popup.alert('RSS Feed URL is required', 'Input Required');
       return;
     }
 

@@ -612,8 +612,9 @@ function renderDiskModuleList() {
     });
 
     const deleteBtn = item.querySelector('.delete-disk-btn');
-    deleteBtn.addEventListener('click', () => {
-      if (confirm(`Delete disk module "${mod.mountPoint === '/' ? 'Disk (Root)' : mod.mountPoint}"?`)) {
+    deleteBtn.addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm(`Delete disk module "${mod.mountPoint === '/' ? 'Disk (Root)' : mod.mountPoint}"?`, 'Confirm Delete');
+      if (confirmed) {
         diskModules.splice(index, 1);
         saveDiskModules();
         renderDiskModuleList();
@@ -629,12 +630,16 @@ function showDiskEditDialog(index) {
 
   // Fetch available disks
   fetch('/api/disks', {cache:"no-store"})
-    .then(res => res.json())
-    .then(data => {
+    .then(async res => {
+      const data = await res.json();
       if (data.error || !data.partitions || data.partitions.length === 0) {
-        alert('No disks available');
+        await window.popup.alert('No disks available', 'No Disks');
         return;
       }
+      return data;
+    })
+    .then(data => {
+      if (!data) return;
 
       const dialog = document.createElement('div');
       dialog.className = 'modal-overlay active';
@@ -677,11 +682,11 @@ function showDiskEditDialog(index) {
         btn.addEventListener('click', closeDialog);
       });
 
-      document.getElementById('disk-save').addEventListener('click', () => {
+      document.getElementById('disk-save').addEventListener('click', async () => {
         const mountPoint = document.getElementById('disk-edit-mount').value.trim();
 
         if (!mountPoint) {
-          alert('Mount point is required');
+          await window.popup.alert('Mount point is required', 'Input Required');
           return;
         }
 
@@ -689,7 +694,7 @@ function showDiskEditDialog(index) {
           const safeMount = mountPoint.replace(/[^a-zA-Z0-9]/g, '_');
           const exists = diskModules.find(m => m.mountPoint === mountPoint);
           if (exists) {
-            alert('This disk is already added');
+            await window.popup.alert('This disk is already added', 'Duplicate');
             return;
           }
           diskModules.push({
@@ -701,7 +706,7 @@ function showDiskEditDialog(index) {
           const safeMount = mountPoint.replace(/[^a-zA-Z0-9]/g, '_');
           const exists = diskModules.find((m, i) => m.mountPoint === mountPoint && i !== index);
           if (exists) {
-            alert('This disk is already added');
+            await window.popup.alert('This disk is already added', 'Duplicate');
             return;
           }
           diskModules[index].mountPoint = mountPoint;
@@ -722,9 +727,9 @@ function showDiskEditDialog(index) {
         closeDialog();
       });
     })
-    .catch(err => {
+    .catch(async err => {
       if (window.debugError) window.debugError('system', 'Error fetching disks:', err);
-      alert('Error loading disks');
+      await window.popup.alert('Error loading disks', 'Error');
     });
 }
 

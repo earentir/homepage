@@ -419,8 +419,9 @@ function renderGitHubModuleList() {
 
     // Delete button
     const deleteBtn = item.querySelector('.delete-github-btn');
-    deleteBtn.addEventListener('click', () => {
-      if (confirm('Delete GitHub module "' + mod.name + '"?')) {
+    deleteBtn.addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm('Delete GitHub module "' + mod.name + '"?', 'Confirm Delete');
+      if (confirmed) {
         githubModules.splice(index, 1);
         saveGitHubModules();
         renderGitHubModuleList();
@@ -512,17 +513,17 @@ function showGitHubEditDialog(index) {
     }
   });
 
-  saveBtn.addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const url = urlInput.value.trim();
     if (!url) {
-      alert('Please enter a GitHub URL');
+      await window.popup.alert('Please enter a GitHub URL', 'Input Required');
       return;
     }
 
     // Extract name from URL
     const parts = url.replace('https://github.com/', '').replace(/\/$/, '').split('/').filter(p => p);
     if (parts.length === 0) {
-      alert('Invalid GitHub URL');
+      await window.popup.alert('Invalid GitHub URL', 'Invalid Input');
       return;
     }
 

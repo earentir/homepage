@@ -79,24 +79,26 @@ async function loadServerConfigs() {
           const res = await fetch(`/api/config/download?name=${encodeURIComponent(name)}`);
           const configData = await res.json();
           if (configData.error) {
-            alert('Error: ' + configData.error);
+            await window.popup.alert('Error: ' + configData.error, 'Error');
             return;
           }
 
-          if (confirm('This will overwrite your current configuration. Continue?')) {
+          const confirmed = await window.popup.confirm('This will overwrite your current configuration. Continue?', 'Confirm Import');
+          if (confirmed) {
             const result = importConfig(configData);
-            alert(`Imported ${result.imported} items${result.errors > 0 ? ` (${result.errors} errors)` : ''}. Page will reload.`);
+            await window.popup.alert(`Imported ${result.imported} items${result.errors > 0 ? ` (${result.errors} errors)` : ''}. Page will reload.`, 'Import Complete');
             location.reload();
           }
         } catch (err) {
-          alert('Error downloading config: ' + err.message);
+          await window.popup.alert('Error downloading config: ' + err.message, 'Error');
         }
       });
 
       // Delete button
       const deleteBtn = item.querySelector('.delete-config-btn');
       deleteBtn.addEventListener('click', async () => {
-        if (!confirm(`Delete config "${name}"?`)) return;
+        const confirmed = await window.popup.confirm(`Delete config "${name}"?`, 'Confirm Delete');
+        if (!confirmed) return;
 
         try {
           const res = await fetch(`/api/config/delete?name=${encodeURIComponent(name)}`, {
@@ -104,12 +106,12 @@ async function loadServerConfigs() {
           });
           const result = await res.json();
           if (result.error) {
-            alert('Error: ' + result.error);
+            await window.popup.alert('Error: ' + result.error, 'Error');
           } else {
             loadServerConfigs();
           }
         } catch (err) {
-          alert('Error deleting config: ' + err.message);
+          await window.popup.alert('Error deleting config: ' + err.message, 'Error');
         }
       });
 
@@ -161,16 +163,17 @@ async function loadServerConfigs() {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
           try {
             const configData = JSON.parse(event.target.result);
-            if (confirm('This will overwrite your current configuration. Continue?')) {
+            const confirmed = await window.popup.confirm('This will overwrite your current configuration. Continue?', 'Confirm Import');
+            if (confirmed) {
               const result = importConfig(configData);
-              alert(`Imported ${result.imported} items${result.errors > 0 ? ` (${result.errors} errors)` : ''}. Page will reload.`);
+              await window.popup.alert(`Imported ${result.imported} items${result.errors > 0 ? ` (${result.errors} errors)` : ''}. Page will reload.`, 'Import Complete');
               location.reload();
             }
           } catch (err) {
-            alert('Error importing config: ' + err.message);
+            await window.popup.alert('Error importing config: ' + err.message, 'Error');
           }
         };
         reader.readAsText(file);
@@ -185,12 +188,12 @@ async function loadServerConfigs() {
       uploadBtn.addEventListener('click', async () => {
         const name = configNameInput.value.trim();
         if (!name) {
-          alert('Please enter a config name');
+          await window.popup.alert('Please enter a config name', 'Input Required');
           return;
         }
 
         if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-          alert('Config name can only contain letters, numbers, dashes, and underscores');
+          await window.popup.alert('Config name can only contain letters, numbers, dashes, and underscores', 'Invalid Name');
           return;
         }
 
@@ -203,14 +206,14 @@ async function loadServerConfigs() {
           });
           const result = await res.json();
           if (result.error) {
-            alert('Error: ' + result.error);
+            await window.popup.alert('Error: ' + result.error, 'Error');
           } else {
-            alert('Config uploaded successfully!');
+            await window.popup.alert('Config uploaded successfully!', 'Success');
             configNameInput.value = '';
             loadServerConfigs();
           }
         } catch (err) {
-          alert('Error uploading config: ' + err.message);
+          await window.popup.alert('Error uploading config: ' + err.message, 'Error');
         }
       });
     }

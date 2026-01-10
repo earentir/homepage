@@ -325,8 +325,9 @@ function renderQuicklinksList() {
       editQuicklink(index);
     });
 
-    item.querySelector('.delete-ql-btn').addEventListener('click', () => {
-      if (confirm('Delete quicklink "' + link.title + '"?')) {
+    item.querySelector('.delete-ql-btn').addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm('Delete quicklink "' + link.title + '"?', 'Confirm Delete');
+      if (confirmed) {
         quicklinks.splice(index, 1);
         saveQuicklinks();
         renderQuicklinksList();
@@ -474,7 +475,7 @@ function initQuicklinks() {
       const editIndex = parseInt(form.dataset.editIndex);
 
       if (!title || !url) {
-        alert('Please enter a title and URL');
+        window.popup.alert('Please enter a title and URL', 'Input Required');
         return;
       }
 

@@ -208,7 +208,7 @@ async function showDayEvents(dateStr) {
   events.forEach(evt => {
     msg += (evt.time || '--:--') + ' - ' + evt.title + '\n';
   });
-  alert(msg);
+  await window.popup.alert(msg, 'Calendar Events');
 }
 
 // Navigate calendar
@@ -496,8 +496,9 @@ function editEventByIndex(index) {
   }
 }
 
-function deleteEvent(id) {
-  if (!confirm('Delete this event?')) return;
+async function deleteEvent(id) {
+  const confirmed = await window.popup.confirm('Delete this event?', 'Confirm Delete');
+  if (!confirmed) return;
 
   calendarEvents = calendarEvents.filter(e => e.id !== id);
   saveEvents();
@@ -526,16 +527,16 @@ async function saveEventFromForm() {
     if (res.ok) {
       const data = await res.json();
       if (!data.valid) {
-        alert(data.error || 'Validation failed');
+        await window.popup.alert(data.error || 'Validation failed', 'Validation Error');
         return;
       }
     } else {
-      alert('Validation error: Unable to validate input');
+      await window.popup.alert('Validation error: Unable to validate input', 'Error');
       return;
     }
   } catch (e) {
     if (window.debugError) window.debugError('calendar', 'Error validating event:', e);
-    alert('Validation error: Unable to connect to server');
+    await window.popup.alert('Validation error: Unable to connect to server', 'Error');
     return;
   }
 
@@ -737,8 +738,9 @@ function renderICSCalendarsList() {
 
     // Delete button
     const deleteBtn = item.querySelector('.delete-ics-calendar-btn');
-    deleteBtn.addEventListener('click', () => {
-      if (confirm(`Delete calendar "${cal.name}"?`)) {
+    deleteBtn.addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm(`Delete calendar "${cal.name}"?`, 'Confirm Delete');
+      if (confirmed) {
         icsCalendars.splice(index, 1);
         saveICSCalendars();
         renderICSCalendarsList();
@@ -789,7 +791,7 @@ async function testICSCalendar() {
   const url = urlInput.value.trim();
   
   if (!url) {
-    alert('Please enter a URL');
+    await window.popup.alert('Please enter a URL', 'Input Required');
     return;
   }
 
@@ -798,12 +800,12 @@ async function testICSCalendar() {
     const data = await res.json();
     
     if (data.valid) {
-      alert('ICS calendar is valid!');
+      await window.popup.alert('ICS calendar is valid!', 'Success');
     } else {
-      alert('Error: ' + (data.error || 'Invalid ICS calendar'));
+      await window.popup.alert('Error: ' + (data.error || 'Invalid ICS calendar'), 'Error');
     }
   } catch (e) {
-    alert('Error testing calendar: ' + e.message);
+    await window.popup.alert('Error testing calendar: ' + e.message, 'Error');
   }
 }
 
@@ -822,7 +824,7 @@ function saveICSCalendarFromForm() {
   const editIndex = parseInt(form.dataset.editIndex);
 
   if (!name || !url) {
-    alert('Please enter a name and URL');
+    window.popup.alert('Please enter a name and URL', 'Input Required');
     return;
   }
 
@@ -870,7 +872,7 @@ function saveICSCacheTTL() {
   
   const ttl = parseInt(ttlInput.value, 10);
   if (isNaN(ttl) || ttl < 1) {
-    alert('Cache TTL must be at least 1 minute');
+    window.popup.alert('Cache TTL must be at least 1 minute', 'Invalid Input');
     ttlInput.value = 15;
     return;
   }
@@ -910,18 +912,18 @@ async function refreshICSCalendars() {
     
     if (data.success) {
       if (window.debugLog) window.debugLog('calendar', `ICS calendars refreshed: ${data.message}`);
-      alert(`ICS calendars refreshed successfully!\n\n${data.message}`);
+      await window.popup.alert(`ICS calendars refreshed successfully!\n\n${data.message}`, 'Success');
       
       // Refresh calendar views
       renderCalendar();
       renderWeekCalendar();
       renderUpcomingEvents();
     } else {
-      alert('Error refreshing ICS calendars: ' + (data.error || 'Unknown error'));
+      await window.popup.alert('Error refreshing ICS calendars: ' + (data.error || 'Unknown error'), 'Error');
     }
   } catch (e) {
     if (window.debugError) window.debugError('calendar', 'Failed to refresh ICS calendars:', e);
-    alert('Error refreshing ICS calendars: ' + e.message);
+    await window.popup.alert('Error refreshing ICS calendars: ' + e.message, 'Error');
   } finally {
     refreshBtn.disabled = false;
     refreshBtn.innerHTML = originalHTML;
@@ -933,6 +935,11 @@ function initICSCalendars() {
   loadICSCalendars();
   loadICSCacheTTL();
   renderICSCalendarsList();
+  
+  // Sync calendars to backend on initialization to ensure backend has them
+  if (icsCalendars.length > 0) {
+    saveICSCalendars();
+  }
 
   const addBtn = document.getElementById('addICSCalendarBtn');
   if (addBtn) {
