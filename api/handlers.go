@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -64,6 +65,7 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/favicon", h.HandleFavicon)
 	mux.HandleFunc("/api/monitor", h.HandleMonitor)
 	mux.HandleFunc("/api/snmp", h.HandleSNMP)
+	mux.HandleFunc("/api/speedplane", h.HandleSpeedplane)
 	mux.HandleFunc("/api/rss", h.HandleRSS)
 	mux.HandleFunc("/api/config/upload", h.HandleConfigUpload)
 	mux.HandleFunc("/api/config/list", h.HandleConfigList)
@@ -616,6 +618,81 @@ func (h *Handler) HandleSNMP(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, map[string]any{
 		"success": true,
 		"value":   result,
+	})
+}
+
+// HandleSpeedplane handles Speedplane API requests.
+func (h *Handler) HandleSpeedplane(w http.ResponseWriter, r *http.Request) {
+	host := r.URL.Query().Get("host")
+	port := r.URL.Query().Get("port")
+
+	if host == "" || port == "" {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   "Missing required parameters: host, port",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	// Build the API URL
+	apiURL := fmt.Sprintf("http://%s:%s/api/export/current.json", host, port)
+
+	// Create HTTP client
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to create request: %v", err),
+		})
+		return
+	}
+	req.Header.Set("User-Agent", "lan-index/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to fetch data: %v", err),
+		})
+		return
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Error closing Speedplane response body: %v", closeErr)
+		}
+	}()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("HTTP error: %s", resp.Status),
+		})
+		return
+	}
+
+	// Decode JSON response
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to parse JSON: %v", err),
+		})
+		return
+	}
+
+	WriteJSON(w, map[string]any{
+		"success": true,
+		"data":    data,
 	})
 }
 
@@ -1553,6 +1630,8 @@ func ValidateInput(req InputValidationRequest) (bool, string) {
 		return validateTodo(req.Data)
 	case "monitoring":
 		return validateMonitoring(req.Data)
+	case "speedplane":
+		return validateSpeedplane(req.Data)
 	default:
 		return false, "Unknown validation type: " + req.Type
 	}
@@ -1616,6 +1695,30 @@ func validateTodo(data map[string]interface{}) (bool, string) {
 		}
 	}
 
+	return true, ""
+}
+
+// validateSpeedplane validates a speedplane instance.
+func validateSpeedplane(data map[string]interface{}) (bool, string) {
+	host, ok := data["host"].(string)
+	if !ok || strings.TrimSpace(host) == "" {
+		return false, "Host is required"
+	}
+	port, ok := data["port"]
+	if !ok {
+		return false, "Port is required"
+	}
+	portNum, ok := port.(float64)
+	if !ok {
+		portNumInt, ok := port.(int)
+		if !ok {
+			return false, "Port must be a number"
+		}
+		portNum = float64(portNumInt)
+	}
+	if portNum < 1 || portNum > 65535 {
+		return false, "Port must be between 1 and 65535"
+	}
 	return true, ""
 }
 
@@ -2134,6 +2237,10 @@ func (h *Handler) HandleModuleConfig(w http.ResponseWriter, r *http.Request) {
 			if item, exists := storage.Get("snmpQueries"); exists {
 				configs = item.Value
 			}
+		case "speedplane":
+			if item, exists := storage.Get("speedplaneConfig"); exists {
+				configs = item.Value
+			}
 		case "quicklinks":
 			if item, exists := storage.Get("quickLinks"); exists {
 				configs = item.Value
@@ -2159,10 +2266,10 @@ func (h *Handler) HandleModuleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate module type
-	validTypes := map[string]bool{
-		"github": true, "rss": true, "disk": true,
-		"monitoring": true, "snmp": true, "quicklinks": true,
-	}
+		validTypes := map[string]bool{
+			"github": true, "rss": true, "disk": true,
+			"monitoring": true, "snmp": true, "speedplane": true, "quicklinks": true,
+		}
 	if !validTypes[req.Type] {
 		WriteJSON(w, map[string]any{"error": "Invalid module type"})
 		return
@@ -2181,6 +2288,8 @@ func (h *Handler) HandleModuleConfig(w http.ResponseWriter, r *http.Request) {
 		storageKey = "monitors"
 	case "snmp":
 		storageKey = "snmpQueries"
+	case "speedplane":
+		storageKey = "speedplaneConfig"
 	case "quicklinks":
 		storageKey = "quickLinks"
 	}
@@ -2257,6 +2366,25 @@ func ValidateModuleConfig(moduleType string, data interface{}) (bool, string) {
 		if oid == "" {
 			return false, "OID is required"
 		}
+	case "speedplane":
+		host, _ := dataMap["host"].(string)
+		port, _ := dataMap["port"]
+		if host == "" {
+			return false, "Host is required"
+		}
+		var portNum float64
+		var ok bool
+		portNum, ok = port.(float64)
+		if !ok {
+			portInt, ok := port.(int)
+			if !ok {
+				return false, "Port must be a number"
+			}
+			portNum = float64(portInt)
+		}
+		if portNum < 1 || portNum > 65535 {
+			return false, "Port must be between 1 and 65535"
+		}
 	case "quicklinks":
 		url, _ := dataMap["url"].(string)
 		title, _ := dataMap["title"].(string)
@@ -2309,6 +2437,8 @@ func (h *Handler) HandleModulesBatch(w http.ResponseWriter, r *http.Request) {
 				storageKey = "monitors"
 			case "snmp":
 				storageKey = "snmpQueries"
+			case "speedplane":
+				storageKey = "speedplaneConfig"
 			case "quicklinks":
 				storageKey = "quickLinks"
 			default:
@@ -2329,6 +2459,7 @@ func (h *Handler) HandleModulesBatch(w http.ResponseWriter, r *http.Request) {
 			"disk":       "diskModules",
 			"monitoring": "monitors",
 			"snmp":       "snmpQueries",
+			"speedplane": "speedplaneConfig",
 			"quicklinks": "quickLinks",
 		}
 

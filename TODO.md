@@ -22,7 +22,6 @@
 - [ ] Add inoreader support
 - [ ] Add TTRSS
 - [ ] Add module that gets a json and builds a ui
-
 - [ ] Add World Clock
 
 ## IP Address Module
@@ -133,6 +132,7 @@
 - [ ] Add a module to show dns status and last 5 dns requests
 - [ ] Add a module to show ntp status and last 5 ntp requests
 - [ ] Add a module to show proxy status and last 5 proxy requests
+- [x] Add a module to show the last speed test from speedplane
 
 ## Backend Migration - Move Frontend Logic to Backend
 

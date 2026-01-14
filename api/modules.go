@@ -172,5 +172,14 @@ func GetModuleMetadata() map[string]ModuleMetadata {
 			HasTimer: false,
 			Enabled:  true,
 		},
+		"speedplane": {
+			Name:            "Speedplane",
+			Icon:            "fa-tachometer-alt",
+			Desc:            "Speed test results from Speedplane API",
+			HasTimer:        true,
+			TimerKey:        "speedplane",
+			DefaultInterval: 300,
+			Enabled:         true,
+		},
 	}
 }

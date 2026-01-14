@@ -10,6 +10,7 @@ const refreshHandlers = {
   ip: () => window.refreshIP && window.refreshIP(),
   monitoring: () => window.refreshMonitoring && window.refreshMonitoring(),
   snmp: () => window.refreshSnmp && window.refreshSnmp(),
+  speedplane: () => window.refreshSpeedplane && window.refreshSpeedplane(),
   rss: () => window.refreshRss && window.refreshRss()
 };
 
@@ -182,6 +183,7 @@ async function initApp() {
   if (window.initICSCalendars) window.initICSCalendars();
   if (window.initMonitoring) window.initMonitoring();
   if (window.initSnmp) window.initSnmp();
+  if (window.initSpeedplane) window.initSpeedplane();
   if (window.initRss) window.initRss();
   if (window.initDisk) window.initDisk();
   if (window.initCalendar) window.initCalendar();
@@ -213,6 +215,7 @@ async function initApp() {
       'ip': () => window.refreshIP && window.refreshIP(),
       'monitoring': () => window.refreshMonitoring && window.refreshMonitoring(),
       'snmp': () => window.refreshSnmp && window.refreshSnmp(),
+      'speedplane': () => window.refreshSpeedplane && window.refreshSpeedplane(),
       'rss': () => window.refreshRss && window.refreshRss()
     };
     

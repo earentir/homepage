@@ -10,6 +10,7 @@ const timers = {
   ip: {interval: 7200000, lastUpdate: 0, timer: null},
   monitoring: {interval: 60000, lastUpdate: 0, timer: null},
   snmp: {interval: 60000, lastUpdate: 0, timer: null},
+  speedplane: {interval: 300000, lastUpdate: 0, timer: null},
   rss: {interval: 300000, lastUpdate: 0, timer: null},
   general: {interval: 30000, lastUpdate: 0, timer: null}
 };
