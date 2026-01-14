@@ -6,6 +6,7 @@ let currentEngineIndex = 0;
 let searchHistory = [];
 let autocompleteItems = [];
 let selectedAutocompleteIndex = -1;
+let searchKeydownInitialized = false;
 
 // Load search engines from backend API
 async function loadSearchEngines() {
@@ -1038,7 +1039,9 @@ async function initSearch() {
       }
     });
 
-    // Handle keyboard navigation
+    // Handle keyboard navigation (only add listener once)
+    if (!searchKeydownInitialized) {
+    searchKeydownInitialized = true;
     q.addEventListener('keydown', (e) => {
       const autocomplete = document.getElementById("searchAutocomplete");
       const isAutocompleteVisible = autocomplete && autocomplete.style.display !== 'none' && autocompleteItems.length > 0;
@@ -1208,6 +1211,7 @@ async function initSearch() {
         }
       }
     });
+    }
 
     // Hide autocomplete when clicking outside
     document.addEventListener('click', (e) => {
