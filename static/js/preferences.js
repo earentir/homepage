@@ -551,6 +551,16 @@ function renderModuleList() {
         window.moduleConfig[key].enabled = toggle.checked;
         if (window.saveModulePrefs) window.saveModulePrefs();
         if (window.applyModuleVisibility) window.applyModuleVisibility();
+        // Clean up layout when module is disabled
+        if (!toggle.checked && window.cleanupLayoutConfig) {
+          if (window.cleanupLayoutConfig()) {
+            if (window.layoutSystem) {
+              window.layoutSystem.saveLayoutConfig();
+              window.layoutSystem.renderLayout();
+              window.layoutSystem.renderLayoutEditor();
+            }
+          }
+        }
       }
     });
   });
@@ -1061,6 +1071,16 @@ function renderCalendarModuleList() {
         window.moduleConfig[key].enabled = toggle.checked;
         if (window.saveModulePrefs) window.saveModulePrefs();
         if (window.applyModuleVisibility) window.applyModuleVisibility();
+        // Clean up layout when module is disabled
+        if (!toggle.checked && window.cleanupLayoutConfig) {
+          if (window.cleanupLayoutConfig()) {
+            if (window.layoutSystem) {
+              window.layoutSystem.saveLayoutConfig();
+              window.layoutSystem.renderLayout();
+              window.layoutSystem.renderLayoutEditor();
+            }
+          }
+        }
       }
     });
 
@@ -1124,6 +1144,16 @@ function renderCalendarModuleList() {
         window.moduleConfig[key].enabled = toggle.checked;
         if (window.saveModulePrefs) window.saveModulePrefs();
         if (window.applyModuleVisibility) window.applyModuleVisibility();
+        // Clean up layout when module is disabled
+        if (!toggle.checked && window.cleanupLayoutConfig) {
+          if (window.cleanupLayoutConfig()) {
+            if (window.layoutSystem) {
+              window.layoutSystem.saveLayoutConfig();
+              window.layoutSystem.renderLayout();
+              window.layoutSystem.renderLayoutEditor();
+            }
+          }
+        }
       }
     });
 
@@ -1187,6 +1217,16 @@ function renderTodoModuleList() {
         window.moduleConfig[key].enabled = toggle.checked;
         if (window.saveModulePrefs) window.saveModulePrefs();
         if (window.applyModuleVisibility) window.applyModuleVisibility();
+        // Clean up layout when module is disabled
+        if (!toggle.checked && window.cleanupLayoutConfig) {
+          if (window.cleanupLayoutConfig()) {
+            if (window.layoutSystem) {
+              window.layoutSystem.saveLayoutConfig();
+              window.layoutSystem.renderLayout();
+              window.layoutSystem.renderLayoutEditor();
+            }
+          }
+        }
       }
     });
 

@@ -97,9 +97,78 @@ function saveLayoutConfig() {
   }
 }
 
+// Helper function to check if a module is enabled
+function isModuleEnabled(moduleId) {
+  if (!moduleId) return false;
+  if (window.moduleConfig && window.moduleConfig[moduleId]) {
+    return window.moduleConfig[moduleId].enabled !== false;
+  }
+  return true; // Default to enabled if not in config
+}
+
+// Clean up layout config: replace disabled modules with null, remove empty rows
+function cleanupLayoutConfig() {
+  if (!layoutConfig.rows || layoutConfig.rows.length === 0) return false;
+
+  let changed = false;
+
+  // First pass: replace disabled modules with null
+  layoutConfig.rows.forEach(row => {
+    for (let i = 0; i < row.modules.length; i++) {
+      const moduleSlot = row.modules[i];
+
+      if (Array.isArray(moduleSlot)) {
+        // Split module - check each
+        for (let j = 0; j < moduleSlot.length; j++) {
+          if (moduleSlot[j] && !isModuleEnabled(moduleSlot[j])) {
+            moduleSlot[j] = null;
+            changed = true;
+          }
+        }
+        // If both slots are null, convert to single null
+        if (!moduleSlot[0] && !moduleSlot[1]) {
+          row.modules[i] = null;
+          changed = true;
+        }
+      } else if (moduleSlot && !isModuleEnabled(moduleSlot)) {
+        row.modules[i] = null;
+        changed = true;
+      }
+    }
+  });
+
+  // Second pass: remove rows where all modules are null
+  const originalLength = layoutConfig.rows.length;
+  layoutConfig.rows = layoutConfig.rows.filter(row => {
+    return row.modules.some(m => {
+      if (Array.isArray(m)) {
+        return m.some(id => id !== null);
+      }
+      return m !== null;
+    });
+  });
+
+  if (layoutConfig.rows.length !== originalLength) {
+    changed = true;
+  }
+
+  // Ensure at least one row exists
+  if (layoutConfig.rows.length === 0) {
+    layoutConfig.rows = [{ cols: 3, modules: [null, null, null] }];
+    changed = true;
+  }
+
+  return changed;
+}
+
 function renderLayout() {
   const grid = document.getElementById('moduleGrid');
   if (!grid) return;
+
+  // Clean up layout config: remove disabled modules and empty rows
+  if (cleanupLayoutConfig()) {
+    saveLayoutConfig();
+  }
 
   // Collect ALL cards from the DOM before clearing
   // Look in grid first (before clearing), then in containers, then anywhere in the grid (in case they're in layout rows)
@@ -1427,7 +1496,9 @@ window.layoutSystem = {
   renderLayout,
   renderLayoutEditor,
   saveLayoutConfig,
+  cleanupLayoutConfig,
   getLayoutConfig: () => layoutConfig
 };
 window.initDragAndDrop = initDragAndDrop;
 window.initLayout = initLayout;
+window.cleanupLayoutConfig = cleanupLayoutConfig;
