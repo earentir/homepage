@@ -392,6 +392,8 @@ function renderLayout() {
     adjustRowHeights();
     // Also adjust after content loads
     setTimeout(() => adjustRowHeights(), 200);
+    // Setup resize observer for dynamic content
+    setupCardResizeObserver();
   });
 }
 
@@ -440,10 +442,14 @@ function adjustRowHeights() {
         // Regular column - measure card height
         const card = col.querySelector('.card');
         if (card) {
-          const originalHeight = col.style.height;
+          const originalColHeight = col.style.height;
+          const originalCardHeight = card.style.height;
+          // Reset both to auto to get natural content height
           col.style.height = 'auto';
+          card.style.height = 'auto';
           maxHeight = Math.max(maxHeight, card.scrollHeight);
-          col.style.height = originalHeight;
+          col.style.height = originalColHeight;
+          card.style.height = originalCardHeight;
         }
       }
     });
@@ -490,6 +496,49 @@ function adjustRowHeights() {
       });
     }
   });
+}
+
+// Observers to automatically adjust row heights when card content changes
+let cardMutationObserver = null;
+let heightAdjustDebounceTimer = null;
+
+function debouncedAdjustRowHeights() {
+  if (heightAdjustDebounceTimer) {
+    clearTimeout(heightAdjustDebounceTimer);
+  }
+  heightAdjustDebounceTimer = setTimeout(() => {
+    adjustRowHeights();
+  }, 150);
+}
+
+function setupCardResizeObserver() {
+  // Clean up existing observer
+  if (cardMutationObserver) {
+    cardMutationObserver.disconnect();
+  }
+
+  // Use MutationObserver to detect content changes within cards
+  cardMutationObserver = new MutationObserver((mutations) => {
+    // Only trigger if there are actual content changes
+    const hasContentChange = mutations.some(mutation => {
+      return mutation.type === 'childList' ||
+             (mutation.type === 'characterData') ||
+             (mutation.type === 'attributes' && mutation.attributeName === 'style');
+    });
+    if (hasContentChange) {
+      debouncedAdjustRowHeights();
+    }
+  });
+
+  // Observe the grid for content changes in cards
+  const grid = document.getElementById('moduleGrid');
+  if (grid) {
+    cardMutationObserver.observe(grid, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+  }
 }
 
 function getModuleName(moduleId) {
@@ -1497,8 +1546,10 @@ window.layoutSystem = {
   renderLayoutEditor,
   saveLayoutConfig,
   cleanupLayoutConfig,
+  adjustRowHeights,
   getLayoutConfig: () => layoutConfig
 };
 window.initDragAndDrop = initDragAndDrop;
 window.initLayout = initLayout;
 window.cleanupLayoutConfig = cleanupLayoutConfig;
+window.adjustRowHeights = adjustRowHeights;
