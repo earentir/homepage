@@ -30,6 +30,15 @@ function formatPct(pct) {
   return pct.toFixed(2) + '%';
 }
 
+function constructServiceUrl(host, port) {
+  // Check if host already contains a protocol
+  if (host.includes('://')) {
+    return host;
+  }
+  // Otherwise construct with http://
+  return `http://${host}:${port}`;
+}
+
 function renderSpeedplane() {
   const container = document.getElementById('speedplaneContainer');
   if (!container) return;
@@ -47,10 +56,12 @@ function renderSpeedplane() {
   if (!statusEl || !dataEl) {
     // Initial render - create elements
     const nameText = window.escapeHtml(speedplaneConfig.name || speedplaneConfig.host + ':' + speedplaneConfig.port);
+    const serviceUrl = constructServiceUrl(speedplaneConfig.host, speedplaneConfig.port);
     container.innerHTML = `
       <div class="kv" style="margin-bottom:8px;">
         <div class="k">
           <span class="monitor-status" id="speedplane-status"><i class="fas fa-circle" style="color:var(--muted);"></i></span> ${nameText}
+          <a href="${serviceUrl}" target="_blank" rel="noreferrer" title="Open Speedplane service" style="margin-left:6px; color:var(--muted); font-size:0.9em;"><i class="fas fa-external-link-alt"></i></a>
         </div>
         <div class="v" id="speedplane-timestamp">—</div>
       </div>
@@ -79,11 +90,11 @@ function showSpeedplaneEditDialog() {
             <input type="text" id="speedplane-edit-name" placeholder="e.g., Home Server" value="${config.name || ''}">
           </div>
           <div class="pref-row">
-            <label>Host / IP</label>
-            <input type="text" id="speedplane-edit-host" placeholder="192.168.1.1 or hostname" value="${config.host || ''}">
+            <label>Host / IP / URL</label>
+            <input type="text" id="speedplane-edit-host" placeholder="192.168.1.1, hostname, or http://example.com" value="${config.host || ''}">
           </div>
           <div class="pref-row">
-            <label>Port</label>
+            <label>Port (optional if URL provided)</label>
             <input type="number" id="speedplane-edit-port" placeholder="8080" min="1" max="65535" value="${config.port || ''}">
           </div>
         </div>
@@ -106,11 +117,32 @@ function showSpeedplaneEditDialog() {
 
   document.getElementById('speedplane-save').addEventListener('click', async () => {
     const name = document.getElementById('speedplane-edit-name').value.trim();
-    const host = document.getElementById('speedplane-edit-host').value.trim();
-    const port = parseInt(document.getElementById('speedplane-edit-port').value) || 0;
+    let host = document.getElementById('speedplane-edit-host').value.trim();
+    let port = parseInt(document.getElementById('speedplane-edit-port').value) || 0;
 
-    if (!host || !port) {
-      await window.popup.alert('Please fill in host and port', 'Input Required');
+    if (!host) {
+      await window.popup.alert('Please fill in host', 'Input Required');
+      return;
+    }
+
+    // Parse host and port if full URL provided
+    if (host.includes('://')) {
+      try {
+        const url = new URL(host);
+        const parsedHost = url.hostname;
+        const parsedPort = url.port || (url.protocol === 'https:' ? '443' : '80');
+
+        // Update the fields with parsed values
+        host = parsedHost;
+        port = parsedPort;
+        document.getElementById('speedplane-edit-host').value = host;
+        document.getElementById('speedplane-edit-port').value = port;
+      } catch (e) {
+        await window.popup.alert('Invalid URL format', 'Input Error');
+        return;
+      }
+    } else if (!port) {
+      await window.popup.alert('Please fill in port', 'Input Required');
       return;
     }
 
@@ -150,7 +182,7 @@ function showSpeedplaneEditDialog() {
 }
 
 async function checkSpeedplane() {
-  if (!speedplaneConfig || !speedplaneConfig.host || !speedplaneConfig.port) {
+  if (!speedplaneConfig || !speedplaneConfig.host) {
     return;
   }
 
@@ -169,7 +201,18 @@ async function checkSpeedplane() {
   statusEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--accent);"></i>';
 
   try {
-    const url = `/api/speedplane?host=${encodeURIComponent(speedplaneConfig.host)}&port=${encodeURIComponent(speedplaneConfig.port)}`;
+    // Parse host and port - handle full URLs
+    let host = speedplaneConfig.host;
+    let port = speedplaneConfig.port;
+
+    if (host.includes('://')) {
+      // Full URL provided
+      const url = new URL(host);
+      host = url.hostname;
+      port = url.port || (url.protocol === 'https:' ? '443' : '80');
+    }
+
+    const url = `/api/speedplane?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}`;
     const res = await fetch(url, {cache: "no-store"});
     const data = await res.json();
 
