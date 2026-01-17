@@ -321,7 +321,6 @@ if ('serviceWorker' in navigator) {
         <button class="modal-tab" data-tab="modules"><i class="fas fa-th-large"></i> Modules</button>
         <button class="modal-tab" data-tab="quicklinks"><i class="fas fa-link"></i> Quicklinks</button>
         <button class="modal-tab" data-tab="calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
-        <button class="modal-tab" data-tab="todo"><i class="fas fa-tasks"></i> Todo</button>
         <button class="modal-tab" data-tab="search"><i class="fas fa-search"></i> Search</button>
         <button class="modal-tab" data-tab="weather"><i class="fas fa-cloud-sun"></i> Weather</button>
         <button class="modal-tab" data-tab="debug"><i class="fas fa-bug"></i> Debug</button>
@@ -442,8 +441,8 @@ if ('serviceWorker' in navigator) {
 
         <!-- Calendar Tab -->
         <div class="tab-content" id="tab-calendar">
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
-            <!-- Left Column: Settings and Events -->
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; align-items:start;">
+            <!-- Column 1: Settings -->
             <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
                 <h3>Month View Settings</h3>
@@ -468,8 +467,16 @@ if ('serviceWorker' in navigator) {
                 </div>
               </div>
               <div class="pref-section">
+                <h3>Todos <button class="btn-small" id="addTodoBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="module-list" id="todosList" style="max-height:300px; overflow-y:auto;"></div>
+              </div>
+            </div>
+
+            <!-- Column 2: Events -->
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div class="pref-section">
                 <h3>Events <button class="btn-small" id="addEventBtn"><i class="fas fa-plus"></i> Add</button></h3>
-                <div class="module-list" id="eventsList" style="max-height:300px; overflow-y:auto;"></div>
+                <div class="module-list" id="eventsList" style="max-height:400px; overflow-y:auto;"></div>
               </div>
               <div class="pref-section" id="eventForm" style="display:none;">
                 <h3>Add / Edit Event</h3>
@@ -495,8 +502,8 @@ if ('serviceWorker' in navigator) {
                 </div>
               </div>
             </div>
-            
-            <!-- Right Column: ICS Calendars -->
+
+            <!-- Column 3: ICS Calendars -->
             <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
                 <h3>ICS Calendar Cache</h3>
@@ -505,83 +512,20 @@ if ('serviceWorker' in navigator) {
                   <input type="number" id="ics-cache-ttl" min="1" max="1440" value="15" style="width:100px;">
                 </div>
                 <div class="pref-row">
-                  <label></label>
+                  <label>Refresh Calendars</label>
                   <button class="btn-small" id="refreshICSCalendarsBtn"><i class="fas fa-sync-alt"></i> Refresh Now</button>
                 </div>
-                <p class="small" style="color:var(--muted); margin-top:8px;">ICS calendars are cached to reduce API calls. Use refresh to update immediately.</p>
+                <p class="small" style="color:var(--muted); margin-top:8px;">Calendars are cached to reduce API calls. Use refresh to update immediately.</p>
               </div>
               <div class="pref-section">
                 <h3>ICS Calendars <button class="btn-small" id="addICSCalendarBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <p class="small" style="color:var(--muted); margin-bottom:16px;">Add external ICS calendar sources. Events from enabled calendars will be merged with your local events.</p>
                 <div class="module-list" id="icsCalendarsList" style="max-height:400px; overflow-y:auto;"></div>
               </div>
-              <div class="pref-section" id="icsCalendarForm" style="display:none;">
-                <h3>Add / Edit ICS Calendar</h3>
-                <input type="hidden" id="ics-calendar-id">
-                <div class="pref-row">
-                  <label>Name</label>
-                  <input type="text" id="ics-calendar-name" placeholder="Calendar name" style="flex:1;">
-                </div>
-                <div class="pref-row">
-                  <label>URL</label>
-                  <input type="url" id="ics-calendar-url" placeholder="https://example.com/calendar.ics" style="flex:1;">
-                </div>
-                <div class="pref-row">
-                  <label>Color</label>
-                  <input type="color" id="ics-calendar-color" value="#3b88c3" style="width:80px;">
-                </div>
-                <div class="pref-row">
-                  <label>Enabled</label>
-                  <input type="checkbox" id="ics-calendar-enabled" checked>
-                </div>
-                <div class="pref-row">
-                  <label></label>
-                  <div>
-                    <button class="btn-small" id="testICSCalendarBtn"><i class="fas fa-check-circle"></i> Test</button>
-                    <button class="btn-small" id="saveICSCalendarBtn"><i class="fas fa-check"></i> Save</button>
-                    <button class="btn-small" id="cancelICSCalendarBtn"><i class="fas fa-times"></i> Cancel</button>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
 
-        <!-- Todo Tab -->
-        <div class="tab-content" id="tab-todo">
-          <div class="pref-section">
-            <h3>Todos <button class="btn-small" id="addTodoBtn"><i class="fas fa-plus"></i> Add</button></h3>
-            <div class="module-list" id="todosList" style="max-height:400px; overflow-y:auto;"></div>
-          </div>
-          <div class="pref-section" id="todoForm" style="display:none;">
-            <h3>Add / Edit Todo</h3>
-            <input type="hidden" id="todo-id">
-            <div class="pref-row">
-              <label>Title</label>
-              <input type="text" id="todo-title" placeholder="Todo title" style="flex:1;">
-            </div>
-            <div class="pref-row">
-              <label>Priority</label>
-              <select id="todo-priority" style="width:150px;">
-                <option value="">None</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-            <div class="pref-row">
-              <label>Due Date</label>
-              <input type="date" id="todo-due-date" style="width:180px;">
-            </div>
-            <div class="pref-row">
-              <label></label>
-              <div>
-                <button class="btn-small" id="saveTodoBtn"><i class="fas fa-check"></i> Save</button>
-                <button class="btn-small" id="cancelTodoBtn"><i class="fas fa-times"></i> Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- Search Tab -->
         <div class="tab-content" id="tab-search">
@@ -632,27 +576,33 @@ if ('serviceWorker' in navigator) {
 
         <!-- Layout Tab -->
         <div class="tab-content" id="tab-layout">
-          <div class="pref-section">
-            <h3>Container Width</h3>
-            <div class="pref-row">
-              <label>Max Width</label>
-              <select id="layoutMaxWidth">
-                <option value="30">30%</option>
-                <option value="40">40%</option>
-                <option value="50">50%</option>
-                <option value="60">60%</option>
-                <option value="70">70%</option>
-                <option value="80">80%</option>
-                <option value="90">90%</option>
-                <option value="100">100%</option>
-              </select>
+          <div style="display:grid; grid-template-columns: 1fr 2fr; gap:20px; align-items:start;">
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div class="pref-section">
+                <h3>Container Width</h3>
+                <div class="pref-row">
+                  <label>Max Width</label>
+                  <select id="layoutMaxWidth">
+                    <option value="30">30%</option>
+                    <option value="40">40%</option>
+                    <option value="50">50%</option>
+                    <option value="60">60%</option>
+                    <option value="70">70%</option>
+                    <option value="80">80%</option>
+                    <option value="90">90%</option>
+                    <option value="100">100%</option>
+                  </select>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="pref-section">
-            <h3>Row Layout Editor</h3>
-            <div id="layoutEditor"></div>
-            <div style="margin-top: 12px;">
-              <button class="btn-small" id="addRowBtn"><i class="fas fa-plus"></i> Add Row</button>
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div class="pref-section">
+                <h3>Row Layout Editor</h3>
+                <div id="layoutEditor"></div>
+                <div style="margin-top: 12px;">
+                  <button class="btn-small" id="addRowBtn"><i class="fas fa-plus"></i> Add Row</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -711,75 +661,36 @@ if ('serviceWorker' in navigator) {
 
         <!-- Quicklinks Tab -->
         <div class="tab-content" id="tab-quicklinks">
-          <div class="pref-section">
-            <h3>Layout</h3>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
-              <div class="layout-buttons">
-                <button class="layout-btn" data-cols="1" title="1 link per row"><i class="fas fa-bars"></i></button>
-                <button class="layout-btn" data-cols="2" title="2 links per row"><i class="fas fa-th-large"></i></button>
-                <button class="layout-btn" data-cols="3" title="3 links per row"><i class="fas fa-th"></i></button>
-              </div>
-              <div style="display:flex; flex-direction:column; gap:8px;">
-                <label style="display:flex; align-items:center; gap:8px;">
-                  <input type="checkbox" id="quicklinksIconsOnly">
-                  <span>Icons Only</span>
-                </label>
-                <label id="quicklinksEqualSizeLabel" style="display:flex; align-items:center; gap:8px; opacity:0.5; pointer-events:none;">
-                  <input type="checkbox" id="quicklinksEqualSize" disabled>
-                  <span>Button Size Equal to icon</span>
-                </label>
-              </div>
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>Quick Links <button class="btn-small" id="addQuicklinkBtn"><i class="fas fa-plus"></i> Add</button></h3>
-            <div class="module-list" id="quicklinksList"></div>
-          </div>
-          <div class="pref-section">
-            <div id="quicklinkForm" style="display:none;">
-              <h3>Add / Edit Link</h3>
-              <div style="display:grid; grid-template-columns: 2fr 2fr 1fr; gap:12px; align-items:start;">
-                <div style="display:flex; flex-direction:column; gap:6px;">
-                  <label style="font-size:12px; font-weight:600; color:var(--txt);">Title</label>
-                  <input type="text" id="ql-title" placeholder="e.g., Router" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:13px;">
-                </div>
-                <div style="display:flex; flex-direction:column; gap:6px;">
-                  <label style="font-size:12px; font-weight:600; color:var(--txt);">URL</label>
-                  <input type="text" id="ql-url" placeholder="e.g., http://192.168.1.1" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:13px;">
-                </div>
-                <div style="display:flex; flex-direction:column; gap:6px;">
-                  <label style="font-size:12px; font-weight:600; color:var(--txt);">Icon</label>
-                  <div class="icon-selector" style="display:flex; gap:6px; align-items:center;">
-                    <select id="ql-icon" style="flex:1; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:13px;">
-                      <option value="">Use favicon</option>
-                      <option value="fa-network-wired">Network</option>
-                      <option value="fa-server">Server</option>
-                      <option value="fa-hdd">Storage</option>
-                      <option value="fa-database">Database</option>
-                      <option value="fa-cloud">Cloud</option>
-                      <option value="fa-home">Home</option>
-                      <option value="fa-cog">Settings</option>
-                      <option value="fa-chart-line">Charts</option>
-                      <option value="fa-shield-alt">Security</option>
-                      <option value="fa-video">Video</option>
-                      <option value="fa-music">Music</option>
-                      <option value="fa-book">Docs</option>
-                      <option value="fa-code">Code</option>
-                      <option value="fa-terminal">Terminal</option>
-                      <option value="fa-download">Downloads</option>
-                      <option value="fa-envelope">Mail</option>
-                      <option value="fa-calendar">Calendar</option>
-                      <option value="fa-globe">Web</option>
-                      <option value="fa-wifi">WiFi</option>
-                      <option value="fa-lock">Lock</option>
-                    </select>
-                    <button class="btn-small" id="ql-clear-icon" title="Clear icon selection"><i class="fas fa-times"></i></button>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
+            <!-- Left Column: Settings -->
+            <div>
+              <div class="pref-section">
+                <h3>Layout</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
+                  <div class="layout-buttons">
+                    <button class="layout-btn" data-cols="1" title="1 link per row"><i class="fas fa-bars"></i></button>
+                    <button class="layout-btn" data-cols="2" title="2 links per row"><i class="fas fa-th-large"></i></button>
+                    <button class="layout-btn" data-cols="3" title="3 links per row"><i class="fas fa-th"></i></button>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:8px;">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                      <input type="checkbox" id="quicklinksIconsOnly">
+                      <span>Icons Only</span>
+                    </label>
+                    <label id="quicklinksEqualSizeLabel" style="display:flex; align-items:center; gap:8px; opacity:0.5; pointer-events:none;">
+                      <input type="checkbox" id="quicklinksEqualSize" disabled>
+                      <span>Button Size Equal to icon</span>
+                    </label>
                   </div>
                 </div>
               </div>
-              <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
-                <button class="btn-small" id="ql-cancel">Cancel</button>
-                <button class="btn-small" id="ql-save" style="background:var(--accent); color:var(--bg);"><i class="fas fa-check"></i> Save</button>
+            </div>
+
+            <!-- Right Column: Quick Links -->
+            <div>
+              <div class="pref-section">
+                <h3>Quick Links <button class="btn-small" id="addQuicklinkBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="module-list" id="quicklinksList"></div>
               </div>
             </div>
           </div>
@@ -1264,6 +1175,12 @@ if ('serviceWorker' in navigator) {
   font-size: 13px;
   min-width: 140px;
 }
+#module-edit-title {
+  min-width: 300px;
+}
+#module-edit-url {
+  min-width: 300px;
+}
 .pref-row select:focus,
 .pref-row input:focus {
   outline: none;
@@ -1558,6 +1475,7 @@ if ('serviceWorker' in navigator) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 .module-item {
   display: flex;
@@ -1568,6 +1486,7 @@ if ('serviceWorker' in navigator) {
   border: 1px solid var(--border);
   border-radius: 8px;
   transition: border-color 0.2s;
+  min-width: 0;
 }
 .quicklinks-list-grid .module-item {
   min-width: 0;
@@ -1605,6 +1524,7 @@ if ('serviceWorker' in navigator) {
 .module-item .module-info {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
 }
 .quicklinks-list-grid .module-item .module-info {
@@ -1615,6 +1535,11 @@ if ('serviceWorker' in navigator) {
   font-size: 13px;
   font-weight: 600;
   color: var(--txt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
 }
 .quicklinks-list-grid .module-item .module-name {
   font-size: 12px;
@@ -1626,6 +1551,11 @@ if ('serviceWorker' in navigator) {
   font-size: 11px;
   color: var(--muted);
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
 }
 .quicklinks-list-grid .module-item .module-desc {
   display: none;
