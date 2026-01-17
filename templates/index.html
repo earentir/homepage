@@ -629,11 +629,23 @@ if ('serviceWorker' in navigator) {
 
         <!-- Modules Tab -->
         <div class="tab-content" id="tab-modules">
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; align-items:start;">
             <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
                 <h3>Module Settings</h3>
                 <div class="module-list" id="moduleList"></div>
+              </div>
+              <div class="pref-section">
+                <h3>Monitoring Modules <button class="btn-small" id="addMonitorBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="module-list" id="monitorModuleList"></div>
+              </div>
+              <div class="pref-section">
+                <h3>SNMP Modules <button class="btn-small" id="addSnmpBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="module-list" id="snmpModuleList"></div>
+              </div>
+              <div class="pref-section">
+                <h3>GitHub Modules <button class="btn-small" id="addGitHubBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="module-list" id="githubModuleList"></div>
               </div>
             </div>
             <div style="display:flex; flex-direction:column; gap:20px;">
@@ -646,24 +658,22 @@ if ('serviceWorker' in navigator) {
                 <div class="module-list" id="todoModuleList"></div>
               </div>
               <div class="pref-section">
-                <h3>GitHub Modules <button class="btn-small" id="addGitHubBtn"><i class="fas fa-plus"></i> Add</button></h3>
-                <div class="module-list" id="githubModuleList"></div>
-              </div>
-              <div class="pref-section">
                 <h3>RSS Modules <button class="btn-small" id="addRssBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <div class="module-list" id="rssModuleList"></div>
               </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
-                <h3>SNMP Modules <button class="btn-small" id="addSnmpBtn"><i class="fas fa-plus"></i> Add</button></h3>
-                <div class="module-list" id="snmpModuleList"></div>
+                <h3>SMBIOS Modules</h3>
+                <div class="module-list" id="smbiosModuleList"></div>
+              </div>
+              <div class="pref-section">
+                <h3>History Modules</h3>
+                <div class="module-list" id="historyModuleList"></div>
               </div>
               <div class="pref-section">
                 <h3>Disk Modules <button class="btn-small" id="addDiskBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <div class="module-list" id="diskModuleList"></div>
-              </div>
-              <div class="pref-section">
-                <h3>Monitoring Modules <button class="btn-small" id="addMonitorBtn"><i class="fas fa-plus"></i> Add</button></h3>
-                <div class="module-list" id="monitorModuleList"></div>
               </div>
             </div>
           </div>

@@ -20,6 +20,8 @@ function initPreferencesModal() {
     if (window.renderMonitorModuleList) window.renderMonitorModuleList();
     if (window.renderRssModuleList) window.renderRssModuleList();
     if (window.renderSnmpModuleList) window.renderSnmpModuleList();
+    if (window.renderHistoryModuleList) window.renderHistoryModuleList();
+    if (window.renderSMBIOSModuleList) window.renderSMBIOSModuleList();
     if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
     if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
     if (window.renderCalendarModuleList) window.renderCalendarModuleList();
@@ -91,6 +93,8 @@ function initPreferencesModal() {
         if (window.renderTodoModuleList) window.renderTodoModuleList();
         if (window.renderMonitorModuleList) window.renderMonitorModuleList();
         if (window.renderSnmpModuleList) window.renderSnmpModuleList();
+        if (window.renderHistoryModuleList) window.renderHistoryModuleList();
+        if (window.renderSMBIOSModuleList) window.renderSMBIOSModuleList();
       }
 
       // Initialize debug settings when debug tab is opened
@@ -521,8 +525,8 @@ function renderModuleList() {
 
   moduleList.innerHTML = '';
 
-  // Exclude calendar, todo, rss, snmp, and monitoring modules from the main module list (they have their own sections)
-  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp', 'monitoring'];
+  // Exclude calendar, todo, rss, snmp, monitoring, smbios, history, and github modules from the main module list (they have their own sections)
+  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp', 'monitoring', 'cpuid', 'raminfo', 'firmware', 'systeminfo', 'baseboard', 'cpu', 'ram', 'disk', 'github'];
 
   Object.keys(window.moduleConfig).forEach(key => {
     // Skip excluded modules
@@ -1174,10 +1178,144 @@ function renderTodoModuleList() {
   });
 }
 
+// Render history modules list in preferences (CPU, RAM, Disk with graphs)
+function renderHistoryModuleList() {
+  const list = document.getElementById('historyModuleList');
+  if (!list || !window.moduleConfig) return;
+
+  list.innerHTML = '';
+
+  // History modules (modules with graphs/timers)
+  const historyModules = ['cpu', 'ram', 'disk'];
+  const foundModules = [];
+
+  historyModules.forEach(key => {
+    if (window.moduleConfig[key]) {
+      foundModules.push({ key, mod: window.moduleConfig[key] });
+    }
+  });
+
+  if (foundModules.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No history modules available</div>';
+    return;
+  }
+
+  foundModules.forEach(({ key, mod }) => {
+    const item = document.createElement('div');
+    item.className = 'module-item';
+    item.innerHTML = `
+      <div class="module-icon"><i class="fas ${mod.icon}"></i></div>
+      <div class="module-info">
+        <div class="module-name">${mod.name}</div>
+        <div class="module-desc">${mod.desc}</div>
+      </div>
+      <div class="module-controls">
+        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
+        <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
+      </div>
+    `;
+    list.appendChild(item);
+
+    // Handle toggle changes
+    const toggle = item.querySelector('.module-toggle');
+    toggle.addEventListener('change', () => {
+      if (window.moduleConfig[key]) {
+        window.moduleConfig[key].enabled = toggle.checked;
+        if (window.saveModulePrefs) window.saveModulePrefs();
+        if (window.applyModuleVisibility) window.applyModuleVisibility();
+        // Clean up layout when module is disabled
+        if (!toggle.checked && window.cleanupLayoutConfig) {
+          if (window.cleanupLayoutConfig()) {
+            if (window.layoutSystem) {
+              window.layoutSystem.saveLayoutConfig();
+              window.layoutSystem.renderLayout();
+              window.layoutSystem.renderLayoutEditor();
+            }
+          }
+        }
+      }
+    });
+
+    // Handle interval changes
+    const intervalInput = item.querySelector('.interval-input');
+    if (intervalInput) {
+      intervalInput.addEventListener('change', () => {
+        if (window.moduleConfig[key] && window.moduleConfig[key].hasTimer && window.timers && window.timers[mod.timerKey]) {
+          const val = Math.max(1, parseInt(intervalInput.value) || mod.defaultInterval);
+          intervalInput.value = val;
+          window.timers[mod.timerKey].interval = val * 1000;
+          if (window.saveModulePrefs) window.saveModulePrefs();
+        }
+      });
+    }
+  });
+}
+
+// Render SMBIOS modules list in preferences
+function renderSMBIOSModuleList() {
+  const list = document.getElementById('smbiosModuleList');
+  if (!list || !window.moduleConfig) return;
+
+  list.innerHTML = '';
+
+  // SMBIOS modules
+  const smbiosModules = ['cpuid', 'raminfo', 'firmware', 'systeminfo', 'baseboard'];
+  const foundModules = [];
+
+  smbiosModules.forEach(key => {
+    if (window.moduleConfig[key]) {
+      foundModules.push({ key, mod: window.moduleConfig[key] });
+    }
+  });
+
+  if (foundModules.length === 0) {
+    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No SMBIOS modules available</div>';
+    return;
+  }
+
+  foundModules.forEach(({ key, mod }) => {
+    const item = document.createElement('div');
+    item.className = 'module-item';
+    item.innerHTML = `
+      <div class="module-icon"><i class="fas ${mod.icon}"></i></div>
+      <div class="module-info">
+        <div class="module-name">${mod.name}</div>
+        <div class="module-desc">${mod.desc}</div>
+      </div>
+      <div class="module-controls">
+        <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
+      </div>
+    `;
+    list.appendChild(item);
+
+    // Handle toggle changes
+    const toggle = item.querySelector('.module-toggle');
+    toggle.addEventListener('change', () => {
+      if (window.moduleConfig[key]) {
+        window.moduleConfig[key].enabled = toggle.checked;
+        if (window.saveModulePrefs) window.saveModulePrefs();
+        if (window.applyModuleVisibility) window.applyModuleVisibility();
+        // Clean up layout when module is disabled
+        if (!toggle.checked && window.cleanupLayoutConfig) {
+          if (window.cleanupLayoutConfig()) {
+            if (window.layoutSystem) {
+              window.layoutSystem.saveLayoutConfig();
+              window.layoutSystem.renderLayout();
+              window.layoutSystem.renderLayoutEditor();
+            }
+          }
+        }
+      }
+    });
+  });
+}
+
 // Export
 window.renderSearchEngines = renderSearchEngines;
 window.renderCalendarModuleList = renderCalendarModuleList;
 window.renderTodoModuleList = renderTodoModuleList;
+window.renderHistoryModuleList = renderHistoryModuleList;
+window.renderSMBIOSModuleList = renderSMBIOSModuleList;
 
 let debugSettingsInitialized = false;
 
