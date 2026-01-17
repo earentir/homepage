@@ -320,7 +320,6 @@ if ('serviceWorker' in navigator) {
         <button class="modal-tab" data-tab="layout"><i class="fas fa-columns"></i> Layout</button>
         <button class="modal-tab" data-tab="modules"><i class="fas fa-th-large"></i> Modules</button>
         <button class="modal-tab" data-tab="quicklinks"><i class="fas fa-link"></i> Quicklinks</button>
-        <button class="modal-tab" data-tab="monitoring"><i class="fas fa-heartbeat"></i> Monitoring</button>
         <button class="modal-tab" data-tab="config"><i class="fas fa-download"></i> Config</button>
         <button class="modal-tab" data-tab="calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
         <button class="modal-tab" data-tab="todo"><i class="fas fa-tasks"></i> Todo</button>
@@ -662,6 +661,10 @@ if ('serviceWorker' in navigator) {
                 <h3>Disk Modules <button class="btn-small" id="addDiskBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <div class="module-list" id="diskModuleList"></div>
               </div>
+              <div class="pref-section">
+                <h3>Monitoring Modules <button class="btn-small" id="addMonitorBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="module-list" id="monitorModuleList"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -741,58 +744,6 @@ if ('serviceWorker' in navigator) {
             </div>
           </div>
         </div>
-
-        <!-- Monitoring Tab -->
-        <div class="tab-content" id="tab-monitoring">
-          <div class="pref-section">
-            <h3>Refresh Interval</h3>
-            <div class="pref-row">
-              <label>Check every</label>
-              <div class="location-input">
-                <input type="number" id="monitor-interval" value="60" min="5" max="3600" style="width:80px;">
-                <span class="small">seconds</span>
-              </div>
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>Services <button class="btn-small" id="addMonitorBtn"><i class="fas fa-plus"></i> Add</button></h3>
-            <div class="module-list" id="monitorsList"></div>
-          </div>
-          <div class="pref-section">
-            <h3>Add / Edit Service</h3>
-            <div id="monitorForm" style="display:none;">
-              <div class="pref-row">
-                <label>Name</label>
-                <input type="text" id="mon-name" placeholder="e.g., Web Server">
-              </div>
-              <div class="pref-row">
-                <label>Type</label>
-                <select id="mon-type">
-                  <option value="http">HTTP Check</option>
-                  <option value="port">Port Check</option>
-                  <option value="ping">Ping</option>
-                </select>
-              </div>
-              <div class="pref-row" id="mon-url-row">
-                <label>URL</label>
-                <input type="text" id="mon-url" placeholder="e.g., https://example.com">
-              </div>
-              <div class="pref-row" id="mon-host-row" style="display:none;">
-                <label>Host</label>
-                <input type="text" id="mon-host" placeholder="e.g., 192.168.1.1">
-              </div>
-              <div class="pref-row" id="mon-port-row" style="display:none;">
-                <label>Port</label>
-                <input type="number" id="mon-port" placeholder="e.g., 443" min="1" max="65535">
-              </div>
-              <div class="pref-row" style="justify-content:flex-end; gap:10px;">
-                <button class="btn-small" id="mon-cancel">Cancel</button>
-                <button class="btn-small" id="mon-save" style="background:var(--accent); color:var(--bg);"><i class="fas fa-check"></i> Save</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
 
         <!-- Config Tab -->
         <div class="tab-content" id="tab-config">
