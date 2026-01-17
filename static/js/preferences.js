@@ -19,7 +19,7 @@ function initPreferencesModal() {
     if (window.renderQuicklinksList) window.renderQuicklinksList();
     if (window.renderMonitorsList) window.renderMonitorsList();
     if (window.renderRssModuleList) window.renderRssModuleList();
-    if (window.renderSnmpList) window.renderSnmpList();
+    if (window.renderSnmpModuleList) window.renderSnmpModuleList();
     if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
     if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
     if (window.renderCalendarModuleList) window.renderCalendarModuleList();
@@ -89,6 +89,7 @@ function initPreferencesModal() {
         if (window.renderDiskModuleList) window.renderDiskModuleList();
         if (window.renderCalendarModuleList) window.renderCalendarModuleList();
         if (window.renderTodoModuleList) window.renderTodoModuleList();
+        if (window.renderSnmpModuleList) window.renderSnmpModuleList();
       }
 
       // Initialize debug settings when debug tab is opened
@@ -519,8 +520,8 @@ function renderModuleList() {
 
   moduleList.innerHTML = '';
 
-  // Exclude calendar, todo, and rss modules from the main module list (they have their own sections)
-  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss'];
+  // Exclude calendar, todo, rss, and snmp modules from the main module list (they have their own sections)
+  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp'];
 
   Object.keys(window.moduleConfig).forEach(key => {
     // Skip excluded modules

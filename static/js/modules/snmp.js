@@ -32,13 +32,14 @@ function renderSnmpQueries() {
   const container = document.getElementById('snmpContainer');
   if (!container) return;
 
-  if (snmpQueries.length === 0) {
-    container.innerHTML = '<div class="small" style="color:var(--muted);">Add queries in Preferences → SNMP</div>';
+  const enabledQueries = snmpQueries.filter(q => q.enabled !== false);
+  if (enabledQueries.length === 0) {
+    container.innerHTML = '<div class="small" style="color:var(--muted);">Add queries in Preferences → Modules → SNMP Modules</div>';
     return;
   }
 
   container.innerHTML = '';
-  snmpQueries.forEach((query, index) => {
+  enabledQueries.forEach((query, index) => {
     const row = document.createElement('div');
     row.className = 'kv';
     row.dataset.index = index;
@@ -62,7 +63,7 @@ function moveSnmpQueryUp(index) {
   if (window.moveArrayItemUp && window.moveArrayItemUp(snmpQueries, index)) {
     // Note: snmpLastValues keys are based on host:port:oid, not index, so no update needed
     saveSnmpQueries();
-    renderSnmpList();
+    renderSnmpModuleList();
     renderSnmpQueries();
     setTimeout(refreshSnmp, 100);
   }
@@ -72,7 +73,7 @@ function moveSnmpQueryDown(index) {
   if (window.moveArrayItemDown && window.moveArrayItemDown(snmpQueries, index)) {
     // Note: snmpLastValues keys are based on host:port:oid, not index, so no update needed
     saveSnmpQueries();
-    renderSnmpList();
+    renderSnmpModuleList();
     renderSnmpQueries();
     setTimeout(refreshSnmp, 100);
   }
@@ -82,93 +83,246 @@ function moveSnmpQuery(fromIndex, toIndex) {
   if (window.moveArrayItem && window.moveArrayItem(snmpQueries, fromIndex, toIndex)) {
     // Note: snmpLastValues keys are based on host:port:oid, not index, so no update needed
     saveSnmpQueries();
-    renderSnmpList();
+    renderSnmpModuleList();
     renderSnmpQueries();
     setTimeout(refreshSnmp, 100);
   }
 }
 
-function renderSnmpList() {
-  const list = document.getElementById('snmpList');
+function renderSnmpModuleList() {
+  const list = document.getElementById('snmpModuleList');
   if (!list) return;
 
   list.innerHTML = '';
 
-  if (snmpQueries.length === 0) {
-    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No queries yet. Click "Add" to create one.</div>';
-    return;
-  }
-
   snmpQueries.forEach((query, index) => {
     const item = document.createElement('div');
-    item.className = 'module-item';
-    item.draggable = true;
-    item.dataset.index = index;
-    const canMoveUp = index > 0;
-    const canMoveDown = index < snmpQueries.length - 1;
+    item.className = 'module-item' + (query.enabled !== false ? '' : ' disabled');
     item.innerHTML = `
-      <div class="module-icon drag-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder">
-        <i class="fas fa-grip-vertical"></i>
-      </div>
       <div class="module-icon"><i class="fas fa-network-wired"></i></div>
       <div class="module-info">
         <div class="module-name">${window.escapeHtml(query.title)}</div>
         <div class="module-desc">${window.escapeHtml(query.host)}:${query.port} - ${window.escapeHtml(query.oid)}</div>
       </div>
       <div class="module-controls">
-        <button class="btn-small move-snmp-up-btn" data-index="${index}" ${!canMoveUp ? 'disabled' : ''} title="Move up">
-          <i class="fas fa-arrow-up"></i>
-        </button>
-        <button class="btn-small move-snmp-down-btn" data-index="${index}" ${!canMoveDown ? 'disabled' : ''} title="Move down">
-          <i class="fas fa-arrow-down"></i>
-        </button>
         <button class="btn-small edit-snmp-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
         <button class="btn-small delete-snmp-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
+        <input type="checkbox" ${query.enabled !== false ? 'checked' : ''} data-index="${index}" title="Enable/disable">
       </div>
     `;
     list.appendChild(item);
 
-    // Setup drag and drop using common function
-    if (window.setupDragAndDrop) {
-      window.setupDragAndDrop(item, index, snmpQueries, (fromIndex, toIndex) => {
-        moveSnmpQuery(fromIndex, toIndex);
-      }, () => {
+    // Enable/disable handler
+    const checkbox = item.querySelector('input[type="checkbox"]');
+    checkbox.addEventListener('change', () => {
+      snmpQueries[index].enabled = checkbox.checked;
+      item.classList.toggle('disabled', !checkbox.checked);
+      saveSnmpQueries();
+      renderSnmpQueries();
+      refreshSnmp();
+    });
+
+    // Edit button
+    const editBtn = item.querySelector('.edit-snmp-btn');
+    editBtn.addEventListener('click', () => showSnmpEditDialog(index));
+
+    // Delete button
+    const deleteBtn = item.querySelector('.delete-snmp-btn');
+    deleteBtn.addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm('Delete SNMP query "' + query.title + '"?', 'Confirm Delete');
+      if (confirmed) {
+        const query = snmpQueries[index];
+        const queryKey = `${query.host}:${query.port}:${query.oid}`;
+        delete snmpLastValues[queryKey];
+        saveSnmpLastValues();
+
+        snmpQueries.splice(index, 1);
         saveSnmpQueries();
-        renderSnmpList();
+        renderSnmpModuleList();
         renderSnmpQueries();
-        setTimeout(refreshSnmp, 100);
-      });
-    }
-
-    // Setup move buttons using common function
-    if (window.setupMoveButtons) {
-      window.setupMoveButtons(item, index, snmpQueries.length,
-        'move-snmp-up-btn', 'move-snmp-down-btn',
-        () => moveSnmpQueryUp(index),
-        () => moveSnmpQueryDown(index)
-      );
-    }
-
-    item.querySelector('.edit-snmp-btn').addEventListener('click', () => editSnmpQuery(index));
-    item.querySelector('.delete-snmp-btn').addEventListener('click', () => deleteSnmpQuery(index));
+      }
+    });
   });
 }
 
-function editSnmpQuery(index) {
-  const query = snmpQueries[index];
-  document.getElementById('snmp-title').value = query.title || '';
-  document.getElementById('snmp-host').value = query.host || '';
-  document.getElementById('snmp-port').value = query.port || 161;
-  document.getElementById('snmp-community').value = query.community || '';
-  document.getElementById('snmp-oid').value = query.oid || '';
-  document.getElementById('snmp-display-type').value = query.displayType || 'show';
-  document.getElementById('snmp-prefix').value = query.prefix || '';
-  document.getElementById('snmp-suffix').value = query.suffix || '';
-  document.getElementById('snmp-si-units').checked = query.siUnits || false;
-  updateDivisorOptions();
-  document.getElementById('snmp-divisor').value = query.divisor || '1';
-  document.getElementById('snmpForm').style.display = 'block';
-  document.getElementById('snmpForm').dataset.editIndex = index;
+function showSnmpEditDialog(index) {
+  const query = index >= 0 ? snmpQueries[index] : { title: '', host: '', port: 161, community: 'public', oid: '', displayType: 'show', prefix: '', suffix: '', divisor: 1, siUnits: false };
+  const isNew = index < 0;
+
+  const fields = [
+    {
+      id: 'title',
+      label: 'Title',
+      type: 'text',
+      placeholder: 'e.g., Router Uptime',
+      required: true
+    },
+    {
+      id: 'host',
+      label: 'Host',
+      type: 'text',
+      placeholder: '192.168.1.1',
+      required: true
+    },
+    {
+      id: 'port',
+      label: 'Port',
+      type: 'number',
+      min: 1,
+      max: 65535,
+      required: false
+    },
+    {
+      id: 'community',
+      label: 'Community',
+      type: 'text',
+      placeholder: 'public',
+      required: true
+    },
+    {
+      id: 'oid',
+      label: 'OID',
+      type: 'text',
+      placeholder: '1.3.6.1.2.1.1.3.0',
+      required: true
+    },
+    {
+      id: 'displayType',
+      label: 'Display Type',
+      type: 'select',
+      options: [
+        { value: 'show', label: 'Show' },
+        { value: 'diff', label: 'Diff' },
+        { value: 'period-diff', label: 'Period Diff' }
+      ],
+      required: false
+    },
+    {
+      id: 'prefix',
+      label: 'Prefix',
+      type: 'text',
+      placeholder: 'e.g., Speed: ',
+      required: false
+    },
+    {
+      id: 'suffix',
+      label: 'Suffix',
+      type: 'text',
+      placeholder: 'e.g., bps',
+      required: false
+    },
+    {
+      id: 'divisor',
+      label: 'Divisor',
+      type: 'select',
+      options: query.siUnits ? [
+        { value: '1', label: '1' },
+        { value: '10', label: '10' },
+        { value: '100', label: '100' },
+        { value: '1000', label: '1,000 (KB)' },
+        { value: '10000', label: '10,000' },
+        { value: '100000', label: '100,000' },
+        { value: '1000000', label: '1,000,000 (MB)' },
+        { value: '1000000000', label: '1,000,000,000 (GB)' }
+      ] : [
+        { value: '1', label: '1' },
+        { value: '10', label: '10' },
+        { value: '100', label: '100' },
+        { value: '1024', label: '1,024 (KiB)' },
+        { value: '12500', label: '12,500' },
+        { value: '125000', label: '125,000' },
+        { value: '1048576', label: '1,048,576 (MiB)' },
+        { value: '1073741824', label: '1,073,741,824 (GiB)' }
+      ],
+      required: false
+    },
+    {
+      id: 'siUnits',
+      label: 'SI units',
+      type: 'checkbox',
+      onChange: (dialog, field, element) => {
+        updateSnmpDivisorOptions(dialog, element.checked);
+      }
+    }
+  ];
+
+  showModuleEditDialog({
+    title: `${isNew ? 'Add' : 'Edit'} SNMP Query`,
+    icon: 'fas fa-network-wired',
+    fields: fields,
+    values: query,
+    onSave: (formData) => {
+      const title = formData.title.trim();
+      const host = formData.host.trim();
+      const port = parseInt(formData.port) || 161;
+      const community = formData.community.trim();
+      const oid = formData.oid.trim();
+      const displayType = formData.displayType;
+      const prefix = formData.prefix.trim();
+      const suffix = formData.suffix.trim();
+      const divisor = parseInt(formData.divisor) || 1;
+      const siUnits = formData.siUnits;
+
+      if (!title || !host || !community || !oid) {
+        window.popup.alert('Please fill in all required fields', 'Input Required');
+        return;
+      }
+
+      const newQuery = { title, host, port, community, oid, displayType, prefix, suffix, divisor, siUnits, enabled: true };
+
+      if (isNew) {
+        snmpQueries.push(newQuery);
+      } else {
+        const oldQuery = snmpQueries[index];
+        const oldKey = `${oldQuery.host}:${oldQuery.port}:${oldQuery.oid}`;
+        delete snmpLastValues[oldKey];
+        saveSnmpLastValues();
+        snmpQueries[index] = newQuery;
+      }
+
+      saveSnmpQueries();
+      renderSnmpModuleList();
+      renderSnmpQueries();
+    }
+  });
+}
+
+function updateSnmpDivisorOptions(dialog, siUnits) {
+  const divisorSelect = dialog.querySelector('#module-edit-divisor');
+  const currentValue = divisorSelect.value;
+
+  divisorSelect.innerHTML = '';
+
+  if (siUnits) {
+    divisorSelect.innerHTML = `
+      <option value="1">1</option>
+      <option value="10">10</option>
+      <option value="100">100</option>
+      <option value="1000">1,000 (KB)</option>
+      <option value="10000">10,000</option>
+      <option value="100000">100,000</option>
+      <option value="1000000">1,000,000 (MB)</option>
+      <option value="1000000000">1,000,000,000 (GB)</option>
+    `;
+  } else {
+    divisorSelect.innerHTML = `
+      <option value="1">1</option>
+      <option value="10">10</option>
+      <option value="100">100</option>
+      <option value="1024">1,024 (KiB)</option>
+      <option value="12500">12,500</option>
+      <option value="125000">125,000</option>
+      <option value="1048576">1,048,576 (MiB)</option>
+      <option value="1073741824">1,073,741,824 (GiB)</option>
+    `;
+  }
+
+  const optionExists = Array.from(divisorSelect.options).some(opt => opt.value === currentValue);
+  if (optionExists) {
+    divisorSelect.value = currentValue;
+  } else {
+    divisorSelect.value = '1';
+  }
 }
 
 async function deleteSnmpQuery(index) {
@@ -181,7 +335,7 @@ async function deleteSnmpQuery(index) {
 
     snmpQueries.splice(index, 1);
     saveSnmpQueries();
-    renderSnmpList();
+    renderSnmpModuleList();
     renderSnmpQueries();
   }
 }
@@ -261,7 +415,7 @@ async function checkSnmpQuery(query, index) {
 }
 
 function refreshSnmp() {
-  snmpQueries.forEach((query, index) => {
+  snmpQueries.filter(q => q.enabled !== false).forEach((query, index) => {
     checkSnmpQuery(query, index);
   });
   window.startTimer('snmp');
@@ -309,86 +463,15 @@ function updateDivisorOptions() {
 function initSnmp() {
   loadSnmpQueries();
 
+  // Set up add button event listener
   const addBtn = document.getElementById('addSnmpBtn');
-  const siUnitsCheckbox = document.getElementById('snmp-si-units');
-  const cancelBtn = document.getElementById('snmp-cancel');
-  const saveBtn = document.getElementById('snmp-save');
-
   if (addBtn) {
     addBtn.addEventListener('click', () => {
-      document.getElementById('snmp-title').value = '';
-      document.getElementById('snmp-host').value = '';
-      document.getElementById('snmp-port').value = '161';
-      document.getElementById('snmp-community').value = 'public';
-      document.getElementById('snmp-oid').value = '';
-      document.getElementById('snmp-display-type').value = 'show';
-      document.getElementById('snmp-prefix').value = '';
-      document.getElementById('snmp-suffix').value = '';
-      document.getElementById('snmp-divisor').value = '1';
-      document.getElementById('snmp-si-units').checked = false;
-      updateDivisorOptions();
-      document.getElementById('snmpForm').style.display = 'block';
-      delete document.getElementById('snmpForm').dataset.editIndex;
+      console.log('SNMP Add button clicked');
+      showSnmpEditDialog(-1);
     });
-  }
-
-  if (siUnitsCheckbox) {
-    siUnitsCheckbox.addEventListener('change', updateDivisorOptions);
-  }
-
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', () => {
-      document.getElementById('snmpForm').style.display = 'none';
-    });
-  }
-
-  if (saveBtn) {
-    saveBtn.addEventListener('click', () => {
-      const title = document.getElementById('snmp-title').value.trim();
-      const host = document.getElementById('snmp-host').value.trim();
-      const port = parseInt(document.getElementById('snmp-port').value) || 161;
-      const community = document.getElementById('snmp-community').value.trim();
-      const oid = document.getElementById('snmp-oid').value.trim();
-      const displayType = document.getElementById('snmp-display-type').value;
-      const prefix = document.getElementById('snmp-prefix').value.trim();
-      const suffix = document.getElementById('snmp-suffix').value.trim();
-      const divisor = parseInt(document.getElementById('snmp-divisor').value) || 1;
-      const siUnits = document.getElementById('snmp-si-units').checked;
-
-      if (!title || !host || !community || !oid) {
-        window.popup.alert('Please fill in all required fields', 'Input Required');
-        return;
-      }
-
-      const editIndex = document.getElementById('snmpForm').dataset.editIndex;
-      const query = { title, host, port, community, oid, displayType, prefix, suffix, divisor, siUnits };
-
-      if (editIndex !== undefined) {
-        const oldQuery = snmpQueries[parseInt(editIndex)];
-        const oldKey = `${oldQuery.host}:${oldQuery.port}:${oldQuery.oid}`;
-        delete snmpLastValues[oldKey];
-        saveSnmpLastValues();
-        snmpQueries[parseInt(editIndex)] = query;
-      } else {
-        snmpQueries.push(query);
-      }
-
-      saveSnmpQueries();
-      renderSnmpList();
-      renderSnmpQueries();
-      document.getElementById('snmpForm').style.display = 'none';
-    });
-  }
-
-  // Modal observer
-  const prefsModal = document.getElementById('prefsModal');
-  if (prefsModal) {
-    const observer = new MutationObserver(() => {
-      if (prefsModal.classList.contains('active')) {
-        renderSnmpList();
-      }
-    });
-    observer.observe(prefsModal, { attributes: true, attributeFilter: ['class'] });
+  } else {
+    console.log('SNMP Add button not found');
   }
 
   renderSnmpQueries();
@@ -406,8 +489,7 @@ function initSnmp() {
 // Export to window
 window.snmpQueries = snmpQueries;
 window.renderSnmpQueries = renderSnmpQueries;
-window.renderSnmpList = renderSnmpList;
+window.renderSnmpModuleList = renderSnmpModuleList;
 window.refreshSnmp = refreshSnmp;
-window.editSnmpQuery = editSnmpQuery;
-window.deleteSnmpQuery = deleteSnmpQuery;
+window.showSnmpEditDialog = showSnmpEditDialog;
 window.initSnmp = initSnmp;
