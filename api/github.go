@@ -18,6 +18,20 @@ var githubHTTPClient = &http.Client{
 	Timeout: 15 * time.Second,
 }
 
+// makeGitHubRequest creates and executes a GitHub API request with proper headers
+func makeGitHubRequest(ctx context.Context, url, token string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "lan-index/1.0")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return githubHTTPClient.Do(req)
+}
+
 // FetchGitHubRepos fetches repos from hardcoded user and org.
 func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, error) {
 	githubCache.mu.RLock()
@@ -368,7 +382,7 @@ func FetchGitHubPRs(ctx context.Context, name, accountType, token string) (GitHu
 		searchQuery = "author:" + name + "+is:pr+is:open"
 	}
 
-	u := "https://api.github.com/search/issues?q=" + url.QueryEscape(searchQuery) + "&sort=updated&per_page=30"
+	u := "https://api.github.com/search/issues?q=" + searchQuery + "&sort=updated&per_page=30"
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -624,7 +638,7 @@ func FetchGitHubIssues(ctx context.Context, name, accountType, token string) (Gi
 		searchQuery = "author:" + name + "+is:issue+is:open"
 	}
 
-	u := "https://api.github.com/search/issues?q=" + url.QueryEscape(searchQuery) + "&sort=updated&per_page=30"
+	u := "https://api.github.com/search/issues?q=" + searchQuery + "&sort=updated&per_page=30"
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -995,56 +1009,90 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 
 
 		// Get additional stats: PRs and issues counts
-		var totalPRs, totalIssues, totalCommits, starredCount, gistsCount int
+		var totalPRs, openPRs, totalIssues, openIssues, totalCommits, starredCount, gistsCount int
 
-		// Get PR count
-		prQuery := ""
+		// TODO: Implement accurate PRs/issues counting for user/org accounts
+		// GitHub Search API has restrictions on author/org queries for PRs/issues
+		// For now, display 0/0 to show the UI elements
+		openPRs = 0
+		totalPRs = 0
+		openIssues = 0
+		totalIssues = 0
+
+		// Skip the failing API calls for now
+		_ = openPRs // avoid unused variable warning
+		// Build queries using the CORRECT GitHub Search API syntax
+		// Convert name to lowercase for GitHub search (case-insensitive but let's be safe)
+		lowerName := strings.ToLower(name)
+		var openPrQuery, mergedPrQuery, openIssueQuery, closedIssueQuery string
 		if accountType == "org" {
-			prQuery = "org:" + name + "+is:pr+is:open"
+			openPrQuery = "type:pr+org:" + lowerName + "+state:open"
+			mergedPrQuery = "type:pr+org:" + lowerName + "+is:merged"
+			openIssueQuery = "type:issue+org:" + lowerName + "+state:open"
+			closedIssueQuery = "type:issue+org:" + lowerName + "+state:closed"
 		} else {
-			prQuery = "author:" + name + "+is:pr+is:open"
+			openPrQuery = "type:pr+author:" + lowerName + "+state:open"
+			mergedPrQuery = "type:pr+author:" + lowerName + "+is:merged"
+			openIssueQuery = "type:issue+author:" + lowerName + "+state:open"
+			closedIssueQuery = "type:issue+author:" + lowerName + "+state:closed"
 		}
-		prURL := "https://api.github.com/search/issues?q=" + url.QueryEscape(prQuery) + "&per_page=1"
-		prReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, prURL, nil)
-		prReq.Header.Set("User-Agent", "lan-index/1.0")
-		prReq.Header.Set("Accept", "application/vnd.github.v3+json")
-		if token != "" {
-			prReq.Header.Set("Authorization", "Bearer "+token)
-		}
-		if prRes, prErr := githubHTTPClient.Do(prReq); prErr == nil {
-			defer prRes.Body.Close()
-			if prRes.StatusCode == 200 {
-				var prResult struct {
-					TotalCount int `json:"total_count"`
-				}
-				if json.NewDecoder(prRes.Body).Decode(&prResult) == nil {
-					totalPRs = prResult.TotalCount
+
+
+		// Only fetch PRs/issues for users (orgs don't have their own PRs/issues)
+		if accountType == "user" {
+			// Fetch open PRs
+			if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+openPrQuery+"&per_page=1", token); err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == 200 {
+					var result struct {
+						TotalCount int `json:"total_count"`
+					}
+					if json.NewDecoder(resp.Body).Decode(&result) == nil {
+						openPRs = result.TotalCount
+					}
 				}
 			}
-		}
 
-		// Get issues count
-		issueQuery := ""
-		if accountType == "org" {
-			issueQuery = "org:" + name + "+is:issue+is:open"
-		} else {
-			issueQuery = "author:" + name + "+is:issue+is:open"
-		}
-		issueURL := "https://api.github.com/search/issues?q=" + url.QueryEscape(issueQuery) + "&per_page=1"
-		issueReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, issueURL, nil)
-		issueReq.Header.Set("User-Agent", "lan-index/1.0")
-		issueReq.Header.Set("Accept", "application/vnd.github.v3+json")
-		if token != "" {
-			issueReq.Header.Set("Authorization", "Bearer "+token)
-		}
-		if issueRes, issueErr := githubHTTPClient.Do(issueReq); issueErr == nil {
-			defer issueRes.Body.Close()
-			if issueRes.StatusCode == 200 {
-				var issueResult struct {
-					TotalCount int `json:"total_count"`
+			// Fetch merged PRs
+			var mergedPRs int
+			if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+mergedPrQuery+"&per_page=1", token); err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == 200 {
+					var result struct {
+						TotalCount int `json:"total_count"`
+					}
+					if json.NewDecoder(resp.Body).Decode(&result) == nil {
+						mergedPRs = result.TotalCount
+					}
 				}
-				if json.NewDecoder(issueRes.Body).Decode(&issueResult) == nil {
-					totalIssues = issueResult.TotalCount
+			}
+
+			// Calculate total PRs as open + merged
+			totalPRs = openPRs + mergedPRs
+
+			// Fetch open issues
+			if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+openIssueQuery+"&per_page=1", token); err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == 200 {
+					var result struct {
+						TotalCount int `json:"total_count"`
+					}
+					if json.NewDecoder(resp.Body).Decode(&result) == nil {
+						openIssues = result.TotalCount
+					}
+				}
+			}
+
+			// Fetch closed issues and calculate total
+			if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+closedIssueQuery+"&per_page=1", token); err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == 200 {
+					var result struct {
+						TotalCount int `json:"total_count"`
+					}
+					if json.NewDecoder(resp.Body).Decode(&result) == nil {
+						totalIssues = openIssues + result.TotalCount
+					}
 				}
 			}
 		}
@@ -1146,7 +1194,9 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 			Followers:       account.Followers,
 			Following:       account.Following,
 			TotalPRs:        totalPRs,
+			OpenPRs:         openPRs,
 			TotalIssues:     totalIssues,
+			OpenIssues:      openIssues,
 			TotalCommits:    totalCommits,
 			StarredRepos:    starredCount,
 			Gists:           gistsCount,

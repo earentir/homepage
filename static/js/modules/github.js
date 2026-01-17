@@ -266,9 +266,7 @@ function renderStats(container, countEl, data, accountType) {
         statsHTML += `<div class="kv"><div class="k">Private Repos</div><div class="v">${data.stats.privateRepos || 0}</div></div>`;
       }
 
-      statsHTML += `
-        <div class="kv"><div class="k">Followers</div><div class="v">${data.stats.followers || 0}</div></div>
-        <div class="kv"><div class="k">Following</div><div class="v">${data.stats.following || 0}</div></div>`;
+      statsHTML += `<div class="kv"><div class="k">Followers/Following</div><div class="v">${data.stats.followers || 0}/${data.stats.following || 0}</div></div>`;
 
       if (data.stats.starredRepos > 0) {
         statsHTML += `<div class="kv"><div class="k">Starred Repos</div><div class="v">${data.stats.starredRepos}</div></div>`;
@@ -279,19 +277,16 @@ function renderStats(container, countEl, data, accountType) {
       }
 
 
-      if (data.stats.totalPRs > 0) {
-        statsHTML += `<div class="kv"><div class="k">Total PRs</div><div class="v">${data.stats.totalPRs}</div></div>`;
-      }
-
-      if (data.stats.totalIssues > 0) {
-        statsHTML += `<div class="kv"><div class="k">Total Issues</div><div class="v">${data.stats.totalIssues}</div></div>`;
+      // Show PRs and Issues only for users (orgs don't have their own PRs/issues)
+      if (accountType === 'user') {
+        statsHTML += `<div class="kv"><div class="k">PRs</div><div class="v">${data.stats.openPRs || 0}/${data.stats.totalPRs || 0}</div></div>`;
+        statsHTML += `<div class="kv"><div class="k">Issues</div><div class="v">${data.stats.openIssues || 0}/${data.stats.totalIssues || 0}</div></div>`;
       }
 
       if (accountType === 'user' && data.stats.totalCommits > 0) {
         statsHTML += `<div class="kv"><div class="k">Recent Commits</div><div class="v">${data.stats.totalCommits}</div></div>`;
       }
 
-      statsHTML += `<div class="kv"><div class="k">Type</div><div class="v">${data.stats.accountType || accountTypeLabel}</div></div>`;
 
       // Always show creation date if available
       if (data.stats.accountCreatedAt) {
