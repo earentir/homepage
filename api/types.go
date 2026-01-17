@@ -399,6 +399,7 @@ type GitHubStats struct {
 	Gists         int    `json:"gists,omitempty"`          // Gist count (users only)
 	AccountType   string `json:"accountType,omitempty"`
 	AccountCreatedAt string `json:"accountCreatedAt,omitempty"` // Account creation date
+	AccountUpdatedAt string `json:"accountUpdatedAt,omitempty"` // Account last update date
 	Location      string `json:"location,omitempty"`       // Account location
 	Company       string `json:"company,omitempty"`       // Account company
 	Bio           string `json:"bio,omitempty"`            // Account bio

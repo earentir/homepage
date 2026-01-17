@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,14 +28,10 @@ func makeGitHubRequest(ctx context.Context, url, token string) (*http.Response, 
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
-		log.Printf("[github] Making request: %s", url)
 	} else {
-		log.Printf("[github] Making unauthenticated request: %s", url)
+		// Making unauthenticated request
 	}
 	resp, err := githubHTTPClient.Do(req)
-	if err == nil {
-		log.Printf("[github] Response status: %d for %s", resp.StatusCode, url)
-	}
 	return resp, err
 }
 
@@ -55,12 +50,10 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 	}
 
 	if hasCachedData && timeSinceLastFetch < minWaitTime {
-		GetDebugLogger().Logf("github", "returning cached data (last fetch: %v ago)", timeSinceLastFetch)
 		return cachedUserRepos, cachedOrgRepos, nil
 	}
 
 	if timeSinceLastFetch < 5*time.Minute {
-		GetDebugLogger().Logf("github", "too soon since last call (%v), returning cached data", timeSinceLastFetch)
 		if hasCachedData {
 			return cachedUserRepos, cachedOrgRepos, nil
 		}
@@ -82,7 +75,6 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 	orgRepos = fetchOrgRepos(cctx, "network-plane")
 
 	if (userRepos.Error != "" || orgRepos.Error != "") && hasCachedData {
-		GetDebugLogger().Logf("github", "API call failed but returning cached data")
 		return cachedUserRepos, cachedOrgRepos, nil
 	}
 
@@ -100,8 +92,6 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 		githubCache.lastFetch = time.Now()
 		githubCache.hasData = true
 		githubCache.mu.Unlock()
-
-		GetDebugLogger().Logf("github", "cached %d user repos and %d org repos", len(userRepos.Repos), len(orgRepos.Repos))
 	}
 
 	return userRepos, orgRepos, nil
@@ -116,7 +106,6 @@ func fetchUserRepos(ctx context.Context, username string) GitHubUserRepos {
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	res, err := githubHTTPClient.Do(req)
 	if err != nil {
-		GetDebugLogger().Logf("github", "API error (user repos): %v", err)
 		userRepos.Error = "Failed to fetch user repos: " + err.Error()
 		return userRepos
 	}
@@ -724,7 +713,6 @@ func FetchGitHubIssues(ctx context.Context, name, accountType, token string) (Gi
 
 // FetchGitHubStats fetches stats for a repo, user, or organization.
 func FetchGitHubStats(ctx context.Context, name, accountType, token string) (GitHubStatsResponse, error) {
-	log.Printf("[github] FetchGitHubStats called: name=%s, type=%s, has_token=%t", name, accountType, token != "")
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
@@ -739,7 +727,6 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 			defer orgResp.Body.Close()
 			if orgResp.StatusCode == 200 {
 				actualAccountType = "org"
-				log.Printf("[github] Detected %s as organization", name)
 			} else {
 				// Try user
 				userURL := "https://api.github.com/users/" + name
@@ -747,7 +734,6 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 					defer userResp.Body.Close()
 					if userResp.StatusCode == 200 {
 						actualAccountType = "user"
-						log.Printf("[github] Detected %s as user", name)
 					}
 				}
 			}
@@ -838,25 +824,21 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 		}
 		if openPrRes, openPrErr := githubHTTPClient.Do(openPrReq); openPrErr == nil {
 			defer openPrRes.Body.Close()
-			GetDebugLogger().Logf("github", "Open PRs API call status: %d", openPrRes.StatusCode)
 			if openPrRes.StatusCode == 200 {
 				// Use Link header to get total count
 				if linkHeader := openPrRes.Header.Get("Link"); linkHeader != "" {
-					GetDebugLogger().Logf("github", "Open PRs Link header: %s", linkHeader)
 					if lastPage := parseLastPageFromLink(linkHeader); lastPage > 0 {
 						openPRs = (lastPage - 1) * 100 // Approximate count
 						// Also count actual items returned
 						var prs []struct{}
 						if json.NewDecoder(openPrRes.Body).Decode(&prs) == nil {
 							openPRs += len(prs)
-							GetDebugLogger().Logf("github", "Open PRs calculated: %d (page %d, items %d)", openPRs, lastPage, len(prs))
 						}
 					} else {
 						// No pagination, count the items directly
 						var prs []struct{}
 						if json.NewDecoder(openPrRes.Body).Decode(&prs) == nil {
 							openPRs = len(prs)
-							GetDebugLogger().Logf("github", "Open PRs (no pagination): %d", openPRs)
 						}
 					}
 				} else {
@@ -864,12 +846,9 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 					var prs []struct{}
 					if json.NewDecoder(openPrRes.Body).Decode(&prs) == nil {
 						openPRs = len(prs)
-						GetDebugLogger().Logf("github", "Open PRs (direct count): %d", openPRs)
 					}
 				}
 			}
-		} else {
-			GetDebugLogger().Logf("github", "Open PRs request failed: %v", openPrErr)
 		}
 
 		// Get total PRs (all states)
@@ -882,25 +861,21 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 		}
 		if totalPrRes, totalPrErr := githubHTTPClient.Do(totalPrReq); totalPrErr == nil {
 			defer totalPrRes.Body.Close()
-			GetDebugLogger().Logf("github", "Total PRs API call status: %d", totalPrRes.StatusCode)
 			if totalPrRes.StatusCode == 200 {
 				// Use Link header to get total count
 				if linkHeader := totalPrRes.Header.Get("Link"); linkHeader != "" {
-					GetDebugLogger().Logf("github", "Total PRs Link header: %s", linkHeader)
 					if lastPage := parseLastPageFromLink(linkHeader); lastPage > 0 {
 						totalPRs = (lastPage - 1) * 100 // Approximate count
 						// Also count actual items returned
 						var prs []struct{}
 						if json.NewDecoder(totalPrRes.Body).Decode(&prs) == nil {
 							totalPRs += len(prs)
-							GetDebugLogger().Logf("github", "Total PRs calculated: %d (page %d, items %d)", totalPRs, lastPage, len(prs))
 						}
 					} else {
 						// No pagination, count the items directly
 						var prs []struct{}
 						if json.NewDecoder(totalPrRes.Body).Decode(&prs) == nil {
 							totalPRs = len(prs)
-							GetDebugLogger().Logf("github", "Total PRs (no pagination): %d", totalPRs)
 						}
 					}
 				} else {
@@ -908,12 +883,9 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 					var prs []struct{}
 					if json.NewDecoder(totalPrRes.Body).Decode(&prs) == nil {
 						totalPRs = len(prs)
-						GetDebugLogger().Logf("github", "Total PRs (direct count): %d", totalPRs)
 					}
 				}
 			}
-		} else {
-			GetDebugLogger().Logf("github", "Total PRs request failed: %v", totalPrErr)
 		}
 
 		// Get repository languages
@@ -968,25 +940,21 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 		}
 		if totalIssuesRes, totalIssuesErr := githubHTTPClient.Do(totalIssuesReq); totalIssuesErr == nil {
 			defer totalIssuesRes.Body.Close()
-			GetDebugLogger().Logf("github", "Total issues API call status: %d", totalIssuesRes.StatusCode)
 			if totalIssuesRes.StatusCode == 200 {
 				// Use Link header to get total count
 				if linkHeader := totalIssuesRes.Header.Get("Link"); linkHeader != "" {
-					GetDebugLogger().Logf("github", "Total issues Link header: %s", linkHeader)
 					if lastPage := parseLastPageFromLink(linkHeader); lastPage > 0 {
 						totalIssues = (lastPage - 1) * 100 // Approximate count
 						// Also count actual items returned
 						var issues []struct{}
 						if json.NewDecoder(totalIssuesRes.Body).Decode(&issues) == nil {
 							totalIssues += len(issues)
-							GetDebugLogger().Logf("github", "Total issues calculated: %d (page %d, items %d)", totalIssues, lastPage, len(issues))
 						}
 					} else {
 						// No pagination, count the items directly
 						var issues []struct{}
 						if json.NewDecoder(totalIssuesRes.Body).Decode(&issues) == nil {
 							totalIssues = len(issues)
-							GetDebugLogger().Logf("github", "Total issues (no pagination): %d", totalIssues)
 						}
 					}
 				} else {
@@ -997,8 +965,6 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 					}
 				}
 			}
-		} else {
-			GetDebugLogger().Logf("github", "Total issues request failed: %v", totalIssuesErr)
 		}
 
 		resp.Stats = &GitHubStats{
@@ -1033,6 +999,7 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 			Blog          string    `json:"blog,omitempty"`
 			Email         string    `json:"email,omitempty"`
 			CreatedAt     time.Time `json:"created_at"`
+			UpdatedAt     time.Time `json:"updated_at"`
 		}
 		if err := json.NewDecoder(res.Body).Decode(&account); err != nil {
 			resp.Error = "Failed to decode account stats: " + err.Error()
@@ -1080,7 +1047,6 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 				}
 				if json.NewDecoder(resp.Body).Decode(&result) == nil {
 					openPRs = result.TotalCount
-					log.Printf("[github] Open PRs result: %d", openPRs)
 				}
 			}
 		}
@@ -1095,7 +1061,6 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 				}
 				if json.NewDecoder(resp.Body).Decode(&result) == nil {
 					mergedPRs = result.TotalCount
-					log.Printf("[github] Merged PRs result: %d", mergedPRs)
 				}
 			}
 		}
@@ -1112,7 +1077,6 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 				}
 				if json.NewDecoder(resp.Body).Decode(&result) == nil {
 					openIssues = result.TotalCount
-					log.Printf("[github] Open issues result: %d", openIssues)
 				}
 			}
 		}
@@ -1126,7 +1090,6 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 				}
 				if json.NewDecoder(resp.Body).Decode(&result) == nil {
 					totalIssues = openIssues + result.TotalCount
-					log.Printf("[github] Closed issues result: %d, Total issues: %d", result.TotalCount, totalIssues)
 				}
 			}
 		}
@@ -1236,6 +1199,7 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 			Gists:           gistsCount,
 			AccountType:     account.Type,
 			AccountCreatedAt: account.CreatedAt.Format("2006-01-02"),
+			AccountUpdatedAt: account.UpdatedAt.Format("2006-01-02"),
 			Location:        account.Location,
 			Company:         account.Company,
 			Bio:             account.Bio,
@@ -1251,24 +1215,18 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 func parseLastPageFromLink(linkHeader string) int {
 	// Link header format: <https://api.github.com/resource?page=2>; rel="next", <https://api.github.com/resource?page=5>; rel="last"
 	// We want to extract the page number from the "last" link
-	GetDebugLogger().Logf("github", "Parsing Link header: %s", linkHeader)
 	links := strings.Split(linkHeader, ",")
 	for _, link := range links {
 		link = strings.TrimSpace(link)
-		GetDebugLogger().Logf("github", "Processing link: %s", link)
 		if strings.Contains(link, `rel="last"`) {
-			GetDebugLogger().Logf("github", "Found last link: %s", link)
 			// Extract URL from <...>
 			if start := strings.Index(link, "<"); start != -1 {
 				if end := strings.Index(link[start:], ">"); end != -1 {
 					urlStr := link[start+1 : start+end]
-					GetDebugLogger().Logf("github", "Extracted URL: %s", urlStr)
 					// Parse page parameter
 					if u, err := url.Parse(urlStr); err == nil {
 						if page := u.Query().Get("page"); page != "" {
-							GetDebugLogger().Logf("github", "Found page: %s", page)
 							if p, err := strconv.Atoi(page); err == nil {
-								GetDebugLogger().Logf("github", "Returning page number: %d", p)
 								return p
 							}
 						}
@@ -1277,7 +1235,6 @@ func parseLastPageFromLink(linkHeader string) int {
 			}
 		}
 	}
-	GetDebugLogger().Logf("github", "No last page found, returning 0")
 	return 0
 }
 

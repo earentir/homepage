@@ -288,7 +288,7 @@ function renderStats(container, countEl, data, accountType) {
 
       // Always show creation date if available
       if (data.stats.accountCreatedAt) {
-        statsHTML += `<div class="kv"><div class="k">Joined</div><div class="v">${data.stats.accountCreatedAt}</div></div>`;
+        statsHTML += `<div class="kv"><div class="k">Created/Updated</div><div class="v">${data.stats.accountCreatedAt}/${data.stats.accountUpdatedAt || 'N/A'}</div></div>`;
       }
 
       // Show other optional fields only if they have values
@@ -359,7 +359,6 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
     // Fetch from API (timer expired or forced refresh or no cache)
     const githubToken = window.loadFromStorage('githubToken') || '';
     const maxItems = mod.maxItems || 5;
-    console.log(`[GitHub Debug] Module ${mod.id}: name=${mod.name}, accountType=${accountType}, displayType=${displayType}`);
     let url = "/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType + "&count=" + maxItems;
     if (githubToken) url += "&token=" + encodeURIComponent(githubToken);
     const res = await fetch(url, {cache:"no-store"});
