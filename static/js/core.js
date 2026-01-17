@@ -57,6 +57,7 @@ function showModuleEditDialog(config) {
     fields,
     values = {},
     onSave,
+    onDialogCreated,
     moduleType
   } = config;
 
@@ -140,6 +141,11 @@ function showModuleEditDialog(config) {
     }
     closeDialog();
   });
+
+  // Call onDialogCreated callback if provided
+  if (onDialogCreated) {
+    onDialogCreated(dialog);
+  }
 }
 
 function generateFieldHTML(field, currentValue) {
@@ -161,7 +167,7 @@ function generateFieldHTML(field, currentValue) {
   switch (type) {
     case 'select':
       inputHTML = `
-        <select id="module-edit-${id}" ${style ? `style="${style}"` : ''}>
+        <select id="module-edit-${id}">
           ${options.map(opt => `<option value="${opt.value}" ${opt.value == currentValue ? 'selected' : ''}>${opt.label}</option>`).join('')}
         </select>
       `;
@@ -177,19 +183,19 @@ function generateFieldHTML(field, currentValue) {
       return `<div class="pref-row">${inputHTML}</div>`;
 
     case 'number':
-      inputHTML = `<input type="number" id="module-edit-${id}" placeholder="${placeholder}" value="${currentValue || ''}" ${min !== undefined ? `min="${min}"` : ''} ${max !== undefined ? `max="${max}"` : ''} ${step !== undefined ? `step="${step}"` : ''} ${style ? `style="${style}"` : ''}>`;
+      inputHTML = `<input type="number" id="module-edit-${id}" placeholder="${placeholder}" value="${currentValue || ''}" ${min !== undefined ? `min="${min}"` : ''} ${max !== undefined ? `max="${max}"` : ''} ${step !== undefined ? `step="${step}"` : ''}>`;
       break;
 
     case 'textarea':
-      inputHTML = `<textarea id="module-edit-${id}" placeholder="${placeholder}" ${style ? `style="${style}"` : ''}>${currentValue || ''}</textarea>`;
+      inputHTML = `<textarea id="module-edit-${id}" placeholder="${placeholder}">${currentValue || ''}</textarea>`;
       break;
 
     default: // text
-      inputHTML = `<input type="text" id="module-edit-${id}" placeholder="${placeholder}" value="${currentValue || ''}" ${style ? `style="${style}"` : ''}>`;
+      inputHTML = `<input type="text" id="module-edit-${id}" placeholder="${placeholder}" value="${currentValue || ''}">`;
   }
 
   return `
-    <div class="pref-row">
+    <div class="pref-row" ${style ? `style="${style}"` : ''}>
       ${type !== 'checkbox' ? `<label>${label}${required ? ' *' : ''}</label>` : ''}
       ${inputHTML}
     </div>

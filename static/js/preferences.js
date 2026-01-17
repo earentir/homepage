@@ -17,7 +17,7 @@ function initPreferencesModal() {
     // Render lists when modal opens
     if (window.renderGitHubModuleList) window.renderGitHubModuleList();
     if (window.renderQuicklinksList) window.renderQuicklinksList();
-    if (window.renderMonitorsList) window.renderMonitorsList();
+    if (window.renderMonitorModuleList) window.renderMonitorModuleList();
     if (window.renderRssModuleList) window.renderRssModuleList();
     if (window.renderSnmpModuleList) window.renderSnmpModuleList();
     if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
@@ -89,6 +89,7 @@ function initPreferencesModal() {
         if (window.renderDiskModuleList) window.renderDiskModuleList();
         if (window.renderCalendarModuleList) window.renderCalendarModuleList();
         if (window.renderTodoModuleList) window.renderTodoModuleList();
+        if (window.renderMonitorModuleList) window.renderMonitorModuleList();
         if (window.renderSnmpModuleList) window.renderSnmpModuleList();
       }
 
@@ -520,8 +521,8 @@ function renderModuleList() {
 
   moduleList.innerHTML = '';
 
-  // Exclude calendar, todo, rss, and snmp modules from the main module list (they have their own sections)
-  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp'];
+  // Exclude calendar, todo, rss, snmp, and monitoring modules from the main module list (they have their own sections)
+  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp', 'monitoring'];
 
   Object.keys(window.moduleConfig).forEach(key => {
     // Skip excluded modules

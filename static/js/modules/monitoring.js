@@ -546,10 +546,217 @@ function initMonitoring() {
   setInterval(updateDownMonitorsDisplay, 1000);
 }
 
+function showMonitorEditDialog(index) {
+  const monitor = index >= 0 ? monitors[index] : { name: '', type: 'http', url: '', host: '', port: '' };
+  const isNew = index < 0;
+
+  const fields = [
+    {
+      id: 'name',
+      label: 'Name',
+      type: 'text',
+      placeholder: 'e.g., Web Server',
+      required: true
+    },
+    {
+      id: 'type',
+      label: 'Type',
+      type: 'select',
+      options: [
+        { value: 'http', label: 'HTTP Check' },
+        { value: 'port', label: 'Port Check' },
+        { value: 'ping', label: 'Ping' }
+      ],
+      required: false,
+      onChange: (dialog, field, element) => {
+        updateMonitorFieldsVisibility(dialog, element.value);
+      }
+    },
+    {
+      id: 'url',
+      label: 'URL',
+      type: 'text',
+      placeholder: 'e.g., https://example.com',
+      required: false
+    },
+    {
+      id: 'host',
+      label: 'Host',
+      type: 'text',
+      placeholder: 'e.g., 192.168.1.1',
+      required: false
+    },
+    {
+      id: 'port',
+      label: 'Port',
+      type: 'number',
+      placeholder: 'e.g., 443',
+      min: 1,
+      max: 65535,
+      required: false
+    }
+  ];
+
+  showModuleEditDialog({
+    title: `${isNew ? 'Add' : 'Edit'} Service`,
+    icon: 'fas fa-heartbeat',
+    fields: fields,
+    values: monitor,
+    onDialogCreated: (dialog) => {
+      // Set initial field visibility
+      updateMonitorFieldsVisibility(dialog, monitor.type || 'http');
+    },
+    onSave: async (formData) => {
+      const name = formData.name.trim();
+      const type = formData.type;
+
+      let mon = { id: 'mon-' + Date.now(), name, type };
+
+      if (type === 'http') {
+        const url = formData.url.trim();
+        mon.url = url;
+      } else if (type === 'port') {
+        const host = formData.host.trim();
+        const port = parseInt(formData.port);
+        mon.host = host;
+        mon.port = port;
+      } else if (type === 'ping') {
+        const host = formData.host.trim();
+        mon.host = host;
+      }
+
+      // Validate using backend
+      try {
+        const res = await fetch('/api/utils/validate-input', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'monitoring',
+            data: mon
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.valid) {
+            await window.popup.alert(data.error || 'Validation failed', 'Validation Error');
+            return;
+          }
+        } else {
+          await window.popup.alert('Validation error: Unable to validate input', 'Error');
+          return;
+        }
+      } catch (e) {
+        if (window.debugError) window.debugError('monitoring', 'Error validating monitoring:', e);
+        await window.popup.alert('Validation error: Unable to connect to server', 'Error');
+        return;
+      }
+
+      if (isNew) {
+        monitors.push(mon);
+      } else {
+        mon.id = monitors[index].id;
+        monitors[index] = mon;
+      }
+
+      saveMonitors();
+      renderMonitorModuleList();
+      renderMonitors();
+      refreshMonitoring();
+    }
+  });
+}
+
+function updateMonitorFieldsVisibility(dialog, type) {
+  const urlField = dialog.querySelector('#module-edit-url').parentElement;
+  const hostField = dialog.querySelector('#module-edit-host').parentElement;
+  const portField = dialog.querySelector('#module-edit-port').parentElement;
+
+  if (type === 'http') {
+    urlField.style.display = '';
+    hostField.style.display = 'none';
+    portField.style.display = 'none';
+  } else if (type === 'port') {
+    urlField.style.display = 'none';
+    hostField.style.display = '';
+    portField.style.display = '';
+  } else if (type === 'ping') {
+    urlField.style.display = 'none';
+    hostField.style.display = '';
+    portField.style.display = 'none';
+  }
+}
+
+function renderMonitorModuleList() {
+  const list = document.getElementById('monitorModuleList');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  monitors.forEach((mon, index) => {
+    const typeLabels = { http: 'HTTP', port: 'Port', ping: 'Ping' };
+    const typeIcons = { http: 'fa-globe', port: 'fa-plug', ping: 'fa-satellite-dish' };
+
+    let desc = '';
+    if (mon.type === 'http') desc = mon.url;
+    else if (mon.type === 'port') desc = mon.host + ':' + mon.port;
+    else if (mon.type === 'ping') desc = mon.host;
+
+    const item = document.createElement('div');
+    item.className = 'module-item';
+    item.innerHTML = `
+      <div class="module-icon"><i class="fas ${typeIcons[mon.type] || 'fa-heartbeat'}"></i></div>
+      <div class="module-info">
+        <div class="module-name">${mon.name}</div>
+        <div class="module-desc">${typeLabels[mon.type] || mon.type} • ${desc}</div>
+      </div>
+      <div class="module-controls">
+        <button class="btn-small edit-mon-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
+        <button class="btn-small delete-mon-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
+      </div>
+    `;
+    list.appendChild(item);
+
+    item.querySelector('.edit-mon-btn').addEventListener('click', () => showMonitorEditDialog(index));
+    item.querySelector('.delete-mon-btn').addEventListener('click', async () => {
+      const confirmed = await window.popup.confirm('Delete service "' + mon.name + '"?', 'Confirm Delete');
+      if (confirmed) {
+        monitors.splice(index, 1);
+        saveMonitors();
+        renderMonitorModuleList();
+        renderMonitors();
+      }
+    });
+  });
+}
+
+function initMonitoring() {
+  // Set up add button event listener
+  const addBtn = document.getElementById('addMonitorBtn');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      showMonitorEditDialog(-1);
+    });
+  }
+
+  renderMonitorModuleList();
+  renderMonitors();
+
+  // Initial check and interval
+  setTimeout(refreshMonitoring, 3000);
+  // Refresh is now handled via WebSocket refresh notifications (fallback only if WebSocket not connected)
+  setInterval(() => {
+    if (!window.wsIsConnected || !window.wsIsConnected()) {
+      refreshMonitoring();
+    }
+  }, window.timers ? window.timers.monitoring.interval : 60000);
+  setInterval(updateDownMonitorsDisplay, 1000);
+}
+
 // Export to window
 window.monitors = monitors;
 window.saveMonitors = saveMonitors;
 window.renderMonitors = renderMonitors;
 window.refreshMonitoring = refreshMonitoring;
-window.renderMonitorsList = renderMonitorsList;
+window.renderMonitorModuleList = renderMonitorModuleList;
+window.showMonitorEditDialog = showMonitorEditDialog;
 window.initMonitoring = initMonitoring;
