@@ -218,11 +218,9 @@ async function loadServerConfigs() {
       });
     }
 
-    // Load server configs when config tab is opened
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('[data-tab="config"]')) {
-        setTimeout(loadServerConfigs, 50);
-      }
-    });
+    // Server configs are now loaded when preferences modal opens (handled in preferences.js)
   }
+
+  // Export to window
+  window.loadServerConfigs = loadServerConfigs;
 })();

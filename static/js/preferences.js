@@ -27,6 +27,7 @@ function initPreferencesModal() {
     if (window.renderCalendarModuleList) window.renderCalendarModuleList();
     if (window.renderTodoModuleList) window.renderTodoModuleList();
     if (window.initICSCalendars) window.initICSCalendars();
+    if (window.loadServerConfigs) window.loadServerConfigs();
     renderModuleList();
     // Initialize debug settings when modal opens
     initDebugSettings();
@@ -542,7 +543,8 @@ function renderModuleList() {
         <div class="module-desc">${mod.desc}</div>
       </div>
       <div class="module-controls">
-        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
+        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
+        ${key === 'speedplane' ? `<button class="btn-small edit-speedplane-btn" data-module="${key}" title="Configure"><i class="fas fa-edit"></i></button>` : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -583,6 +585,15 @@ function renderModuleList() {
         // Update local timer for immediate UI feedback (backend will sync and update via WebSocket)
         window.timers[mod.timerKey].interval = val * 1000;
         if (window.saveModulePrefs) window.saveModulePrefs();
+      }
+    });
+  });
+
+  // Handle speedplane edit button
+  moduleList.querySelectorAll('.edit-speedplane-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.showSpeedplaneEditDialog) {
+        window.showSpeedplaneEditDialog();
       }
     });
   });
@@ -1064,7 +1075,7 @@ function renderCalendarModuleList() {
         <div class="module-desc">${mod.desc}</div>
       </div>
       <div class="module-controls">
-        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
+        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -1137,7 +1148,7 @@ function renderTodoModuleList() {
         <div class="module-desc">${mod.desc}</div>
       </div>
       <div class="module-controls">
-        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
+        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -1210,7 +1221,7 @@ function renderHistoryModuleList() {
         <div class="module-desc">${mod.desc}</div>
       </div>
       <div class="module-controls">
-        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
+        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -1251,6 +1262,7 @@ function renderHistoryModuleList() {
   });
 }
 
+// Render speedplane modules list in preferences
 // Render SMBIOS modules list in preferences
 function renderSMBIOSModuleList() {
   const list = document.getElementById('smbiosModuleList');

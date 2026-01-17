@@ -76,9 +76,9 @@ function showSpeedplaneEditDialog() {
   const config = speedplaneConfig || { name: '', host: '', port: '' };
 
   const dialog = document.createElement('div');
-  dialog.className = 'modal-overlay active';
+  dialog.className = 'modal-overlay module-edit-overlay active';
   dialog.innerHTML = `
-    <div class="modal" style="max-width:500px;">
+    <div class="modal module-edit" style="max-width:500px;">
       <div class="modal-header">
         <h2><i class="fas fa-tachometer-alt"></i> ${speedplaneConfig ? 'Edit' : 'Configure'} Speedplane</h2>
         <button class="modal-close speedplane-dialog-close"><i class="fas fa-times"></i></button>
@@ -296,14 +296,6 @@ function refreshSpeedplane() {
 function initSpeedplane() {
   loadSpeedplaneConfig();
   renderSpeedplane();
-
-  // Setup edit button
-  const editBtn = document.getElementById('speedplane-edit-btn');
-  if (editBtn) {
-    editBtn.addEventListener('click', () => {
-      showSpeedplaneEditDialog();
-    });
-  }
 
   // Initial check and interval
   setTimeout(refreshSpeedplane, 2000);

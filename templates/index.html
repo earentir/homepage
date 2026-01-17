@@ -248,7 +248,7 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <div class="card span-6" data-module="speedplane" draggable="true">
-        <h3><i class="fas fa-tachometer-alt"></i> Speedplane<div class="header-icons"><button class="btn-icon" id="speedplane-edit-btn" title="Configure Speedplane"><i class="fas fa-cog"></i></button><div class="timer-circle" id="speedplaneTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-tachometer-alt"></i> Speedplane<div class="header-icons"><div class="timer-circle" id="speedplaneTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div id="speedplaneContainer">
           <div class="small" style="color:var(--muted);">Click the configure button to set up Speedplane</div>
         </div>
@@ -320,7 +320,6 @@ if ('serviceWorker' in navigator) {
         <button class="modal-tab" data-tab="layout"><i class="fas fa-columns"></i> Layout</button>
         <button class="modal-tab" data-tab="modules"><i class="fas fa-th-large"></i> Modules</button>
         <button class="modal-tab" data-tab="quicklinks"><i class="fas fa-link"></i> Quicklinks</button>
-        <button class="modal-tab" data-tab="config"><i class="fas fa-download"></i> Config</button>
         <button class="modal-tab" data-tab="calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
         <button class="modal-tab" data-tab="todo"><i class="fas fa-tasks"></i> Todo</button>
         <button class="modal-tab" data-tab="search"><i class="fas fa-search"></i> Search</button>
@@ -331,7 +330,7 @@ if ('serviceWorker' in navigator) {
       <div class="modal-content">
         <!-- General Tab -->
         <div class="tab-content active" id="tab-general">
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; align-items:start;">
             <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
                 <h3>Appearance</h3>
@@ -352,24 +351,24 @@ if ('serviceWorker' in navigator) {
                     <button class="btn-small" id="resetTitleBtn" title="Reset to LAN Index"><i class="fas fa-undo"></i></button>
                   </div>
                 </div>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <div class="pref-section">
                 <h3>Timers</h3>
                 <div class="pref-row">
                   <label>Disk Refresh</label>
                   <div class="location-input">
                     <input type="number" id="pref-disk-interval" value="15" min="5" max="3600" style="width:80px;">
-                    <span class="small">seconds</span>
                   </div>
                 </div>
                 <div class="pref-row">
                   <label>RSS Refresh</label>
                   <div class="location-input">
                     <input type="number" id="pref-rss-interval" value="300" min="60" max="86400" style="width:80px;">
-                    <span class="small">seconds</span>
                   </div>
                 </div>
               </div>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
                 <h3>Graphs</h3>
                 <div class="pref-row">
@@ -395,6 +394,8 @@ if ('serviceWorker' in navigator) {
                   </div>
                 </div>
               </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
                 <h3>Data</h3>
                 <div class="pref-row">
@@ -404,6 +405,35 @@ if ('serviceWorker' in navigator) {
                 <div class="pref-row">
                   <label>Reset module order</label>
                   <button class="btn-small" id="resetOrderBtn"><i class="fas fa-undo"></i> Reset Order</button>
+                </div>
+              </div>
+              <div class="pref-section">
+                <h3>Configuration</h3>
+                <div class="pref-row">
+                  <label>Export</label>
+                  <button class="btn-small" id="exportConfigBtn"><i class="fas fa-download"></i> Export Config</button>
+                </div>
+                <div class="pref-row">
+                  <label>Import</label>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="file" id="importConfigFile" accept=".json" style="display:none;">
+                    <button class="btn-small" id="importConfigBtn"><i class="fas fa-upload"></i> Import Config</button>
+                  </div>
+                </div>
+                <div class="pref-row">
+                  <label>Config Name</label>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" id="configNameInput" placeholder="Enter config name" style="max-width:200px;">
+                    <button class="btn-small" id="uploadConfigBtn"><i class="fas fa-upload"></i> Upload</button>
+                  </div>
+                </div>
+                <div class="pref-row" style="align-items:flex-start;">
+                  <label style="margin-top:4px;">Stored Configs</label>
+                  <div style="flex:1; display:flex; flex-direction:column; gap:8px; padding-left:12px;">
+                    <div id="serverConfigsList" style="min-height:100px; border:1px solid var(--border); border-radius:6px; padding:8px; background:var(--panel2);">
+                      <div class="small" style="color:var(--muted);">Loading...</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -755,41 +785,6 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
 
-        <!-- Config Tab -->
-        <div class="tab-content" id="tab-config">
-          <div class="pref-section">
-            <h3>Local Config</h3>
-            <div class="pref-row">
-              <label>Export</label>
-              <button class="btn-small" id="exportConfigBtn"><i class="fas fa-download"></i> Export Config</button>
-            </div>
-            <div class="pref-row">
-              <label>Import</label>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input type="file" id="importConfigFile" accept=".json" style="display:none;">
-                <button class="btn-small" id="importConfigBtn"><i class="fas fa-upload"></i> Import Config</button>
-              </div>
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>Server Side</h3>
-            <div class="pref-row">
-              <label>Config Name</label>
-              <div style="display:flex; gap:8px; align-items:center; flex:1;">
-                <input type="text" id="configNameInput" placeholder="Enter config name" style="flex:1;">
-                <button class="btn-small" id="uploadConfigBtn"><i class="fas fa-upload"></i> Upload</button>
-              </div>
-            </div>
-            <div class="pref-row" style="align-items:flex-start;">
-              <label>Stored Configs</label>
-              <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
-                <div id="serverConfigsList" style="min-height:100px; border:1px solid var(--border); border-radius:6px; padding:8px; background:var(--panel2);">
-                  <div class="small" style="color:var(--muted);">Loading...</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- About Tab -->
         <!-- Weather Tab -->
