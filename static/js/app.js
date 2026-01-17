@@ -32,14 +32,18 @@ function setupTimerHandlers() {
 function loadModulePrefs() {
   try {
     const saved = window.loadFromStorage('modulePrefs');
-    if (saved) {
+    if (saved && window.moduleConfig) {
       const prefs = saved;
+      // Only update modules that exist in both saved preferences and current config
+      // This prevents losing modules that aren't in saved preferences
       Object.keys(prefs).forEach(key => {
-        if (window.moduleConfig && window.moduleConfig[key]) {
+        if (window.moduleConfig[key] && prefs[key] && typeof prefs[key].enabled === 'boolean') {
           window.moduleConfig[key].enabled = prefs[key].enabled;
         }
         // Timer intervals are managed by backend and updated via WebSocket timer-status messages
       });
+      // Important: Don't update modules that aren't in saved preferences - preserve their current state
+      // This ensures modules not processed by backend are not lost
     }
   } catch (e) {
     if (window.debugError) window.debugError('app', 'Failed to load module prefs:', e);
@@ -59,6 +63,8 @@ async function saveModulePrefs() {
     }
     
     // Process and validate using backend
+    // Merge processed preferences back into original prefs to preserve all modules
+    // The backend only returns modules that exist in metadata, so we need to keep all modules
     try {
       const res = await fetch('/api/modules/process-prefs', {
         method: 'POST',
@@ -69,7 +75,15 @@ async function saveModulePrefs() {
       if (res.ok) {
         const data = await res.json();
         if (data.preferences) {
-          prefs = data.preferences;
+          // Merge processed preferences into original prefs to preserve all modules
+          // This ensures modules not in metadata are still saved
+          Object.keys(data.preferences).forEach(key => {
+            if (prefs[key]) {
+              prefs[key] = data.preferences[key];
+            }
+          });
+          // Don't update window.moduleConfig here - it's already updated by the checkbox handler
+          // The processed preferences are only for validation and storage
           if (data.errors && data.errors.length > 0 && window.debugError) {
             window.debugError('app', 'Module prefs processing errors:', data.errors);
           }
@@ -79,6 +93,7 @@ async function saveModulePrefs() {
       if (window.debugError) window.debugError('app', 'Error processing module prefs:', e);
     }
     
+    // Save all modules, not just processed ones, to preserve modules not in metadata
     window.saveToStorage('modulePrefs', prefs);
   } catch (e) {
     if (window.debugError) window.debugError('app', 'Failed to save module prefs:', e);
@@ -89,7 +104,8 @@ function applyModuleVisibility() {
   if (!window.moduleConfig) return;
   let needsRerender = false;
   Object.keys(window.moduleConfig).forEach(key => {
-    const card = document.querySelector(`[data-module="${key}"]`);
+    // Only affect .card elements, not checkboxes or other elements in preferences modal
+    const card = document.querySelector(`.card[data-module="${key}"]`);
     if (card) {
       const wasVisible = card.style.display !== 'none';
       const shouldBeVisible = window.moduleConfig[key].enabled;

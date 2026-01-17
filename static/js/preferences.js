@@ -519,8 +519,8 @@ function renderModuleList() {
 
   moduleList.innerHTML = '';
 
-  // Exclude calendar and todo modules from the main module list (they have their own sections)
-  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo'];
+  // Exclude calendar, todo, and rss modules from the main module list (they have their own sections)
+  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss'];
 
   Object.keys(window.moduleConfig).forEach(key => {
     // Skip excluded modules
@@ -1023,79 +1023,6 @@ function renderSearchEngines() {
 
     categoryDiv.appendChild(categoryEnginesDiv);
     container.appendChild(categoryDiv);
-  });
-}
-
-// Render calendar modules list in preferences
-function renderCalendarModuleList() {
-  const list = document.getElementById('calendarModuleList');
-  if (!list || !window.moduleConfig) return;
-
-  list.innerHTML = '';
-
-  // Filter calendar-related modules
-  const calendarModules = ['calendar', 'events', 'weekcalendar'];
-  const foundModules = [];
-
-  calendarModules.forEach(key => {
-    if (window.moduleConfig[key]) {
-      foundModules.push({ key, mod: window.moduleConfig[key] });
-    }
-  });
-
-  if (foundModules.length === 0) {
-    list.innerHTML = '<div class="small" style="color:var(--muted);padding:10px;">No calendar modules available</div>';
-    return;
-  }
-
-  foundModules.forEach(({ key, mod }) => {
-    const item = document.createElement('div');
-    item.className = 'module-item';
-    item.innerHTML = `
-      <div class="module-icon"><i class="fas ${mod.icon}"></i></div>
-      <div class="module-info">
-        <div class="module-name">${mod.name}</div>
-        <div class="module-desc">${mod.desc}</div>
-      </div>
-      <div class="module-controls">
-        ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">s` : ''}
-        <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
-      </div>
-    `;
-    list.appendChild(item);
-
-    // Handle toggle changes
-    const toggle = item.querySelector('.module-toggle');
-    toggle.addEventListener('change', () => {
-      if (window.moduleConfig[key]) {
-        window.moduleConfig[key].enabled = toggle.checked;
-        if (window.saveModulePrefs) window.saveModulePrefs();
-        if (window.applyModuleVisibility) window.applyModuleVisibility();
-        // Clean up layout when module is disabled
-        if (!toggle.checked && window.cleanupLayoutConfig) {
-          if (window.cleanupLayoutConfig()) {
-            if (window.layoutSystem) {
-              window.layoutSystem.saveLayoutConfig();
-              window.layoutSystem.renderLayout();
-              window.layoutSystem.renderLayoutEditor();
-            }
-          }
-        }
-      }
-    });
-
-    // Handle interval changes
-    const intervalInput = item.querySelector('.interval-input');
-    if (intervalInput) {
-      intervalInput.addEventListener('change', () => {
-        if (window.moduleConfig[key] && window.moduleConfig[key].hasTimer && window.timers && window.timers[mod.timerKey]) {
-          const val = Math.max(1, parseInt(intervalInput.value) || mod.defaultInterval);
-          intervalInput.value = val;
-          window.timers[mod.timerKey].interval = val * 1000;
-          if (window.saveModulePrefs) window.saveModulePrefs();
-        }
-      });
-    }
   });
 }
 
