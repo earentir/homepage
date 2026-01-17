@@ -186,8 +186,13 @@ function generateFieldHTML(field, currentValue) {
       inputHTML = `<input type="number" id="module-edit-${id}" placeholder="${placeholder}" value="${currentValue || ''}" ${min !== undefined ? `min="${min}"` : ''} ${max !== undefined ? `max="${max}"` : ''} ${step !== undefined ? `step="${step}"` : ''}>`;
       break;
 
-    case 'textarea':
-      inputHTML = `<textarea id="module-edit-${id}" placeholder="${placeholder}">${currentValue || ''}</textarea>`;
+
+    case 'datetime-local':
+      inputHTML = `<input type="datetime-local" id="module-edit-${id}" value="${currentValue || ''}">`;
+      break;
+
+    case 'color':
+      inputHTML = `<input type="color" id="module-edit-${id}" value="${currentValue || '#3b88c3'}">`;
       break;
 
     default: // text

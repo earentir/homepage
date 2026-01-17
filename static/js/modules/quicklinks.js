@@ -341,22 +341,93 @@ function renderQuicklinksList() {
   list.appendChild(grid);
 }
 
-function editQuicklink(index) {
-  const link = index >= 0 ? quicklinks[index] : { id: 'ql-' + Date.now(), title: '', url: '', icon: '' };
+function showQuicklinkEditDialog(index) {
+  const link = index >= 0 ? quicklinks[index] : { title: '', url: '', icon: '' };
   const isNew = index < 0;
 
-  const titleInput = document.getElementById('ql-title');
-  const urlInput = document.getElementById('ql-url');
-  const iconInput = document.getElementById('ql-icon');
-  const form = document.getElementById('quicklinkForm');
+  const fields = [
+    {
+      id: 'title',
+      label: 'Title',
+      type: 'text',
+      placeholder: 'e.g., Router',
+      required: true
+    },
+    {
+      id: 'url',
+      label: 'URL',
+      type: 'text',
+      placeholder: 'e.g., http://192.168.1.1',
+      required: true
+    },
+    {
+      id: 'icon',
+      label: 'Icon',
+      type: 'select',
+      options: [
+        { value: '', label: 'Use favicon' },
+        { value: 'fa-network-wired', label: 'Network' },
+        { value: 'fa-server', label: 'Server' },
+        { value: 'fa-hdd', label: 'Storage' },
+        { value: 'fa-database', label: 'Database' },
+        { value: 'fa-cloud', label: 'Cloud' },
+        { value: 'fa-home', label: 'Home' },
+        { value: 'fa-cog', label: 'Settings' },
+        { value: 'fa-chart-line', label: 'Charts' },
+        { value: 'fa-router', label: 'Router' },
+        { value: 'fa-wifi', label: 'WiFi' },
+        { value: 'fa-shield-alt', label: 'Security' },
+        { value: 'fa-camera', label: 'Camera' },
+        { value: 'fa-music', label: 'Music' },
+        { value: 'fa-play', label: 'Media' },
+        { value: 'fa-envelope', label: 'Mail' },
+        { value: 'fa-user', label: 'User' },
+        { value: 'fa-users', label: 'Users' },
+        { value: 'fa-globe', label: 'Web' },
+        { value: 'fa-code', label: 'Code' },
+        { value: 'fa-terminal', label: 'Terminal' }
+      ],
+      required: false
+    }
+  ];
 
-  if (titleInput) titleInput.value = link.title || '';
-  if (urlInput) urlInput.value = link.url || '';
-  if (iconInput) iconInput.value = link.icon || '';
-  if (form) {
-    form.style.display = 'block';
-    form.dataset.editIndex = isNew ? '-1' : index;
-  }
+  showModuleEditDialog({
+    title: `${isNew ? 'Add' : 'Edit'} Quick Link`,
+    icon: 'fas fa-link',
+    fields: fields,
+    values: link,
+    onSave: async (formData) => {
+      const title = formData.title.trim();
+      const url = formData.url.trim();
+      const icon = formData.icon;
+
+      if (!title || !url) {
+        await window.popup.alert('Please enter a title and URL', 'Input Required');
+        return;
+      }
+
+      const linkData = {
+        id: isNew ? 'ql-' + Date.now() : link.id,
+        title: title,
+        url: url,
+        icon: icon
+      };
+
+      if (isNew) {
+        quicklinks.push(linkData);
+      } else {
+        quicklinks[index] = linkData;
+      }
+
+      saveQuicklinks();
+      renderQuicklinks();
+      renderQuicklinksList();
+    }
+  });
+}
+
+function editQuicklink(index) {
+  showQuicklinkEditDialog(index);
 }
 
 function saveQuicklinksIconsOnly(enabled) {
@@ -456,48 +527,6 @@ function initQuicklinks() {
     });
   }
 
-  // Cancel button
-  const cancelBtn = document.getElementById('ql-cancel');
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', () => {
-      document.getElementById('quicklinkForm').style.display = 'none';
-    });
-  }
-
-  // Save button
-  const saveBtn = document.getElementById('ql-save');
-  if (saveBtn) {
-    saveBtn.addEventListener('click', () => {
-      const title = document.getElementById('ql-title').value.trim();
-      const url = document.getElementById('ql-url').value.trim();
-      const icon = document.getElementById('ql-icon').value.trim();
-      const form = document.getElementById('quicklinkForm');
-      const editIndex = parseInt(form.dataset.editIndex);
-
-      if (!title || !url) {
-        window.popup.alert('Please enter a title and URL', 'Input Required');
-        return;
-      }
-
-      const link = {
-        id: editIndex >= 0 ? quicklinks[editIndex].id : 'ql-' + Date.now(),
-        title,
-        url,
-        icon
-      };
-
-      if (editIndex >= 0) {
-        quicklinks[editIndex] = link;
-      } else {
-        quicklinks.push(link);
-      }
-
-      saveQuicklinks();
-      renderQuicklinksList();
-      renderQuicklinks();
-      form.style.display = 'none';
-    });
-  }
 
   renderQuicklinks();
 }
@@ -508,4 +537,5 @@ window.saveQuicklinks = saveQuicklinks;
 window.renderQuicklinks = renderQuicklinks;
 window.renderQuicklinksList = renderQuicklinksList;
 window.initQuicklinks = initQuicklinks;
+window.showQuicklinkEditDialog = showQuicklinkEditDialog;
 window.reloadQuicklinksSettings = reloadQuicklinksSettings;

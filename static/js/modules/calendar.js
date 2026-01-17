@@ -713,7 +713,7 @@ function renderICSCalendarsList() {
       </div>
       <div class="module-info">
         <div class="module-name">${window.escapeHtml ? window.escapeHtml(cal.name) : cal.name}</div>
-        <div class="module-desc" style="font-size:11px; color:var(--muted);">${window.escapeHtml ? window.escapeHtml(cal.url) : cal.url}</div>
+        <div class="module-desc" style="font-size:11px; color:var(--muted);">ICS Calendar</div>
       </div>
       <div class="module-controls">
         <input type="checkbox" class="ics-calendar-toggle" data-index="${index}" ${cal.enabled ? 'checked' : ''} title="Enable/Disable">
@@ -733,7 +733,7 @@ function renderICSCalendarsList() {
     // Edit button
     const editBtn = item.querySelector('.edit-ics-calendar-btn');
     editBtn.addEventListener('click', () => {
-      showICSCalendarForm(index);
+      showICSCalendarEditDialog(index);
     });
 
     // Delete button
@@ -749,41 +749,78 @@ function renderICSCalendarsList() {
   });
 }
 
-function showICSCalendarForm(editIndex = -1) {
-  const form = document.getElementById('icsCalendarForm');
-  if (!form) return;
+function showICSCalendarEditDialog(editIndex = -1) {
+  const calendar = editIndex >= 0 ? icsCalendars[editIndex] : { name: '', url: '', color: '#3b88c3', enabled: true };
+  const isNew = editIndex < 0;
 
-  const idInput = document.getElementById('ics-calendar-id');
-  const nameInput = document.getElementById('ics-calendar-name');
-  const urlInput = document.getElementById('ics-calendar-url');
-  const colorInput = document.getElementById('ics-calendar-color');
-  const enabledInput = document.getElementById('ics-calendar-enabled');
+  const fields = [
+    {
+      id: 'name',
+      label: 'Name',
+      type: 'text',
+      placeholder: 'Calendar name',
+      required: true
+    },
+    {
+      id: 'url',
+      label: 'ICS URL',
+      type: 'text',
+      placeholder: 'https://example.com/calendar.ics',
+      required: true
+    },
+    {
+      id: 'color',
+      label: 'Color',
+      type: 'color',
+      required: false
+    },
+    {
+      id: 'enabled',
+      label: 'Enabled',
+      type: 'checkbox',
+      required: false
+    }
+  ];
 
-  if (editIndex >= 0 && editIndex < icsCalendars.length) {
-    const cal = icsCalendars[editIndex];
-    idInput.value = cal.id;
-    nameInput.value = cal.name || '';
-    urlInput.value = cal.url || '';
-    colorInput.value = cal.color || '#3b88c3';
-    enabledInput.checked = cal.enabled !== false;
-    form.dataset.editIndex = editIndex;
-  } else {
-    idInput.value = '';
-    nameInput.value = '';
-    urlInput.value = '';
-    colorInput.value = '#3b88c3';
-    enabledInput.checked = true;
-    form.dataset.editIndex = -1;
-  }
+  showModuleEditDialog({
+    title: `${isNew ? 'Add' : 'Edit'} ICS Calendar`,
+    icon: 'fas fa-calendar',
+    fields: fields,
+    values: calendar,
+    onSave: async (formData) => {
+      const name = formData.name.trim();
+      const url = formData.url.trim();
+      const color = formData.color;
+      const enabled = formData.enabled;
 
-  form.style.display = 'block';
-}
+      if (!name || !url) {
+        await window.popup.alert('Please enter a name and URL', 'Input Required');
+        return;
+      }
 
-function hideICSCalendarForm() {
-  const form = document.getElementById('icsCalendarForm');
-  if (form) {
-    form.style.display = 'none';
-  }
+      const calendarData = {
+        id: isNew ? generateICSCalendarId() : calendar.id,
+        name: name,
+        url: url,
+        color: color,
+        enabled: enabled
+      };
+
+      if (isNew) {
+        icsCalendars.push(calendarData);
+      } else {
+        icsCalendars[editIndex] = calendarData;
+      }
+
+      saveICSCalendars();
+      renderICSCalendarsList();
+
+      // Refresh calendar views to show new events
+      renderCalendar();
+      renderWeekCalendar();
+      renderUpcomingEvents();
+    }
+  });
 }
 
 async function testICSCalendar() {
@@ -809,48 +846,6 @@ async function testICSCalendar() {
   }
 }
 
-function saveICSCalendarFromForm() {
-  const idInput = document.getElementById('ics-calendar-id');
-  const nameInput = document.getElementById('ics-calendar-name');
-  const urlInput = document.getElementById('ics-calendar-url');
-  const colorInput = document.getElementById('ics-calendar-color');
-  const enabledInput = document.getElementById('ics-calendar-enabled');
-  const form = document.getElementById('icsCalendarForm');
-
-  const name = nameInput.value.trim();
-  const url = urlInput.value.trim();
-  const color = colorInput.value;
-  const enabled = enabledInput.checked;
-  const editIndex = parseInt(form.dataset.editIndex);
-
-  if (!name || !url) {
-    window.popup.alert('Please enter a name and URL', 'Input Required');
-    return;
-  }
-
-  const calendar = {
-    id: idInput.value || generateICSCalendarId(),
-    name: name,
-    url: url,
-    color: color,
-    enabled: enabled
-  };
-
-  if (editIndex >= 0) {
-    icsCalendars[editIndex] = calendar;
-  } else {
-    icsCalendars.push(calendar);
-  }
-
-  saveICSCalendars();
-  renderICSCalendarsList();
-  hideICSCalendarForm();
-  
-  // Refresh calendar views to show new events
-  renderCalendar();
-  renderWeekCalendar();
-  renderUpcomingEvents();
-}
 
 // Load ICS cache TTL setting
 function loadICSCacheTTL() {
@@ -943,23 +938,9 @@ function initICSCalendars() {
 
   const addBtn = document.getElementById('addICSCalendarBtn');
   if (addBtn) {
-    addBtn.addEventListener('click', () => showICSCalendarForm());
+    addBtn.addEventListener('click', () => showICSCalendarEditDialog(-1));
   }
 
-  const saveBtn = document.getElementById('saveICSCalendarBtn');
-  if (saveBtn) {
-    saveBtn.addEventListener('click', saveICSCalendarFromForm);
-  }
-
-  const cancelBtn = document.getElementById('cancelICSCalendarBtn');
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', hideICSCalendarForm);
-  }
-
-  const testBtn = document.getElementById('testICSCalendarBtn');
-  if (testBtn) {
-    testBtn.addEventListener('click', testICSCalendar);
-  }
 
   // Cache TTL input
   const ttlInput = document.getElementById('ics-cache-ttl');
@@ -982,3 +963,4 @@ window.renderWeekCalendar = renderWeekCalendar;
 window.renderUpcomingEvents = renderUpcomingEvents;
 window.renderEventsPreferenceList = renderEventsPreferenceList;
 window.initICSCalendars = initICSCalendars;
+window.showICSCalendarEditDialog = showICSCalendarEditDialog;

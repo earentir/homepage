@@ -28,6 +28,28 @@ function generateTodoId() {
   return 'todo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
+// Format date for datetime-local input (YYYY-MM-DDTHH:MM)
+function formatDateForInput(dateString) {
+  if (!dateString) return '';
+
+  // If it's already in YYYY-MM-DDTHH:MM format, return as-is
+  if (dateString.includes('T')) return dateString;
+
+  // If it's just YYYY-MM-DD, append default time 09:00
+  return `${dateString}T09:00`;
+}
+
+// Parse datetime-local value to date string (YYYY-MM-DD)
+function parseDateFromInput(datetimeString) {
+  if (!datetimeString) return undefined;
+
+  // Extract just the date part (before 'T') since backend expects YYYY-MM-DD format
+  if (datetimeString.includes('T')) {
+    return datetimeString.split('T')[0];
+  }
+  return datetimeString; // Fallback, though datetime-local should always have 'T'
+}
+
 // Get next N incomplete todos, sorted by priority and due date - uses backend processing
 async function getNextTodos(count = 5) {
   if (todos.length === 0) return [];
@@ -260,29 +282,11 @@ async function renderTodosPreferenceList() {
 }
 
 // Show todo form for add/edit
-function showTodoForm(todo = null) {
-  const form = document.getElementById('todoForm');
-  if (!form) return;
-
-  form.style.display = 'block';
-
-  document.getElementById('todo-id').value = todo ? todo.id : '';
-  document.getElementById('todo-title').value = todo ? todo.title : '';
-  document.getElementById('todo-priority').value = todo ? (todo.priority || '') : '';
-  document.getElementById('todo-due-date').value = todo ? (todo.dueDate || '') : '';
-
-  document.getElementById('todo-title').focus();
-}
-
-function hideTodoForm() {
-  const form = document.getElementById('todoForm');
-  if (form) form.style.display = 'none';
-}
 
 function editTodo(id) {
-  const todo = todos.find(t => t.id === id);
-  if (todo) {
-    showTodoForm(todo);
+  const index = todos.findIndex(t => t.id === id);
+  if (index >= 0) {
+    showTodoEditDialog(index);
   }
 }
 
@@ -358,6 +362,104 @@ async function saveTodoFromForm() {
 
 // Using escapeHtml from core.js
 
+function showTodoEditDialog(index) {
+  const todo = index >= 0 ? todos[index] : { title: '', priority: '', dueDate: '' };
+  const isNew = index < 0;
+
+  // Convert dueDate to datetime-local format (YYYY-MM-DDTHH:MM)
+  const dueDateValue = todo.dueDate ? formatDateForInput(todo.dueDate) : '';
+
+  const fields = [
+    {
+      id: 'title',
+      label: 'Title',
+      type: 'text',
+      placeholder: 'Todo title',
+      required: true
+    },
+    {
+      id: 'priority',
+      label: 'Priority',
+      type: 'select',
+      options: [
+        { value: '', label: 'None' },
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' }
+      ],
+      required: false
+    },
+    {
+      id: 'dueDate',
+      label: 'Due Date & Time',
+      type: 'datetime-local',
+      required: false
+    }
+  ];
+
+  const values = {
+    ...todo,
+    dueDate: dueDateValue
+  };
+
+  showModuleEditDialog({
+    title: `${isNew ? 'Add' : 'Edit'} Todo`,
+    icon: 'fas fa-tasks',
+    fields: fields,
+    values: values,
+    onSave: async (formData) => {
+      const title = formData.title.trim();
+      const priority = formData.priority;
+      const dueDate = parseDateFromInput(formData.dueDate);
+
+      // Validate using backend
+      try {
+        const res = await fetch('/api/utils/validate-input', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'todo',
+            data: { title, priority, dueDate }
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.valid) {
+            await window.popup.alert(data.error || 'Validation failed', 'Validation Error');
+            return;
+          }
+        } else {
+          await window.popup.alert('Validation error: Unable to validate input', 'Error');
+          return;
+        }
+      } catch (e) {
+        if (window.debugError) window.debugError('todo', 'Error validating todo:', e);
+        await window.popup.alert('Validation error: Unable to connect to server', 'Error');
+        return;
+      }
+
+      if (isNew) {
+        const newTodo = {
+          id: generateTodoId(),
+          title,
+          priority: priority || undefined,
+          dueDate: dueDate || undefined,
+          completed: false
+        };
+        todos.push(newTodo);
+      } else {
+        todos[index].title = title;
+        todos[index].priority = priority || undefined;
+        todos[index].dueDate = dueDate || undefined;
+      }
+
+      saveTodos();
+      renderTodosPreferenceList();
+      renderNextTodos();
+    }
+  });
+}
+
 // Initialize todo module
 async function initTodo() {
   loadTodos();
@@ -366,19 +468,7 @@ async function initTodo() {
   // Add todo button in preferences
   const addBtn = document.getElementById('addTodoBtn');
   if (addBtn) {
-    addBtn.addEventListener('click', () => showTodoForm());
-  }
-
-  // Save button in form
-  const saveBtn = document.getElementById('saveTodoBtn');
-  if (saveBtn) {
-    saveBtn.addEventListener('click', saveTodoFromForm);
-  }
-
-  // Cancel button in form
-  const cancelBtn = document.getElementById('cancelTodoBtn');
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', hideTodoForm);
+    addBtn.addEventListener('click', () => showTodoEditDialog(-1));
   }
 }
 
@@ -386,3 +476,4 @@ async function initTodo() {
 window.initTodo = initTodo;
 window.renderNextTodos = renderNextTodos;
 window.renderTodosPreferenceList = renderTodosPreferenceList;
+window.showTodoEditDialog = showTodoEditDialog;
