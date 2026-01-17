@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -100,7 +101,7 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 func fetchUserRepos(ctx context.Context, username string) GitHubUserRepos {
 	var userRepos GitHubUserRepos
 
-	u := "https://api.github.com/users/" + username + "/repos?sort=updated&per_page=5"
+	u := "https://api.github.com/users/" + username + "/repos?sort=created&direction=desc&per_page=100"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -156,7 +157,7 @@ func fetchUserRepos(ctx context.Context, username string) GitHubUserRepos {
 func fetchOrgRepos(ctx context.Context, orgName string) GitHubOrgRepos {
 	var orgRepos GitHubOrgRepos
 
-	u := "https://api.github.com/orgs/" + orgName + "/repos?sort=updated&per_page=5"
+	u := "https://api.github.com/orgs/" + orgName + "/repos?sort=created&direction=desc&per_page=100"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -210,19 +211,27 @@ func fetchOrgRepos(ctx context.Context, orgName string) GitHubOrgRepos {
 }
 
 // FetchGitHubReposForName fetches repos for a specific user or org.
-func FetchGitHubReposForName(ctx context.Context, name, repoType, token string) (GitHubReposResponse, error) {
+func FetchGitHubReposForName(ctx context.Context, name, repoType, token, sort, order string) (GitHubReposResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubReposResponse
 	resp.AccountURL = "https://github.com/" + name
 
+	// Default sort/order if not provided
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
+
 	var reposURL, profileURL string
 	if repoType == "org" {
-		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=updated&per_page=5"
+		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=" + sort + "&direction=" + order + "&per_page=100"
 		profileURL = "https://api.github.com/orgs/" + name
 	} else {
-		reposURL = "https://api.github.com/users/" + name + "/repos?sort=updated&per_page=5"
+		reposURL = "https://api.github.com/users/" + name + "/repos?sort=" + sort + "&direction=" + order + "&per_page=100"
 		profileURL = "https://api.github.com/users/" + name
 	}
 
@@ -301,15 +310,23 @@ func FetchGitHubReposForName(ctx context.Context, name, repoType, token string) 
 }
 
 // FetchGitHubPRs fetches pull requests for a user/org/repo.
-func FetchGitHubPRs(ctx context.Context, name, accountType, token string) (GitHubPRsResponse, error) {
+func FetchGitHubPRs(ctx context.Context, name, accountType, token, sort, order string) (GitHubPRsResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubPRsResponse
 
+	// Default sort/order if not provided
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
+
 	if accountType == "repo" {
 		// For a specific repo, get PRs directly from the repo endpoint
-		u := "https://api.github.com/repos/" + name + "/pulls?state=open&sort=updated&per_page=20"
+		u := "https://api.github.com/repos/" + name + "/pulls?state=open&sort=" + sort + "&direction=" + order + "&per_page=100"
 		req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 		req.Header.Set("User-Agent", "lan-index/1.0")
 		req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -379,7 +396,7 @@ func FetchGitHubPRs(ctx context.Context, name, accountType, token string) (GitHu
 		searchQuery = "author:" + name + "+is:pr+is:open"
 	}
 
-	u := "https://api.github.com/search/issues?q=" + searchQuery + "&sort=updated&per_page=30"
+	u := "https://api.github.com/search/issues?q=" + searchQuery + "&sort=" + sort + "&order=" + order + "&per_page=100"
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -448,19 +465,27 @@ func FetchGitHubPRs(ctx context.Context, name, accountType, token string) (GitHu
 }
 
 // FetchGitHubCommits fetches commits for a user/org.
-func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (GitHubCommitsResponse, error) {
+func FetchGitHubCommits(ctx context.Context, name, accountType, token, sort, order string) (GitHubCommitsResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubCommitsResponse
 
+	// Default sort/order if not provided
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
+
 	// For commits, we need to get repos first, then get commits from each repo
 	var reposURL string
 	if accountType == "org" {
-		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=updated&per_page=10"
+		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=" + sort + "&direction=" + order + "&per_page=100"
 	} else if accountType == "repo" {
 		// For a specific repo, get commits directly
-		u := "https://api.github.com/repos/" + name + "/commits?per_page=30"
+		u := "https://api.github.com/repos/" + name + "/commits?per_page=100"
 		req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 		req.Header.Set("User-Agent", "lan-index/1.0")
 		req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -522,7 +547,7 @@ func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (G
 		resp.Total = len(resp.Items)
 		return resp, nil
 	} else {
-		reposURL = "https://api.github.com/users/" + name + "/repos?sort=updated&per_page=10"
+		reposURL = "https://api.github.com/users/" + name + "/repos?sort=" + sort + "&direction=" + order + "&per_page=100"
 	}
 
 	// Get repos first
@@ -565,7 +590,11 @@ func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (G
 	}
 	for i := 0; i < maxRepos && len(resp.Items) < 30; i++ {
 		repoName := repos[i].FullName
-		u := "https://api.github.com/repos/" + repoName + "/commits?per_page=10&author=" + name
+		// For users, filter by author; for orgs, get all commits from the repo
+		u := "https://api.github.com/repos/" + repoName + "/commits?per_page=100"
+		if accountType != "org" {
+			u += "&author=" + name
+		}
 		req2, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 		req2.Header.Set("User-Agent", "lan-index/1.0")
 		req2.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -619,23 +648,54 @@ func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (G
 }
 
 // FetchGitHubIssues fetches issues for a user/org.
-func FetchGitHubIssues(ctx context.Context, name, accountType, token string) (GitHubIssuesResponse, error) {
+func FetchGitHubIssues(ctx context.Context, name, accountType, token, sort, order string) (GitHubIssuesResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubIssuesResponse
 
-	// Build search query based on account type
-	var searchQuery string
-	if accountType == "org" {
-		searchQuery = "org:" + name + "+is:issue+is:open"
-	} else if accountType == "repo" {
-		searchQuery = "repo:" + name + "+is:issue+is:open"
-	} else {
-		searchQuery = "author:" + name + "+is:issue+is:open"
+	// Default sort/order if not provided
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
 	}
 
-	u := "https://api.github.com/search/issues?q=" + searchQuery + "&sort=updated&per_page=30"
+	// First, determine the actual account type by checking the GitHub API
+	var actualAccountType = accountType
+	if accountType != "repo" {
+		// Try org first
+		orgURL := "https://api.github.com/orgs/" + name
+		if orgResp, err := makeGitHubRequest(ctx, orgURL, token); err == nil {
+			defer orgResp.Body.Close()
+			if orgResp.StatusCode == 200 {
+				actualAccountType = "org"
+			} else {
+				// Try user
+				userURL := "https://api.github.com/users/" + name
+				if userResp, err := makeGitHubRequest(ctx, userURL, token); err == nil {
+					defer userResp.Body.Close()
+					if userResp.StatusCode == 200 {
+						actualAccountType = "user"
+					}
+				}
+			}
+		}
+	}
+
+	// Build search query based on account type
+	var searchQuery string
+	if actualAccountType == "org" {
+		searchQuery = "org:" + name + "+type:issue+state:open"
+	} else if actualAccountType == "repo" {
+		searchQuery = "repo:" + name + "+type:issue+state:open"
+	} else {
+		searchQuery = "author:" + name + "+type:issue+state:open"
+	}
+
+	u := "https://api.github.com/search/issues?q=" + searchQuery + "&sort=" + sort + "&order=" + order + "&per_page=100"
+	log.Printf("[github] Fetching issues from: %s", u)
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")

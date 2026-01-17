@@ -1,8 +1,40 @@
 // GitHub module
 
 const defaultGitHubModules = [
-  { id: 'github-1', accountType: 'user', displayType: 'repos', name: 'Earentir', url: 'https://github.com/Earentir', enabled: true },
-  { id: 'github-2', accountType: 'org', displayType: 'repos', name: 'network-plane', url: 'https://github.com/network-plane', enabled: true }
+  { id: 'github-1', accountType: 'user', displayType: 'repos', name: 'Earentir', url: 'https://github.com/Earentir', enabled: true, sort: 'created', order: 'desc' },
+  { id: 'github-2', accountType: 'org', displayType: 'repos', name: 'network-plane', url: 'https://github.com/network-plane', enabled: true, sort: 'created', order: 'desc' }
+];
+
+// Sort options based on display type
+const githubSortOptions = {
+  repos: [
+    { value: 'created', label: 'Created Date' },
+    { value: 'updated', label: 'Updated Date' },
+    { value: 'pushed', label: 'Last Push' },
+    { value: 'full_name', label: 'Name' }
+  ],
+  prs: [
+    { value: 'created', label: 'Created Date' },
+    { value: 'updated', label: 'Updated Date' },
+    { value: 'popularity', label: 'Popularity' },
+    { value: 'long-running', label: 'Long Running' }
+  ],
+  commits: [
+    { value: 'date', label: 'Commit Date' }
+  ],
+  issues: [
+    { value: 'created', label: 'Created Date' },
+    { value: 'updated', label: 'Updated Date' },
+    { value: 'comments', label: 'Comments' }
+  ],
+  stats: [
+    { value: 'created', label: 'Created Date' }
+  ]
+};
+
+const githubOrderOptions = [
+  { value: 'desc', label: 'Descending' },
+  { value: 'asc', label: 'Ascending' }
 ];
 
 const githubDisplayTypes = {
@@ -359,7 +391,9 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
     // Fetch from API (timer expired or forced refresh or no cache)
     const githubToken = window.loadFromStorage('githubToken') || '';
     const maxItems = mod.maxItems || 5;
-    let url = "/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType + "&count=" + maxItems;
+    const sort = mod.sort || 'created';
+    const order = mod.order || 'desc';
+    let url = "/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType + "&count=" + maxItems + "&sort=" + sort + "&order=" + order;
     if (githubToken) url += "&token=" + encodeURIComponent(githubToken);
     const res = await fetch(url, {cache:"no-store"});
     const data = await res.json();
@@ -559,7 +593,22 @@ function showGitHubEditDialog(index) {
         { value: 'issues', label: 'Issues' },
         { value: 'stats', label: 'Stats' }
       ],
-      required: false
+      required: false,
+      onChange: (dialog, field, element) => {
+        // Update sort options based on display type
+        const sortSelect = dialog.querySelector('#module-edit-sort');
+        if (sortSelect) {
+          const displayType = element.value;
+          const sortOptions = githubSortOptions[displayType] || githubSortOptions.repos;
+          sortSelect.innerHTML = sortOptions.map(opt =>
+            `<option value="${opt.value}">${opt.label}</option>`
+          ).join('');
+          // Default to 'created' if available
+          if (sortOptions.some(opt => opt.value === 'created')) {
+            sortSelect.value = 'created';
+          }
+        }
+      }
     },
     {
       id: 'maxItems',
@@ -567,7 +616,21 @@ function showGitHubEditDialog(index) {
       type: 'number',
       min: 1,
       max: 20,
-      style: 'width:60px;',
+      required: false
+    },
+    {
+      id: 'sort',
+      label: 'Sort By',
+      type: 'select',
+      options: githubSortOptions[mod.displayType || 'repos'] || githubSortOptions.repos,
+      required: false,
+      dynamicOptions: true
+    },
+    {
+      id: 'order',
+      label: 'Order',
+      type: 'select',
+      options: githubOrderOptions,
       required: false
     }
   ];
@@ -580,7 +643,9 @@ function showGitHubEditDialog(index) {
       url: mod.url || '',
       accountType: mod.accountType || mod.type || 'user',
       displayType: mod.displayType || 'repos',
-      maxItems: mod.maxItems || 5
+      maxItems: mod.maxItems || 5,
+      sort: mod.sort || 'created',
+      order: mod.order || 'desc'
     },
     onSave: async (formData) => {
       const url = formData.url.trim();
@@ -608,7 +673,9 @@ function showGitHubEditDialog(index) {
           name: name,
           url: url.startsWith('https://') ? url : 'https://github.com/' + name,
           enabled: true,
-          maxItems: maxItems
+          maxItems: maxItems,
+          sort: formData.sort || 'created',
+          order: formData.order || 'desc'
         });
       } else {
         githubModules[index].url = url.startsWith('https://') ? url : 'https://github.com/' + name;
@@ -616,6 +683,8 @@ function showGitHubEditDialog(index) {
         githubModules[index].displayType = formData.displayType;
         githubModules[index].name = name;
         githubModules[index].maxItems = maxItems;
+        githubModules[index].sort = formData.sort || 'created';
+        githubModules[index].order = formData.order || 'desc';
       }
 
       saveGitHubModules();
