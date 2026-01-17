@@ -344,6 +344,8 @@ func (h *Handler) HandleGitHubRepos(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	repoType := r.URL.Query().Get("type")
 	token := r.URL.Query().Get("token")
+	sort := r.URL.Query().Get("sort")
+	order := r.URL.Query().Get("order")
 
 	if name == "" {
 		WriteJSON(w, map[string]string{"error": "Missing 'name' parameter"})
@@ -352,8 +354,14 @@ func (h *Handler) HandleGitHubRepos(w http.ResponseWriter, r *http.Request) {
 	if repoType == "" {
 		repoType = "user"
 	}
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
 
-	repos, err := FetchGitHubReposForName(ctx, name, repoType, token)
+	repos, err := FetchGitHubReposForName(ctx, name, repoType, token, sort, order)
 	if err != nil {
 		WriteJSON(w, map[string]any{"error": err.Error(), "repos": []any{}, "total": 0})
 		return
@@ -367,13 +375,21 @@ func (h *Handler) HandleGitHubPRs(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	accountType := r.URL.Query().Get("type")
 	token := r.URL.Query().Get("token")
+	sort := r.URL.Query().Get("sort")
+	order := r.URL.Query().Get("order")
 
 	if name == "" {
 		WriteJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 		return
 	}
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
 
-	prs, err := FetchGitHubPRs(ctx, name, accountType, token)
+	prs, err := FetchGitHubPRs(ctx, name, accountType, token, sort, order)
 	if err != nil {
 		WriteJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
 		return
@@ -387,13 +403,21 @@ func (h *Handler) HandleGitHubCommits(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	accountType := r.URL.Query().Get("type")
 	token := r.URL.Query().Get("token")
+	sort := r.URL.Query().Get("sort")
+	order := r.URL.Query().Get("order")
 
 	if name == "" {
 		WriteJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 		return
 	}
+	if sort == "" {
+		sort = "date"
+	}
+	if order == "" {
+		order = "desc"
+	}
 
-	commits, err := FetchGitHubCommits(ctx, name, accountType, token)
+	commits, err := FetchGitHubCommits(ctx, name, accountType, token, sort, order)
 	if err != nil {
 		WriteJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
 		return
@@ -407,13 +431,21 @@ func (h *Handler) HandleGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	accountType := r.URL.Query().Get("type")
 	token := r.URL.Query().Get("token")
+	sort := r.URL.Query().Get("sort")
+	order := r.URL.Query().Get("order")
 
 	if name == "" {
 		WriteJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 		return
 	}
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
 
-	issues, err := FetchGitHubIssues(ctx, name, accountType, token)
+	issues, err := FetchGitHubIssues(ctx, name, accountType, token, sort, order)
 	if err != nil {
 		WriteJSON(w, map[string]any{"error": err.Error(), "items": []any{}, "total": 0})
 		return
@@ -421,22 +453,32 @@ func (h *Handler) HandleGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, issues)
 }
 
-// HandleGitHubStats returns stats for a repo.
+// HandleGitHubStats returns stats for a repo, user, or organization.
 func (h *Handler) HandleGitHubStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := r.URL.Query().Get("name")
+	accountType := r.URL.Query().Get("type")
 	token := r.URL.Query().Get("token")
 
+	GetDebugLogger().Logf("api", "HandleGitHubStats called - name:%s, type:%s", name, accountType)
+
 	if name == "" {
+		GetDebugLogger().Logf("api", "HandleGitHubStats: Missing name parameter")
 		WriteJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 		return
 	}
 
-	stats, err := FetchGitHubStats(ctx, name, token)
+	if accountType == "" {
+		accountType = "user" // Default to user
+	}
+
+	stats, err := FetchGitHubStats(ctx, name, accountType, token)
 	if err != nil {
+		GetDebugLogger().Logf("api", "HandleGitHubStats error: %v", err)
 		WriteJSON(w, map[string]any{"error": err.Error()})
 		return
 	}
+	GetDebugLogger().Logf("api", "HandleGitHubStats returning stats for %s", name)
 	WriteJSON(w, stats)
 }
 

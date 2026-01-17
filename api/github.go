@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -15,6 +17,23 @@ var githubCache = &GitHubCache{}
 // githubHTTPClient is an HTTP client with proper timeouts for GitHub API requests
 var githubHTTPClient = &http.Client{
 	Timeout: 15 * time.Second,
+}
+
+// makeGitHubRequest creates and executes a GitHub API request with proper headers
+func makeGitHubRequest(ctx context.Context, url, token string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "lan-index/1.0")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	} else {
+		// Making unauthenticated request
+	}
+	resp, err := githubHTTPClient.Do(req)
+	return resp, err
 }
 
 // FetchGitHubRepos fetches repos from hardcoded user and org.
@@ -32,12 +51,10 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 	}
 
 	if hasCachedData && timeSinceLastFetch < minWaitTime {
-		GetDebugLogger().Logf("github", "returning cached data (last fetch: %v ago)", timeSinceLastFetch)
 		return cachedUserRepos, cachedOrgRepos, nil
 	}
 
 	if timeSinceLastFetch < 5*time.Minute {
-		GetDebugLogger().Logf("github", "too soon since last call (%v), returning cached data", timeSinceLastFetch)
 		if hasCachedData {
 			return cachedUserRepos, cachedOrgRepos, nil
 		}
@@ -59,7 +76,6 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 	orgRepos = fetchOrgRepos(cctx, "network-plane")
 
 	if (userRepos.Error != "" || orgRepos.Error != "") && hasCachedData {
-		GetDebugLogger().Logf("github", "API call failed but returning cached data")
 		return cachedUserRepos, cachedOrgRepos, nil
 	}
 
@@ -77,8 +93,6 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 		githubCache.lastFetch = time.Now()
 		githubCache.hasData = true
 		githubCache.mu.Unlock()
-
-		GetDebugLogger().Logf("github", "cached %d user repos and %d org repos", len(userRepos.Repos), len(orgRepos.Repos))
 	}
 
 	return userRepos, orgRepos, nil
@@ -87,13 +101,12 @@ func FetchGitHubRepos(ctx context.Context) (GitHubUserRepos, GitHubOrgRepos, err
 func fetchUserRepos(ctx context.Context, username string) GitHubUserRepos {
 	var userRepos GitHubUserRepos
 
-	u := "https://api.github.com/users/" + username + "/repos?sort=updated&per_page=5"
+	u := "https://api.github.com/users/" + username + "/repos?sort=created&direction=desc&per_page=100"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	res, err := githubHTTPClient.Do(req)
 	if err != nil {
-		GetDebugLogger().Logf("github", "API error (user repos): %v", err)
 		userRepos.Error = "Failed to fetch user repos: " + err.Error()
 		return userRepos
 	}
@@ -144,7 +157,7 @@ func fetchUserRepos(ctx context.Context, username string) GitHubUserRepos {
 func fetchOrgRepos(ctx context.Context, orgName string) GitHubOrgRepos {
 	var orgRepos GitHubOrgRepos
 
-	u := "https://api.github.com/orgs/" + orgName + "/repos?sort=updated&per_page=5"
+	u := "https://api.github.com/orgs/" + orgName + "/repos?sort=created&direction=desc&per_page=100"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -198,19 +211,27 @@ func fetchOrgRepos(ctx context.Context, orgName string) GitHubOrgRepos {
 }
 
 // FetchGitHubReposForName fetches repos for a specific user or org.
-func FetchGitHubReposForName(ctx context.Context, name, repoType, token string) (GitHubReposResponse, error) {
+func FetchGitHubReposForName(ctx context.Context, name, repoType, token, sort, order string) (GitHubReposResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubReposResponse
 	resp.AccountURL = "https://github.com/" + name
 
+	// Default sort/order if not provided
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
+
 	var reposURL, profileURL string
 	if repoType == "org" {
-		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=updated&per_page=5"
+		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=" + sort + "&direction=" + order + "&per_page=100"
 		profileURL = "https://api.github.com/orgs/" + name
 	} else {
-		reposURL = "https://api.github.com/users/" + name + "/repos?sort=updated&per_page=5"
+		reposURL = "https://api.github.com/users/" + name + "/repos?sort=" + sort + "&direction=" + order + "&per_page=100"
 		profileURL = "https://api.github.com/users/" + name
 	}
 
@@ -288,24 +309,94 @@ func FetchGitHubReposForName(ctx context.Context, name, repoType, token string) 
 	return resp, nil
 }
 
-// FetchGitHubPRs fetches pull requests for a user/org.
-func FetchGitHubPRs(ctx context.Context, name, accountType, token string) (GitHubPRsResponse, error) {
+// FetchGitHubPRs fetches pull requests for a user/org/repo.
+func FetchGitHubPRs(ctx context.Context, name, accountType, token, sort, order string) (GitHubPRsResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubPRsResponse
 
-	// Build search query based on account type
+	// Default sort/order if not provided
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
+
+	if accountType == "repo" {
+		// For a specific repo, get PRs directly from the repo endpoint
+		u := "https://api.github.com/repos/" + name + "/pulls?state=open&sort=" + sort + "&direction=" + order + "&per_page=100"
+		req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
+		req.Header.Set("User-Agent", "lan-index/1.0")
+		req.Header.Set("Accept", "application/vnd.github.v3+json")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		res, err := githubHTTPClient.Do(req)
+		if err != nil {
+			resp.Error = "Failed to fetch PRs: " + err.Error()
+			return resp, nil
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode == 403 {
+			rateLimitReset := res.Header.Get("X-RateLimit-Reset")
+			resp.RateLimitError = "Rate Limited"
+			resp.RateLimitReset = formatRateLimitResetForUI(rateLimitReset)
+			return resp, nil
+		}
+		if res.StatusCode == 404 {
+			resp.Error = "Repository not found: " + name
+			return resp, nil
+		}
+		if res.StatusCode < 200 || res.StatusCode > 299 {
+			resp.Error = "HTTP error: " + res.Status
+			return resp, nil
+		}
+
+		var prs []struct {
+			Title     string `json:"title"`
+			HTMLURL   string `json:"html_url"`
+			State     string `json:"state"`
+			User      struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			CreatedAt time.Time `json:"created_at"`
+			UpdatedAt time.Time `json:"updated_at"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&prs); err != nil {
+			resp.Error = "Failed to decode PRs: " + err.Error()
+			return resp, nil
+		}
+
+		for _, pr := range prs {
+			resp.Items = append(resp.Items, GitHubPRItem{
+				Title:     pr.Title,
+				URL:       pr.HTMLURL,
+				Repo:      name,
+				State:     pr.State,
+				User:      pr.User.Login,
+				Author:    pr.User.Login,
+				Created:   pr.CreatedAt.Format("2006-01-02"),
+				CreatedAt: pr.CreatedAt.Format("2006-01-02"),
+				UpdatedAt: pr.UpdatedAt.Format("2006-01-02"),
+			})
+		}
+		resp.Total = len(prs)
+		return resp, nil
+	}
+
+	// For users and orgs, use the search API (more comprehensive but has limitations)
 	var searchQuery string
 	if accountType == "org" {
 		searchQuery = "org:" + name + "+is:pr+is:open"
-	} else if accountType == "repo" {
-		searchQuery = "repo:" + name + "+is:pr+is:open"
 	} else {
+		// Default to user
 		searchQuery = "author:" + name + "+is:pr+is:open"
 	}
 
-	u := "https://api.github.com/search/issues?q=" + url.QueryEscape(searchQuery) + "&sort=updated&per_page=30"
+	u := "https://api.github.com/search/issues?q=" + searchQuery + "&sort=" + sort + "&order=" + order + "&per_page=100"
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -374,19 +465,27 @@ func FetchGitHubPRs(ctx context.Context, name, accountType, token string) (GitHu
 }
 
 // FetchGitHubCommits fetches commits for a user/org.
-func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (GitHubCommitsResponse, error) {
+func FetchGitHubCommits(ctx context.Context, name, accountType, token, sort, order string) (GitHubCommitsResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubCommitsResponse
 
+	// Default sort/order if not provided
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
+	}
+
 	// For commits, we need to get repos first, then get commits from each repo
 	var reposURL string
 	if accountType == "org" {
-		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=updated&per_page=10"
+		reposURL = "https://api.github.com/orgs/" + name + "/repos?sort=" + sort + "&direction=" + order + "&per_page=100"
 	} else if accountType == "repo" {
 		// For a specific repo, get commits directly
-		u := "https://api.github.com/repos/" + name + "/commits?per_page=30"
+		u := "https://api.github.com/repos/" + name + "/commits?per_page=100"
 		req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 		req.Header.Set("User-Agent", "lan-index/1.0")
 		req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -448,7 +547,7 @@ func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (G
 		resp.Total = len(resp.Items)
 		return resp, nil
 	} else {
-		reposURL = "https://api.github.com/users/" + name + "/repos?sort=updated&per_page=10"
+		reposURL = "https://api.github.com/users/" + name + "/repos?sort=" + sort + "&direction=" + order + "&per_page=100"
 	}
 
 	// Get repos first
@@ -491,7 +590,11 @@ func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (G
 	}
 	for i := 0; i < maxRepos && len(resp.Items) < 30; i++ {
 		repoName := repos[i].FullName
-		u := "https://api.github.com/repos/" + repoName + "/commits?per_page=10&author=" + name
+		// For users, filter by author; for orgs, get all commits from the repo
+		u := "https://api.github.com/repos/" + repoName + "/commits?per_page=100"
+		if accountType != "org" {
+			u += "&author=" + name
+		}
 		req2, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 		req2.Header.Set("User-Agent", "lan-index/1.0")
 		req2.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -545,23 +648,54 @@ func FetchGitHubCommits(ctx context.Context, name, accountType, token string) (G
 }
 
 // FetchGitHubIssues fetches issues for a user/org.
-func FetchGitHubIssues(ctx context.Context, name, accountType, token string) (GitHubIssuesResponse, error) {
+func FetchGitHubIssues(ctx context.Context, name, accountType, token, sort, order string) (GitHubIssuesResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubIssuesResponse
 
-	// Build search query based on account type
-	var searchQuery string
-	if accountType == "org" {
-		searchQuery = "org:" + name + "+is:issue+is:open"
-	} else if accountType == "repo" {
-		searchQuery = "repo:" + name + "+is:issue+is:open"
-	} else {
-		searchQuery = "author:" + name + "+is:issue+is:open"
+	// Default sort/order if not provided
+	if sort == "" {
+		sort = "created"
+	}
+	if order == "" {
+		order = "desc"
 	}
 
-	u := "https://api.github.com/search/issues?q=" + url.QueryEscape(searchQuery) + "&sort=updated&per_page=30"
+	// First, determine the actual account type by checking the GitHub API
+	var actualAccountType = accountType
+	if accountType != "repo" {
+		// Try org first
+		orgURL := "https://api.github.com/orgs/" + name
+		if orgResp, err := makeGitHubRequest(ctx, orgURL, token); err == nil {
+			defer orgResp.Body.Close()
+			if orgResp.StatusCode == 200 {
+				actualAccountType = "org"
+			} else {
+				// Try user
+				userURL := "https://api.github.com/users/" + name
+				if userResp, err := makeGitHubRequest(ctx, userURL, token); err == nil {
+					defer userResp.Body.Close()
+					if userResp.StatusCode == 200 {
+						actualAccountType = "user"
+					}
+				}
+			}
+		}
+	}
+
+	// Build search query based on account type
+	var searchQuery string
+	if actualAccountType == "org" {
+		searchQuery = "org:" + name + "+type:issue+state:open"
+	} else if actualAccountType == "repo" {
+		searchQuery = "repo:" + name + "+type:issue+state:open"
+	} else {
+		searchQuery = "author:" + name + "+type:issue+state:open"
+	}
+
+	u := "https://api.github.com/search/issues?q=" + searchQuery + "&sort=" + sort + "&order=" + order + "&per_page=100"
+	log.Printf("[github] Fetching issues from: %s", u)
 	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -637,15 +771,48 @@ func FetchGitHubIssues(ctx context.Context, name, accountType, token string) (Gi
 	return resp, nil
 }
 
-// FetchGitHubStats fetches stats for a repo.
-func FetchGitHubStats(ctx context.Context, name, token string) (GitHubStatsResponse, error) {
+// FetchGitHubStats fetches stats for a repo, user, or organization.
+func FetchGitHubStats(ctx context.Context, name, accountType, token string) (GitHubStatsResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubStatsResponse
 
-	u := "https://api.github.com/repos/" + name
-	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, u, nil)
+	// First, determine the actual account type by checking the GitHub API
+	var actualAccountType = accountType
+	if accountType != "repo" {
+		// Try org first
+		orgURL := "https://api.github.com/orgs/" + name
+		if orgResp, err := makeGitHubRequest(ctx, orgURL, token); err == nil {
+			defer orgResp.Body.Close()
+			if orgResp.StatusCode == 200 {
+				actualAccountType = "org"
+			} else {
+				// Try user
+				userURL := "https://api.github.com/users/" + name
+				if userResp, err := makeGitHubRequest(ctx, userURL, token); err == nil {
+					defer userResp.Body.Close()
+					if userResp.StatusCode == 200 {
+						actualAccountType = "user"
+					}
+				}
+			}
+		}
+	}
+
+	var apiURL string
+	if accountType == "repo" {
+		// For repos: GET /repos/{owner}/{repo}
+		apiURL = "https://api.github.com/repos/" + name
+	} else if actualAccountType == "org" {
+		// For orgs: GET /orgs/{org}
+		apiURL = "https://api.github.com/orgs/" + name
+	} else {
+		// For users (default): GET /users/{username}
+		apiURL = "https://api.github.com/users/" + name
+	}
+
+	req, _ := http.NewRequestWithContext(cctx, http.MethodGet, apiURL, nil)
 	req.Header.Set("User-Agent", "lan-index/1.0")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	if token != "" {
@@ -665,7 +832,13 @@ func FetchGitHubStats(ctx context.Context, name, token string) (GitHubStatsRespo
 		return resp, nil
 	}
 	if res.StatusCode == 404 {
-		resp.Error = "Repository not found: " + name
+		if accountType == "repo" {
+			resp.Error = "Repository not found: " + name
+		} else if accountType == "org" {
+			resp.Error = "Organization not found: " + name
+		} else {
+			resp.Error = "User not found: " + name
+		}
 		return resp, nil
 	}
 	if res.StatusCode < 200 || res.StatusCode > 299 {
@@ -673,27 +846,456 @@ func FetchGitHubStats(ctx context.Context, name, token string) (GitHubStatsRespo
 		return resp, nil
 	}
 
-	var repo struct {
-		StargazersCount int    `json:"stargazers_count"`
-		ForksCount      int    `json:"forks_count"`
-		WatchersCount   int    `json:"watchers_count"`
-		OpenIssuesCount int    `json:"open_issues_count"`
-		Language        string `json:"language"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&repo); err != nil {
-		resp.Error = "Failed to decode stats: " + err.Error()
-		return resp, nil
-	}
+	if accountType == "repo" {
+		// Parse repository stats
+		var repo struct {
+			StargazersCount int       `json:"stargazers_count"`
+			ForksCount      int       `json:"forks_count"`
+			WatchersCount   int       `json:"watchers_count"`
+			OpenIssuesCount int       `json:"open_issues_count"`
+			Language        string    `json:"language"`
+			Size            int       `json:"size"`
+			CreatedAt       time.Time `json:"created_at"`
+			UpdatedAt       time.Time `json:"updated_at"`
+			PushedAt        time.Time `json:"pushed_at"`
+			License         struct {
+				Name string `json:"name"`
+			} `json:"license"`
+			Fork       bool     `json:"fork"`
+			Archived   bool     `json:"archived"`
+			Topics     []string `json:"topics"`
+			FullName   string   `json:"full_name"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&repo); err != nil {
+			resp.Error = "Failed to decode repo stats: " + err.Error()
+			return resp, nil
+		}
 
-	resp.Stats = &GitHubStats{
-		Stars:      repo.StargazersCount,
-		Forks:      repo.ForksCount,
-		Watchers:   repo.WatchersCount,
-		OpenIssues: repo.OpenIssuesCount,
-		Language:   repo.Language,
+		// Get PR and issue counts for this repo
+		var openPRs, totalPRs, totalIssues int
+
+		// Get open PRs
+		openPrURL := "https://api.github.com/repos/" + repo.FullName + "/pulls?state=open&per_page=100"
+		openPrReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, openPrURL, nil)
+		openPrReq.Header.Set("User-Agent", "lan-index/1.0")
+		openPrReq.Header.Set("Accept", "application/vnd.github.v3+json")
+		if token != "" {
+			openPrReq.Header.Set("Authorization", "Bearer "+token)
+		}
+		if openPrRes, openPrErr := githubHTTPClient.Do(openPrReq); openPrErr == nil {
+			defer openPrRes.Body.Close()
+			if openPrRes.StatusCode == 200 {
+				// Use Link header to get total count
+				if linkHeader := openPrRes.Header.Get("Link"); linkHeader != "" {
+					if lastPage := parseLastPageFromLink(linkHeader); lastPage > 0 {
+						openPRs = (lastPage - 1) * 100 // Approximate count
+						// Also count actual items returned
+						var prs []struct{}
+						if json.NewDecoder(openPrRes.Body).Decode(&prs) == nil {
+							openPRs += len(prs)
+						}
+					} else {
+						// No pagination, count the items directly
+						var prs []struct{}
+						if json.NewDecoder(openPrRes.Body).Decode(&prs) == nil {
+							openPRs = len(prs)
+						}
+					}
+				} else {
+					// No Link header, count items directly (should be <= 100)
+					var prs []struct{}
+					if json.NewDecoder(openPrRes.Body).Decode(&prs) == nil {
+						openPRs = len(prs)
+					}
+				}
+			}
+		}
+
+		// Get total PRs (all states)
+		totalPrURL := "https://api.github.com/repos/" + repo.FullName + "/pulls?state=all&per_page=100"
+		totalPrReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, totalPrURL, nil)
+		totalPrReq.Header.Set("User-Agent", "lan-index/1.0")
+		totalPrReq.Header.Set("Accept", "application/vnd.github.v3+json")
+		if token != "" {
+			totalPrReq.Header.Set("Authorization", "Bearer "+token)
+		}
+		if totalPrRes, totalPrErr := githubHTTPClient.Do(totalPrReq); totalPrErr == nil {
+			defer totalPrRes.Body.Close()
+			if totalPrRes.StatusCode == 200 {
+				// Use Link header to get total count
+				if linkHeader := totalPrRes.Header.Get("Link"); linkHeader != "" {
+					if lastPage := parseLastPageFromLink(linkHeader); lastPage > 0 {
+						totalPRs = (lastPage - 1) * 100 // Approximate count
+						// Also count actual items returned
+						var prs []struct{}
+						if json.NewDecoder(totalPrRes.Body).Decode(&prs) == nil {
+							totalPRs += len(prs)
+						}
+					} else {
+						// No pagination, count the items directly
+						var prs []struct{}
+						if json.NewDecoder(totalPrRes.Body).Decode(&prs) == nil {
+							totalPRs = len(prs)
+						}
+					}
+				} else {
+					// No Link header, count items directly (should be <= 100)
+					var prs []struct{}
+					if json.NewDecoder(totalPrRes.Body).Decode(&prs) == nil {
+						totalPRs = len(prs)
+					}
+				}
+			}
+		}
+
+		// Get repository languages
+		var languages []string
+		languagesURL := "https://api.github.com/repos/" + repo.FullName + "/languages"
+		languagesReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, languagesURL, nil)
+		languagesReq.Header.Set("User-Agent", "lan-index/1.0")
+		languagesReq.Header.Set("Accept", "application/vnd.github.v3+json")
+		if token != "" {
+			languagesReq.Header.Set("Authorization", "Bearer "+token)
+		}
+		if languagesRes, languagesErr := githubHTTPClient.Do(languagesReq); languagesErr == nil {
+			defer languagesRes.Body.Close()
+			if languagesRes.StatusCode == 200 {
+				var langMap map[string]int
+				if json.NewDecoder(languagesRes.Body).Decode(&langMap) == nil {
+					// Sort languages by byte count (descending) and take top languages
+					type langPair struct {
+						name  string
+						bytes int
+					}
+					var langPairs []langPair
+					for name, bytes := range langMap {
+						langPairs = append(langPairs, langPair{name, bytes})
+					}
+					// Sort by bytes descending
+					for i := 0; i < len(langPairs)-1; i++ {
+						for j := i + 1; j < len(langPairs); j++ {
+							if langPairs[i].bytes < langPairs[j].bytes {
+								langPairs[i], langPairs[j] = langPairs[j], langPairs[i]
+							}
+						}
+					}
+					// Take top 5 languages
+					for i, pair := range langPairs {
+						if i >= 5 {
+							break
+						}
+						languages = append(languages, pair.name)
+					}
+				}
+			}
+		}
+
+		// Get total issues (all states)
+		totalIssuesURL := "https://api.github.com/repos/" + repo.FullName + "/issues?state=all&per_page=100"
+		totalIssuesReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, totalIssuesURL, nil)
+		totalIssuesReq.Header.Set("User-Agent", "lan-index/1.0")
+		totalIssuesReq.Header.Set("Accept", "application/vnd.github.v3+json")
+		if token != "" {
+			totalIssuesReq.Header.Set("Authorization", "Bearer "+token)
+		}
+		if totalIssuesRes, totalIssuesErr := githubHTTPClient.Do(totalIssuesReq); totalIssuesErr == nil {
+			defer totalIssuesRes.Body.Close()
+			if totalIssuesRes.StatusCode == 200 {
+				// Use Link header to get total count
+				if linkHeader := totalIssuesRes.Header.Get("Link"); linkHeader != "" {
+					if lastPage := parseLastPageFromLink(linkHeader); lastPage > 0 {
+						totalIssues = (lastPage - 1) * 100 // Approximate count
+						// Also count actual items returned
+						var issues []struct{}
+						if json.NewDecoder(totalIssuesRes.Body).Decode(&issues) == nil {
+							totalIssues += len(issues)
+						}
+					} else {
+						// No pagination, count the items directly
+						var issues []struct{}
+						if json.NewDecoder(totalIssuesRes.Body).Decode(&issues) == nil {
+							totalIssues = len(issues)
+						}
+					}
+				} else {
+					// No Link header, count items directly (should be <= 100)
+					var issues []struct{}
+					if json.NewDecoder(totalIssuesRes.Body).Decode(&issues) == nil {
+						totalIssues = len(issues)
+					}
+				}
+			}
+		}
+
+		resp.Stats = &GitHubStats{
+			Stars:         repo.StargazersCount,
+			Forks:         repo.ForksCount,
+			Watchers:      repo.WatchersCount,
+			OpenIssues:    repo.OpenIssuesCount,
+			TotalIssues:   totalIssues,
+			OpenPRs:       openPRs,
+			TotalPRs:      totalPRs,
+			Language:      repo.Language,
+			Languages:     languages,
+			Size:          repo.Size,
+			RepoCreatedAt: repo.CreatedAt.Format("2006-01-02"),
+			RepoUpdatedAt: repo.PushedAt.Format("2006-01-02"),
+			License:       repo.License.Name,
+			IsFork:        repo.Fork,
+			IsArchived:    repo.Archived,
+			Topics:        repo.Topics,
+		}
+	} else {
+		// Parse user/organization stats
+		var account struct {
+			PublicRepos   int       `json:"public_repos"`
+			PrivateRepos  int       `json:"total_private_repos,omitempty"`
+			Followers     int       `json:"followers"`
+			Following     int       `json:"following"`
+			Type          string    `json:"type"`
+			Company       string    `json:"company,omitempty"`
+			Location      string    `json:"location,omitempty"`
+			Bio           string    `json:"bio,omitempty"`
+			Blog          string    `json:"blog,omitempty"`
+			Email         string    `json:"email,omitempty"`
+			CreatedAt     time.Time `json:"created_at"`
+			UpdatedAt     time.Time `json:"updated_at"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&account); err != nil {
+			resp.Error = "Failed to decode account stats: " + err.Error()
+			return resp, nil
+		}
+
+
+		// Get additional stats: PRs and issues counts
+		var totalPRs, openPRs, totalIssues, openIssues, totalCommits, starredCount, gistsCount int
+
+		// TODO: Implement accurate PRs/issues counting for user/org accounts
+		// GitHub Search API has restrictions on author/org queries for PRs/issues
+		// For now, display 0/0 to show the UI elements
+		openPRs = 0
+		totalPRs = 0
+		openIssues = 0
+		totalIssues = 0
+
+		// Skip the failing API calls for now
+		_ = openPRs // avoid unused variable warning
+		// Build queries using the CORRECT GitHub Search API syntax
+		// Convert name to lowercase for GitHub search (case-insensitive but let's be safe)
+		lowerName := strings.ToLower(name)
+		var openPrQuery, mergedPrQuery, openIssueQuery, closedIssueQuery string
+		if actualAccountType == "org" {
+			openPrQuery = "type:pr+org:" + lowerName + "+state:open"
+			mergedPrQuery = "type:pr+org:" + lowerName + "+is:merged"
+			openIssueQuery = "type:issue+org:" + lowerName + "+state:open"
+			closedIssueQuery = "type:issue+org:" + lowerName + "+state:closed"
+		} else {
+			openPrQuery = "type:pr+author:" + lowerName + "+state:open"
+			mergedPrQuery = "type:pr+author:" + lowerName + "+is:merged"
+			openIssueQuery = "type:issue+author:" + lowerName + "+state:open"
+			closedIssueQuery = "type:issue+author:" + lowerName + "+state:closed"
+		}
+
+
+		// Fetch PRs/issues for both users and organizations
+		// Fetch open PRs
+		if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+openPrQuery+"&per_page=1", token); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					TotalCount int `json:"total_count"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					openPRs = result.TotalCount
+				}
+			}
+		}
+
+		// Fetch merged PRs
+		var mergedPRs int
+		if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+mergedPrQuery+"&per_page=1", token); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					TotalCount int `json:"total_count"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					mergedPRs = result.TotalCount
+				}
+			}
+		}
+
+		// Calculate total PRs as open + merged
+		totalPRs = openPRs + mergedPRs
+
+		// Fetch open issues
+		if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+openIssueQuery+"&per_page=1", token); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					TotalCount int `json:"total_count"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					openIssues = result.TotalCount
+				}
+			}
+		}
+
+		// Fetch closed issues and calculate total
+		if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+closedIssueQuery+"&per_page=1", token); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					TotalCount int `json:"total_count"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					totalIssues = openIssues + result.TotalCount
+				}
+			}
+		}
+
+		// Get commit count (approximate - last 30 days of activity)
+		if accountType == "user" {
+			// For users, get recent commit activity
+			eventsURL := "https://api.github.com/users/" + name + "/events?per_page=100"
+			eventsReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, eventsURL, nil)
+			eventsReq.Header.Set("User-Agent", "lan-index/1.0")
+			eventsReq.Header.Set("Accept", "application/vnd.github.v3+json")
+			if token != "" {
+				eventsReq.Header.Set("Authorization", "Bearer "+token)
+			}
+			if eventsRes, eventsErr := githubHTTPClient.Do(eventsReq); eventsErr == nil {
+				defer eventsRes.Body.Close()
+				if eventsRes.StatusCode == 200 {
+					var events []struct {
+						Type string `json:"type"`
+						Repo struct {
+							Name string `json:"name"`
+						} `json:"repo"`
+						Payload struct {
+							Commits []struct{} `json:"commits,omitempty"`
+						} `json:"payload"`
+					}
+					if json.NewDecoder(eventsRes.Body).Decode(&events) == nil {
+						// Count PushEvent commits from recent activity
+						for _, event := range events {
+							if event.Type == "PushEvent" {
+								totalCommits += len(event.Payload.Commits)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Get additional account stats
+
+		// Get starred repositories count
+		starredURL := ""
+		if accountType == "user" {
+			starredURL = "https://api.github.com/users/" + name + "/starred?per_page=1"
+		} else {
+			// For organizations, we can't easily get starred repos count
+			starredCount = 0
+		}
+
+		if starredURL != "" {
+			starredReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, starredURL, nil)
+			starredReq.Header.Set("User-Agent", "lan-index/1.0")
+			starredReq.Header.Set("Accept", "application/vnd.github.v3+json")
+			if token != "" {
+				starredReq.Header.Set("Authorization", "Bearer "+token)
+			}
+			if starredRes, starredErr := githubHTTPClient.Do(starredReq); starredErr == nil {
+				defer starredRes.Body.Close()
+				// Use Link header to get total count
+				if linkHeader := starredRes.Header.Get("Link"); linkHeader != "" {
+					// Parse Link header to extract last page number
+					if lastPage := parseLastPageFromLink(linkHeader); lastPage > 0 {
+						starredCount = (lastPage - 1) * 30 // Approximate, assuming 30 per page
+						if starredCount < 0 {
+							starredCount = 0
+						}
+					}
+				}
+			}
+		}
+
+		// Get gists count for users
+		if accountType == "user" {
+			gistsURL := "https://api.github.com/users/" + name + "/gists?per_page=1"
+			gistsReq, _ := http.NewRequestWithContext(cctx, http.MethodGet, gistsURL, nil)
+			gistsReq.Header.Set("User-Agent", "lan-index/1.0")
+			gistsReq.Header.Set("Accept", "application/vnd.github.v3+json")
+			if token != "" {
+				gistsReq.Header.Set("Authorization", "Bearer "+token)
+			}
+			if gistsRes, gistsErr := githubHTTPClient.Do(gistsReq); gistsErr == nil {
+				defer gistsRes.Body.Close()
+				// Use Link header to get total count
+				if linkHeader := gistsRes.Header.Get("Link"); linkHeader != "" {
+					if lastPage := parseLastPageFromLink(linkHeader); lastPage > 0 {
+						gistsCount = (lastPage - 1) * 30 // Approximate, assuming 30 per page
+						if gistsCount < 0 {
+							gistsCount = 0
+						}
+					}
+				}
+			}
+		}
+
+		// For users/orgs, we show comprehensive stats
+		resp.Stats = &GitHubStats{
+			PublicRepos:     account.PublicRepos,
+			PrivateRepos:    account.PrivateRepos,
+			Followers:       account.Followers,
+			Following:       account.Following,
+			TotalPRs:        totalPRs,
+			OpenPRs:         openPRs,
+			TotalIssues:     totalIssues,
+			OpenIssues:      openIssues,
+			TotalCommits:    totalCommits,
+			StarredRepos:    starredCount,
+			Gists:           gistsCount,
+			AccountType:     account.Type,
+			AccountCreatedAt: account.CreatedAt.Format("2006-01-02"),
+			AccountUpdatedAt: account.UpdatedAt.Format("2006-01-02"),
+			Location:        account.Location,
+			Company:         account.Company,
+			Bio:             account.Bio,
+			Blog:            account.Blog,
+		}
+
 	}
 
 	return resp, nil
+}
+
+// parseLastPageFromLink extracts the last page number from GitHub's Link header
+func parseLastPageFromLink(linkHeader string) int {
+	// Link header format: <https://api.github.com/resource?page=2>; rel="next", <https://api.github.com/resource?page=5>; rel="last"
+	// We want to extract the page number from the "last" link
+	links := strings.Split(linkHeader, ",")
+	for _, link := range links {
+		link = strings.TrimSpace(link)
+		if strings.Contains(link, `rel="last"`) {
+			// Extract URL from <...>
+			if start := strings.Index(link, "<"); start != -1 {
+				if end := strings.Index(link[start:], ">"); end != -1 {
+					urlStr := link[start+1 : start+end]
+					// Parse page parameter
+					if u, err := url.Parse(urlStr); err == nil {
+						if page := u.Query().Get("page"); page != "" {
+							if p, err := strconv.Atoi(page); err == nil {
+								return p
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return 0
 }
 
 func formatRateLimitResetForUI(resetHeader string) string {

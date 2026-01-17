@@ -1,8 +1,40 @@
 // GitHub module
 
 const defaultGitHubModules = [
-  { id: 'github-1', accountType: 'user', displayType: 'repos', name: 'Earentir', url: 'https://github.com/Earentir', enabled: true },
-  { id: 'github-2', accountType: 'org', displayType: 'repos', name: 'network-plane', url: 'https://github.com/network-plane', enabled: true }
+  { id: 'github-1', accountType: 'user', displayType: 'repos', name: 'Earentir', url: 'https://github.com/Earentir', enabled: true, sort: 'created', order: 'desc' },
+  { id: 'github-2', accountType: 'org', displayType: 'repos', name: 'network-plane', url: 'https://github.com/network-plane', enabled: true, sort: 'created', order: 'desc' }
+];
+
+// Sort options based on display type
+const githubSortOptions = {
+  repos: [
+    { value: 'created', label: 'Created Date' },
+    { value: 'updated', label: 'Updated Date' },
+    { value: 'pushed', label: 'Last Push' },
+    { value: 'full_name', label: 'Name' }
+  ],
+  prs: [
+    { value: 'created', label: 'Created Date' },
+    { value: 'updated', label: 'Updated Date' },
+    { value: 'popularity', label: 'Popularity' },
+    { value: 'long-running', label: 'Long Running' }
+  ],
+  commits: [
+    { value: 'date', label: 'Commit Date' }
+  ],
+  issues: [
+    { value: 'created', label: 'Created Date' },
+    { value: 'updated', label: 'Updated Date' },
+    { value: 'comments', label: 'Comments' }
+  ],
+  stats: [
+    { value: 'created', label: 'Created Date' }
+  ]
+};
+
+const githubOrderOptions = [
+  { value: 'desc', label: 'Descending' },
+  { value: 'asc', label: 'Ascending' }
 ];
 
 const githubDisplayTypes = {
@@ -16,7 +48,7 @@ const githubDisplayTypes = {
 let githubModules = [];
 try {
   const saved = window.loadFromStorage('githubModules');
-  if (saved) {
+  if (saved && Array.isArray(saved) && saved.length > 0) {
     githubModules = saved;
   } else {
     githubModules = defaultGitHubModules;
@@ -74,7 +106,7 @@ function setCachedGitHubData(moduleId, displayType, data) {
   saveGitHubCache(cache);
 }
 
-function renderGitHubContent(moduleId, displayType, data, maxItems) {
+function renderGitHubContent(moduleId, displayType, data, maxItems, accountType) {
   const container = document.getElementById("content-" + moduleId);
   const countEl = document.getElementById("count-" + moduleId);
   const errEl = document.getElementById("err-" + moduleId);
@@ -83,7 +115,7 @@ function renderGitHubContent(moduleId, displayType, data, maxItems) {
   if (!container) return;
 
   if (data.error) {
-    container.innerHTML = "";
+    container.innerHTML = `<div class="small" style="color: red;">Error: ${data.error}</div>`;
     if (errEl) errEl.textContent = data.error;
     if (countEl) countEl.textContent = "Error";
     return;
@@ -91,7 +123,6 @@ function renderGitHubContent(moduleId, displayType, data, maxItems) {
 
   container.innerHTML = "";
   if (errEl) errEl.textContent = "";
-
   if (displayType === 'repos') {
     renderReposList(container, countEl, data, limit);
   } else if (displayType === 'prs') {
@@ -101,7 +132,7 @@ function renderGitHubContent(moduleId, displayType, data, maxItems) {
   } else if (displayType === 'issues') {
     renderIssuesList(container, countEl, data, limit);
   } else if (displayType === 'stats') {
-    renderStats(container, countEl, data);
+    renderStats(container, countEl, data, accountType);
   } else {
     renderReposList(container, countEl, data, limit);
   }
@@ -223,16 +254,95 @@ function renderIssuesList(container, countEl, data, maxItems) {
   }
 }
 
-function renderStats(container, countEl, data) {
+function renderStats(container, countEl, data, accountType) {
   if (data.stats) {
-    if (countEl) countEl.textContent = "Repository stats";
-    container.innerHTML = `
-      <div class="kv"><div class="k">Stars</div><div class="v">${data.stats.stars || 0}</div></div>
-      <div class="kv"><div class="k">Forks</div><div class="v">${data.stats.forks || 0}</div></div>
-      <div class="kv"><div class="k">Watchers</div><div class="v">${data.stats.watchers || 0}</div></div>
-      <div class="kv"><div class="k">Open Issues</div><div class="v">${data.stats.openIssues || 0}</div></div>
-      <div class="kv"><div class="k">Language</div><div class="v">${data.stats.language || 'N/A'}</div></div>
-    `;
+    let statsTitle = "Repository stats";
+    let statsHTML = '';
+
+    if (accountType === 'repo') {
+      // Repository stats
+      statsTitle = "Repository stats";
+      let repoStats = `
+        <div class="kv"><div class="k">Stars/Forks/Watchers</div><div class="v">${data.stats.stars || 0}/${data.stats.forks || 0}/${data.stats.watchers || 0}</div></div>
+        <div class="kv"><div class="k">Issues</div><div class="v">${data.stats.openIssues || 0}/${data.stats.totalIssues || 0}</div></div>
+        <div class="kv"><div class="k">PRs</div><div class="v">${data.stats.openPRs || 0}/${data.stats.totalPRs || 0}</div></div>
+        <div class="kv"><div class="k">Languages</div><div class="v">${data.stats.languages && data.stats.languages.length > 0 ? data.stats.languages.join(', ') : 'N/A'}</div></div>
+        <div class="kv"><div class="k">Created/Updated</div><div class="v">${data.stats.repoCreatedAt || 'N/A'}/${data.stats.repoUpdatedAt || 'N/A'}</div></div>
+        <div class="kv"><div class="k">Size</div><div class="v">${data.stats.size ? Math.round(data.stats.size / 1024 * 100) / 100 + ' MB' : 'N/A'}</div></div>`;
+
+      if (data.stats.license) {
+        repoStats += `<div class="kv"><div class="k">License</div><div class="v">${data.stats.license}</div></div>`;
+      }
+
+      if (data.stats.isFork) {
+        repoStats += `<div class="kv"><div class="k">Type</div><div class="v">Fork</div></div>`;
+      } else if (data.stats.isArchived) {
+        repoStats += `<div class="kv"><div class="k">Status</div><div class="v">Archived</div></div>`;
+      }
+
+      if (data.stats.topics && data.stats.topics.length > 0) {
+        repoStats += `<div class="kv"><div class="k">Topics</div><div class="v">${data.stats.topics.slice(0, 3).join(', ')}${data.stats.topics.length > 3 ? '...' : ''}</div></div>`;
+      }
+
+      statsHTML = repoStats;
+    } else {
+      // User/Organization stats
+      statsTitle = accountType === 'org' ? "Organization stats" : "User stats";
+      const accountTypeLabel = accountType === 'org' ? 'Organization' : 'User';
+
+      statsHTML = `
+        <div class="kv"><div class="k">Public Repos</div><div class="v">${data.stats.publicRepos || 0}</div></div>`;
+
+      // Show private repos for organizations
+      if (accountType === 'org' && data.stats.privateRepos > 0) {
+        statsHTML += `<div class="kv"><div class="k">Private Repos</div><div class="v">${data.stats.privateRepos || 0}</div></div>`;
+      }
+
+      statsHTML += `<div class="kv"><div class="k">Followers/Following</div><div class="v">${data.stats.followers || 0}/${data.stats.following || 0}</div></div>`;
+
+      if (data.stats.starredRepos > 0) {
+        statsHTML += `<div class="kv"><div class="k">Starred Repos</div><div class="v">${data.stats.starredRepos}</div></div>`;
+      }
+
+      if (accountType === 'user' && data.stats.gists > 0) {
+        statsHTML += `<div class="kv"><div class="k">Gists</div><div class="v">${data.stats.gists}</div></div>`;
+      }
+
+
+      // Show PRs and Issues for both users and organizations
+      statsHTML += `<div class="kv"><div class="k">PRs</div><div class="v">${data.stats.openPRs || 0}/${data.stats.totalPRs || 0}</div></div>`;
+      statsHTML += `<div class="kv"><div class="k">Issues</div><div class="v">${data.stats.openIssues || 0}/${data.stats.totalIssues || 0}</div></div>`;
+
+      if (accountType === 'user' && data.stats.totalCommits > 0) {
+        statsHTML += `<div class="kv"><div class="k">Recent Commits</div><div class="v">${data.stats.totalCommits}</div></div>`;
+      }
+
+
+      // Always show creation date if available
+      if (data.stats.accountCreatedAt) {
+        statsHTML += `<div class="kv"><div class="k">Created/Updated</div><div class="v">${data.stats.accountCreatedAt}/${data.stats.accountUpdatedAt || 'N/A'}</div></div>`;
+      }
+
+      // Show other optional fields only if they have values
+      if (data.stats.location) {
+        statsHTML += `<div class="kv"><div class="k">Location</div><div class="v">${data.stats.location}</div></div>`;
+      }
+
+      if (data.stats.company) {
+        statsHTML += `<div class="kv"><div class="k">Company</div><div class="v">${data.stats.company}</div></div>`;
+      }
+
+      if (data.stats.bio) {
+        statsHTML += `<div class="kv"><div class="k">Bio</div><div class="v">${data.stats.bio.substring(0, 50)}${data.stats.bio.length > 50 ? '...' : ''}</div></div>`;
+      }
+
+      if (data.stats.blog) {
+        statsHTML += `<div class="kv"><div class="k">Website</div><div class="v"><a href="${data.stats.blog}" target="_blank" rel="noreferrer">${data.stats.blog}</a></div></div>`;
+      }
+    }
+
+    if (countEl) countEl.textContent = statsTitle;
+    container.innerHTML = statsHTML;
   } else {
     container.innerHTML = '<div class="small">No stats available.</div>';
     if (countEl) countEl.textContent = "No stats";
@@ -265,7 +375,7 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
         const cachedData = getCachedGitHubData(mod.id, displayType);
         // Don't use cached data if it contains an error (especially old "not implemented" errors)
         if (cachedData && !cachedData.error) {
-          renderGitHubContent(mod.id, displayType, cachedData, mod.maxItems || 5);
+          renderGitHubContent(mod.id, displayType, cachedData, mod.maxItems || 5, mod.accountType || mod.type || 'user');
           return;
         }
         // If cached data has an error, clear it and fetch fresh
@@ -281,20 +391,22 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
     // Fetch from API (timer expired or forced refresh or no cache)
     const githubToken = window.loadFromStorage('githubToken') || '';
     const maxItems = mod.maxItems || 5;
-    let url = "/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType + "&count=" + maxItems;
+    const sort = mod.sort || 'created';
+    const order = mod.order || 'desc';
+    let url = "/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType + "&count=" + maxItems + "&sort=" + sort + "&order=" + order;
     if (githubToken) url += "&token=" + encodeURIComponent(githubToken);
     const res = await fetch(url, {cache:"no-store"});
     const data = await res.json();
 
     // Store in cache
     setCachedGitHubData(mod.id, displayType, data);
-    renderGitHubContent(mod.id, displayType, data, maxItems);
+    renderGitHubContent(mod.id, displayType, data, maxItems, accountType);
   } catch(err) {
     if (window.debugError) window.debugError('github', "Error refreshing GitHub module " + mod.id + ":", err);
     // Try to use cached data on error
     const cachedData = getCachedGitHubData(mod.id, displayType);
     if (cachedData) {
-      renderGitHubContent(mod.id, displayType, cachedData, mod.maxItems || 5);
+      renderGitHubContent(mod.id, displayType, cachedData, mod.maxItems || 5, mod.accountType || mod.type || 'user');
     } else {
       const errEl = document.getElementById("err-" + mod.id);
       if (errEl) errEl.textContent = "Error loading data";
@@ -337,8 +449,9 @@ function renderGitHubModules() {
   }
 
   githubModules.forEach((mod, index) => {
-    if (!mod.enabled) return;
-    if (modulesInLayout.has(mod.id)) return;
+    // TEMP: Force enable all modules for debugging
+    mod.enabled = true;
+    // GitHub modules can appear in their dedicated container even if they're also in the layout
 
     const displayType = mod.displayType || 'repos';
     const typeInfo = githubDisplayTypes[displayType] || githubDisplayTypes.repos;
@@ -347,14 +460,14 @@ function renderGitHubModules() {
     card.className = 'card span-6';
     card.setAttribute('data-module', mod.id);
     card.setAttribute('draggable', 'true');
+    // TEMP: Add visible styling to ensure card is visible
 
     const hasTimer = index === 0;
     const timerHtml = hasTimer ? '<div class="timer-circle" id="githubTimer" title="Double-click to refresh"></div>' : '';
     const titleSuffix = displayType !== 'repos' ? ' - ' + typeInfo.name : '';
 
     card.innerHTML = `
-      <h3><i class="fab fa-github"></i> ${mod.name}${titleSuffix}<div class="header-icons"><a href="${mod.url}" target="_blank" rel="noreferrer"><i class="fas fa-external-link-alt"></i></a>${timerHtml}<i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
-      <div class="small" style="margin-bottom:8px; color:var(--muted);"><i class="fas ${typeInfo.icon}"></i> <span id="count-${mod.id}">—</span></div>
+      <h3>${mod.name}${titleSuffix}<div class="header-icons"><a href="${mod.url}" target="_blank" rel="noreferrer"><i class="fas fa-external-link-alt"></i></a>${timerHtml}<i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
       <div id="content-${mod.id}">
         <div class="small">Loading...</div>
       </div>
@@ -366,7 +479,7 @@ function renderGitHubModules() {
     // Load cached data on initial render
     const cachedData = getCachedGitHubData(mod.id, displayType);
     if (cachedData) {
-      renderGitHubContent(mod.id, displayType, cachedData, mod.maxItems || 5);
+      renderGitHubContent(mod.id, displayType, cachedData, mod.maxItems || 5, mod.accountType || mod.type || 'user');
     }
   });
 
@@ -480,7 +593,22 @@ function showGitHubEditDialog(index) {
         { value: 'issues', label: 'Issues' },
         { value: 'stats', label: 'Stats' }
       ],
-      required: false
+      required: false,
+      onChange: (dialog, field, element) => {
+        // Update sort options based on display type
+        const sortSelect = dialog.querySelector('#module-edit-sort');
+        if (sortSelect) {
+          const displayType = element.value;
+          const sortOptions = githubSortOptions[displayType] || githubSortOptions.repos;
+          sortSelect.innerHTML = sortOptions.map(opt =>
+            `<option value="${opt.value}">${opt.label}</option>`
+          ).join('');
+          // Default to 'created' if available
+          if (sortOptions.some(opt => opt.value === 'created')) {
+            sortSelect.value = 'created';
+          }
+        }
+      }
     },
     {
       id: 'maxItems',
@@ -488,7 +616,21 @@ function showGitHubEditDialog(index) {
       type: 'number',
       min: 1,
       max: 20,
-      style: 'width:60px;',
+      required: false
+    },
+    {
+      id: 'sort',
+      label: 'Sort By',
+      type: 'select',
+      options: githubSortOptions[mod.displayType || 'repos'] || githubSortOptions.repos,
+      required: false,
+      dynamicOptions: true
+    },
+    {
+      id: 'order',
+      label: 'Order',
+      type: 'select',
+      options: githubOrderOptions,
       required: false
     }
   ];
@@ -501,7 +643,9 @@ function showGitHubEditDialog(index) {
       url: mod.url || '',
       accountType: mod.accountType || mod.type || 'user',
       displayType: mod.displayType || 'repos',
-      maxItems: mod.maxItems || 5
+      maxItems: mod.maxItems || 5,
+      sort: mod.sort || 'created',
+      order: mod.order || 'desc'
     },
     onSave: async (formData) => {
       const url = formData.url.trim();
@@ -529,7 +673,9 @@ function showGitHubEditDialog(index) {
           name: name,
           url: url.startsWith('https://') ? url : 'https://github.com/' + name,
           enabled: true,
-          maxItems: maxItems
+          maxItems: maxItems,
+          sort: formData.sort || 'created',
+          order: formData.order || 'desc'
         });
       } else {
         githubModules[index].url = url.startsWith('https://') ? url : 'https://github.com/' + name;
@@ -537,6 +683,8 @@ function showGitHubEditDialog(index) {
         githubModules[index].displayType = formData.displayType;
         githubModules[index].name = name;
         githubModules[index].maxItems = maxItems;
+        githubModules[index].sort = formData.sort || 'created';
+        githubModules[index].order = formData.order || 'desc';
       }
 
       saveGitHubModules();
