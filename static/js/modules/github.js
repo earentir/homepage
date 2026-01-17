@@ -438,122 +438,112 @@ function showGitHubEditDialog(index) {
   // Ensure default for existing modules
   if (mod.maxItems === undefined) mod.maxItems = 5;
 
-  const dialog = document.createElement('div');
-  dialog.className = 'modal-overlay active';
-  dialog.innerHTML = `
-    <div class="modal" style="max-width:400px;">
-      <div class="modal-header">
-        <h2><i class="fab fa-github"></i> ${isNew ? 'Add' : 'Edit'} GitHub Module</h2>
-        <button class="modal-close github-dialog-close"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="modal-content">
-        <div class="pref-section">
-          <div class="pref-row">
-            <label>GitHub URL</label>
-            <input type="text" id="github-edit-url" placeholder="https://github.com/username or https://github.com/user/repo" value="${mod.url || ''}" style="flex:1;">
-          </div>
-          <div class="pref-row">
-            <label>Account Type</label>
-            <select id="github-edit-account-type">
-              <option value="user" ${(mod.accountType || mod.type) === 'user' ? 'selected' : ''}>User</option>
-              <option value="org" ${(mod.accountType || mod.type) === 'org' ? 'selected' : ''}>Organization</option>
-              <option value="repo" ${(mod.accountType || mod.type) === 'repo' ? 'selected' : ''}>Repository</option>
-            </select>
-          </div>
-          <div class="pref-row">
-            <label>Display</label>
-            <select id="github-edit-display-type">
-              <option value="repos" ${(mod.displayType || 'repos') === 'repos' ? 'selected' : ''}>Repositories</option>
-              <option value="prs" ${mod.displayType === 'prs' ? 'selected' : ''}>Pull Requests</option>
-              <option value="commits" ${mod.displayType === 'commits' ? 'selected' : ''}>Commits</option>
-              <option value="issues" ${mod.displayType === 'issues' ? 'selected' : ''}>Issues</option>
-              <option value="stats" ${mod.displayType === 'stats' ? 'selected' : ''}>Stats</option>
-            </select>
-          </div>
-          <div class="pref-row">
-            <label>Items</label>
-            <input type="number" id="github-edit-max" value="${mod.maxItems || 5}" min="1" max="20" style="width:60px;">
-          </div>
-        </div>
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
-          <button class="btn-small github-dialog-cancel">Cancel</button>
-          <button class="btn-small github-dialog-save" style="background:var(--accent); color:var(--bg);"><i class="fas fa-check"></i> Save</button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(dialog);
-
-  const urlInput = dialog.querySelector('#github-edit-url');
-  const accountTypeSelect = dialog.querySelector('#github-edit-account-type');
-  const displayTypeSelect = dialog.querySelector('#github-edit-display-type');
-  const closeBtn = dialog.querySelector('.github-dialog-close');
-  const cancelBtn = dialog.querySelector('.github-dialog-cancel');
-  const saveBtn = dialog.querySelector('.github-dialog-save');
-
-  function closeDialog() {
-    dialog.remove();
-  }
-
-  closeBtn.addEventListener('click', closeDialog);
-  cancelBtn.addEventListener('click', closeDialog);
-  dialog.addEventListener('click', (e) => {
-    if (e.target === dialog) closeDialog();
-  });
-
-  // Auto-detect type from URL
-  urlInput.addEventListener('input', () => {
-    const url = urlInput.value.trim();
-    const parts = url.replace('https://github.com/', '').split('/').filter(p => p);
-    if (parts.length >= 2) {
-      accountTypeSelect.value = 'repo';
-    } else if (parts.length === 1) {
-      // Could be user or org - default to user
-      accountTypeSelect.value = 'user';
+  const fields = [
+    {
+      id: 'url',
+      label: 'GitHub URL',
+      type: 'text',
+      placeholder: 'https://github.com/username or https://github.com/user/repo',
+      required: true,
+      onChange: (dialog, field, element) => {
+        // Auto-detect type from URL
+        const url = element.value.trim();
+        const parts = url.replace('https://github.com/', '').split('/').filter(p => p);
+        const accountTypeSelect = dialog.querySelector('#module-edit-accountType');
+        if (parts.length >= 2) {
+          accountTypeSelect.value = 'repo';
+        } else if (parts.length === 1) {
+          // Could be user or org - default to user
+          accountTypeSelect.value = 'user';
+        }
+      }
+    },
+    {
+      id: 'accountType',
+      label: 'Account Type',
+      type: 'select',
+      options: [
+        { value: 'user', label: 'User' },
+        { value: 'org', label: 'Organization' },
+        { value: 'repo', label: 'Repository' }
+      ],
+      required: false
+    },
+    {
+      id: 'displayType',
+      label: 'Display',
+      type: 'select',
+      options: [
+        { value: 'repos', label: 'Repositories' },
+        { value: 'prs', label: 'Pull Requests' },
+        { value: 'commits', label: 'Commits' },
+        { value: 'issues', label: 'Issues' },
+        { value: 'stats', label: 'Stats' }
+      ],
+      required: false
+    },
+    {
+      id: 'maxItems',
+      label: 'Items',
+      type: 'number',
+      min: 1,
+      max: 20,
+      style: 'width:60px;',
+      required: false
     }
-  });
+  ];
 
-  saveBtn.addEventListener('click', async () => {
-    const url = urlInput.value.trim();
-    if (!url) {
-      await window.popup.alert('Please enter a GitHub URL', 'Input Required');
-      return;
+  showModuleEditDialog({
+    title: `${isNew ? 'Add' : 'Edit'} GitHub Module`,
+    icon: 'fab fa-github',
+    fields: fields,
+    values: {
+      url: mod.url || '',
+      accountType: mod.accountType || mod.type || 'user',
+      displayType: mod.displayType || 'repos',
+      maxItems: mod.maxItems || 5
+    },
+    onSave: async (formData) => {
+      const url = formData.url.trim();
+      if (!url) {
+        await window.popup.alert('Please enter a GitHub URL', 'Input Required');
+        return;
+      }
+
+      // Extract name from URL
+      const parts = url.replace('https://github.com/', '').replace(/\/$/, '').split('/').filter(p => p);
+      if (parts.length === 0) {
+        await window.popup.alert('Invalid GitHub URL', 'Invalid Input');
+        return;
+      }
+
+      const accountType = formData.accountType;
+      const name = accountType === 'repo' ? parts.join('/') : parts[0];
+      const maxItems = Math.max(1, Math.min(20, parseInt(formData.maxItems) || 5));
+
+      if (isNew) {
+        githubModules.push({
+          id: 'github-' + Date.now(),
+          accountType: accountType,
+          displayType: formData.displayType,
+          name: name,
+          url: url.startsWith('https://') ? url : 'https://github.com/' + name,
+          enabled: true,
+          maxItems: maxItems
+        });
+      } else {
+        githubModules[index].url = url.startsWith('https://') ? url : 'https://github.com/' + name;
+        githubModules[index].accountType = accountType;
+        githubModules[index].displayType = formData.displayType;
+        githubModules[index].name = name;
+        githubModules[index].maxItems = maxItems;
+      }
+
+      saveGitHubModules();
+      renderGitHubModuleList();
+      renderGitHubModules();
+      refreshGitHub();
     }
-
-    // Extract name from URL
-    const parts = url.replace('https://github.com/', '').replace(/\/$/, '').split('/').filter(p => p);
-    if (parts.length === 0) {
-      await window.popup.alert('Invalid GitHub URL', 'Invalid Input');
-      return;
-    }
-
-    const name = accountTypeSelect.value === 'repo' ? parts.join('/') : parts[0];
-
-    const maxItems = Math.max(1, Math.min(20, parseInt(document.getElementById('github-edit-max').value) || 5));
-
-    if (isNew) {
-      githubModules.push({
-        id: 'github-' + Date.now(),
-        accountType: accountTypeSelect.value,
-        displayType: displayTypeSelect.value,
-        name: name,
-        url: url.startsWith('https://') ? url : 'https://github.com/' + name,
-        enabled: true,
-        maxItems: maxItems
-      });
-    } else {
-      githubModules[index].url = url.startsWith('https://') ? url : 'https://github.com/' + name;
-      githubModules[index].accountType = accountTypeSelect.value;
-      githubModules[index].displayType = displayTypeSelect.value;
-      githubModules[index].name = name;
-      githubModules[index].maxItems = maxItems;
-    }
-
-    saveGitHubModules();
-    renderGitHubModuleList();
-    renderGitHubModules();
-    refreshGitHub();
-    closeDialog();
   });
 }
 

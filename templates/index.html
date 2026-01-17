@@ -321,7 +321,6 @@ if ('serviceWorker' in navigator) {
         <button class="modal-tab" data-tab="modules"><i class="fas fa-th-large"></i> Modules</button>
         <button class="modal-tab" data-tab="quicklinks"><i class="fas fa-link"></i> Quicklinks</button>
         <button class="modal-tab" data-tab="monitoring"><i class="fas fa-heartbeat"></i> Monitoring</button>
-        <button class="modal-tab" data-tab="snmp"><i class="fas fa-network-wired"></i> SNMP</button>
         <button class="modal-tab" data-tab="config"><i class="fas fa-download"></i> Config</button>
         <button class="modal-tab" data-tab="calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
         <button class="modal-tab" data-tab="todo"><i class="fas fa-tasks"></i> Todo</button>
@@ -656,6 +655,10 @@ if ('serviceWorker' in navigator) {
                 <div class="module-list" id="rssModuleList"></div>
               </div>
               <div class="pref-section">
+                <h3>SNMP Modules <button class="btn-small" id="addSnmpBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="module-list" id="snmpModuleList"></div>
+              </div>
+              <div class="pref-section">
                 <h3>Disk Modules <button class="btn-small" id="addDiskBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <div class="module-list" id="diskModuleList"></div>
               </div>
@@ -790,77 +793,6 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
 
-        <!-- SNMP Tab -->
-        <div class="tab-content" id="tab-snmp">
-          <div class="pref-section">
-            <h3>SNMP Queries <button class="btn-small" id="addSnmpBtn"><i class="fas fa-plus"></i> Add</button></h3>
-            <div class="module-list" id="snmpList"></div>
-          </div>
-          <div class="pref-section">
-            <h3>Add / Edit SNMP Query</h3>
-            <div id="snmpForm" style="display:none;">
-              <div class="pref-row">
-                <label>Title</label>
-                <input type="text" id="snmp-title" placeholder="e.g., Router Uptime">
-              </div>
-              <div class="pref-row">
-                <label>Host</label>
-                <input type="text" id="snmp-host" placeholder="192.168.1.1">
-              </div>
-              <div class="pref-row">
-                <label>Port</label>
-                <input type="number" id="snmp-port" placeholder="161" value="161" min="1" max="65535">
-              </div>
-              <div class="pref-row">
-                <label>Community</label>
-                <input type="text" id="snmp-community" placeholder="public">
-              </div>
-              <div class="pref-row">
-                <label>OID</label>
-                <input type="text" id="snmp-oid" placeholder="1.3.6.1.2.1.1.3.0">
-              </div>
-              <div class="pref-row">
-                <label>Display Type</label>
-                <select id="snmp-display-type">
-                  <option value="show">Show</option>
-                  <option value="diff">Diff</option>
-                  <option value="period-diff">Period Diff</option>
-                </select>
-              </div>
-              <div class="pref-row">
-                <label>Prefix</label>
-                <input type="text" id="snmp-prefix" placeholder="e.g., Speed: ">
-              </div>
-              <div class="pref-row">
-                <label>Suffix</label>
-                <input type="text" id="snmp-suffix" placeholder="e.g., bps">
-              </div>
-              <div class="pref-row">
-                <label>Divisor</label>
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <select id="snmp-divisor">
-                    <option value="1">1</option>
-                    <option value="10">10</option>
-                    <option value="100">100</option>
-                    <option value="1000">1,000</option>
-                    <option value="10000">10,000</option>
-                    <option value="100000">100,000</option>
-                    <option value="1000000">1,000,000</option>
-                    <option value="1000000000">1,000,000,000</option>
-                  </select>
-                  <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer;">
-                    <input type="checkbox" id="snmp-si-units" style="margin:0;">
-                    <span>SI units</span>
-                  </label>
-                </div>
-              </div>
-              <div class="pref-row" style="justify-content:flex-end; gap:10px;">
-                <button class="btn-small" id="snmp-cancel">Cancel</button>
-                <button class="btn-small" id="snmp-save" style="background:var(--accent); color:var(--bg);"><i class="fas fa-check"></i> Save</button>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- Config Tab -->
         <div class="tab-content" id="tab-config">
@@ -1244,6 +1176,23 @@ if ('serviceWorker' in navigator) {
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   flex-shrink: 0;
+}
+/* Module edit dialog - smaller modal */
+.modal-overlay.module-edit-overlay {
+  z-index: 10002;
+}
+.modal.module-edit {
+  width: auto;
+  min-width: 400px;
+  max-width: 600px;
+  height: auto;
+  min-height: 300px;
+  max-height: 80vh;
+  width: 90vw;
+}
+.modal.module-edit .modal-content {
+  overflow-y: auto;
+  max-height: calc(80vh - 120px);
 }
 .modal-header {
   display: flex;

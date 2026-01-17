@@ -278,99 +278,91 @@ function showRssEditDialog(index) {
   if (mod.showDate === undefined) mod.showDate = true;
   if (mod.maxItems === undefined) mod.maxItems = 5;
 
-  const dialog = document.createElement('div');
-  dialog.className = 'modal-overlay active';
-  dialog.innerHTML = `
-    <div class="modal" style="max-width:500px;">
-      <div class="modal-header">
-        <h2><i class="fas fa-rss"></i> ${isNew ? 'Add' : 'Edit'} RSS Module</h2>
-        <button class="modal-close rss-dialog-close"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="modal-content">
-        <div class="pref-section">
-          <div class="pref-row">
-            <label>Name</label>
-            <input type="text" id="rss-edit-name" placeholder="RSS Feed Name" value="${mod.name || ''}">
-          </div>
-          <div class="pref-row">
-            <label>RSS Feed URL</label>
-            <input type="text" id="rss-edit-url" placeholder="https://example.com/feed.xml" value="${mod.url || ''}">
-          </div>
-          <div class="pref-row">
-            <label>Articles</label>
-            <input type="number" id="rss-edit-max" value="${mod.maxItems || 5}" min="1" max="20" style="width:60px;">
-          </div>
-          <div class="pref-row" style="margin-top:10px;">
-            <label>Show</label>
-            <div style="display:flex; gap:15px;">
-              <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
-                <input type="checkbox" id="rss-edit-title" ${mod.showTitle ? 'checked' : ''}> Title
-              </label>
-              <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
-                <input type="checkbox" id="rss-edit-text" ${mod.showText ? 'checked' : ''}> Text
-              </label>
-              <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
-                <input type="checkbox" id="rss-edit-date" ${mod.showDate ? 'checked' : ''}> Date
-              </label>
-            </div>
-          </div>
-        </div>
-        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
-          <button class="btn-small rss-dialog-close">Cancel</button>
-          <button class="btn-small" id="rss-save">Save</button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(dialog);
-
-  function closeDialog() {
-    dialog.remove();
-  }
-
-  dialog.querySelectorAll('.rss-dialog-close').forEach(btn => {
-    btn.addEventListener('click', closeDialog);
-  });
-
-  document.getElementById('rss-save').addEventListener('click', () => {
-    const name = document.getElementById('rss-edit-name').value.trim();
-    const url = document.getElementById('rss-edit-url').value.trim();
-    const maxItems = Math.max(1, Math.min(20, parseInt(document.getElementById('rss-edit-max').value) || 5));
-    const showTitle = document.getElementById('rss-edit-title').checked;
-    const showText = document.getElementById('rss-edit-text').checked;
-    const showDate = document.getElementById('rss-edit-date').checked;
-
-    if (!url) {
-      window.popup.alert('RSS Feed URL is required', 'Input Required');
-      return;
+  const fields = [
+    {
+      id: 'name',
+      label: 'Name',
+      type: 'text',
+      placeholder: 'RSS Feed Name',
+      required: false
+    },
+    {
+      id: 'url',
+      label: 'RSS Feed URL',
+      type: 'text',
+      placeholder: 'https://example.com/feed.xml',
+      required: true
+    },
+    {
+      id: 'maxItems',
+      label: 'Articles',
+      type: 'number',
+      min: 1,
+      max: 20,
+      style: 'width:60px;',
+      required: false
+    },
+    {
+      id: 'showTitle',
+      label: 'Show Title',
+      type: 'checkbox'
+    },
+    {
+      id: 'showText',
+      label: 'Show Text',
+      type: 'checkbox'
+    },
+    {
+      id: 'showDate',
+      label: 'Show Date',
+      type: 'checkbox'
     }
+  ];
 
-    if (isNew) {
-      rssModules.push({
-        id: 'rss-' + Date.now(),
-        name: name || 'RSS Feed',
-        url: url,
-        enabled: true,
-        maxItems: maxItems,
-        showTitle: showTitle,
-        showText: showText,
-        showDate: showDate
-      });
-    } else {
-      rssModules[index].name = name || 'RSS Feed';
-      rssModules[index].url = url;
-      rssModules[index].maxItems = maxItems;
-      rssModules[index].showTitle = showTitle;
-      rssModules[index].showText = showText;
-      rssModules[index].showDate = showDate;
+  showModuleEditDialog({
+    title: `${isNew ? 'Add' : 'Edit'} RSS Module`,
+    icon: 'fas fa-rss',
+    fields: fields,
+    values: mod,
+    onSave: (formData) => {
+      const name = formData.name.trim();
+      const url = formData.url.trim();
+      const maxItems = Math.max(1, Math.min(20, parseInt(formData.maxItems) || 5));
+      const showTitle = formData.showTitle;
+      const showText = formData.showText;
+      const showDate = formData.showDate;
+
+      if (!url) {
+        window.popup.alert('RSS Feed URL is required', 'Input Required');
+        return;
+      }
+
+      if (isNew) {
+        rssModules.push({
+          id: 'rss-' + Date.now(),
+          name: name || 'RSS Feed',
+          url: url,
+          enabled: true,
+          maxItems: maxItems,
+          showTitle: showTitle,
+          showText: showText,
+          showDate: showDate
+        });
+      } else {
+        rssModules[index].name = name || 'RSS Feed';
+        rssModules[index].url = url;
+        rssModules[index].maxItems = maxItems;
+        rssModules[index].showTitle = showTitle;
+        rssModules[index].showText = showText;
+        rssModules[index].showDate = showDate;
+      }
+
+      saveRssModules();
+      window.rssModules = rssModules;
+      renderRssModuleList();
+      renderRssModules();
+      refreshRss();
     }
-
-    saveRssModules();
-    window.rssModules = rssModules;
-    renderRssModuleList();
-    renderRssModules();
-    refreshRss();
-    closeDialog();
   });
 }
 

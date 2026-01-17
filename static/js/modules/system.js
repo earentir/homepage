@@ -628,7 +628,7 @@ function showDiskEditDialog(index) {
   const mod = index >= 0 ? diskModules[index] : { id: '', mountPoint: '', enabled: true };
   const isNew = index < 0;
 
-  // Fetch available disks
+  // Fetch available disks first
   fetch('/api/disks', {cache:"no-store"})
     .then(async res => {
       const data = await res.json();
@@ -641,90 +641,74 @@ function showDiskEditDialog(index) {
     .then(data => {
       if (!data) return;
 
-      const dialog = document.createElement('div');
-      dialog.className = 'modal-overlay active';
+      const mountPointOptions = data.partitions.map(partition => ({
+        value: partition.mountPoint,
+        label: `${partition.mountPoint} (${partition.device}, ${partition.fsType})`
+      }));
 
-      let optionsHtml = '<option value="">Select a disk...</option>';
-      data.partitions.forEach(partition => {
-        const selected = partition.mountPoint === mod.mountPoint ? 'selected' : '';
-        optionsHtml += `<option value="${partition.mountPoint}" ${selected}>${partition.mountPoint} (${partition.device}, ${partition.fsType})</option>`;
-      });
-
-      dialog.innerHTML = `
-        <div class="modal" style="max-width:500px;">
-          <div class="modal-header">
-            <h2><i class="fas fa-hdd"></i> ${isNew ? 'Add' : 'Edit'} Disk Module</h2>
-            <button class="modal-close disk-dialog-close"><i class="fas fa-times"></i></button>
-          </div>
-          <div class="modal-content">
-            <div class="pref-section">
-              <div class="pref-row">
-                <label>Mount Point</label>
-                <select id="disk-edit-mount" style="width:100%; padding:5px;">
-                  ${optionsHtml}
-                </select>
-              </div>
-            </div>
-            <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
-              <button class="btn-small disk-dialog-close">Cancel</button>
-              <button class="btn-small" id="disk-save">Save</button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(dialog);
-
-      function closeDialog() {
-        dialog.remove();
-      }
-
-      dialog.querySelectorAll('.disk-dialog-close').forEach(btn => {
-        btn.addEventListener('click', closeDialog);
-      });
-
-      document.getElementById('disk-save').addEventListener('click', async () => {
-        const mountPoint = document.getElementById('disk-edit-mount').value.trim();
-
-        if (!mountPoint) {
-          await window.popup.alert('Mount point is required', 'Input Required');
-          return;
+      const fields = [
+        {
+          id: 'mountPoint',
+          label: 'Mount Point',
+          type: 'select',
+          options: [
+            { value: '', label: 'Select a disk...' },
+            ...mountPointOptions
+          ],
+          required: true
         }
+      ];
 
-        if (isNew) {
-          const safeMount = mountPoint.replace(/[^a-zA-Z0-9]/g, '_');
-          const exists = diskModules.find(m => m.mountPoint === mountPoint);
-          if (exists) {
-            await window.popup.alert('This disk is already added', 'Duplicate');
+      showModuleEditDialog({
+        title: `${isNew ? 'Add' : 'Edit'} Disk Module`,
+        icon: 'fas fa-hdd',
+        fields: fields,
+        values: {
+          mountPoint: mod.mountPoint || ''
+        },
+        onSave: async (formData) => {
+          const mountPoint = formData.mountPoint.trim();
+
+          if (!mountPoint) {
+            await window.popup.alert('Mount point is required', 'Input Required');
             return;
           }
-          diskModules.push({
-            id: 'disk-' + safeMount,
-            mountPoint: mountPoint,
-            enabled: true
-          });
-        } else {
-          const safeMount = mountPoint.replace(/[^a-zA-Z0-9]/g, '_');
-          const exists = diskModules.find((m, i) => m.mountPoint === mountPoint && i !== index);
-          if (exists) {
-            await window.popup.alert('This disk is already added', 'Duplicate');
-            return;
-          }
-          diskModules[index].mountPoint = mountPoint;
-          diskModules[index].id = 'disk-' + safeMount;
-        }
 
-        saveDiskModules();
-        window.diskModules = diskModules;
-        renderDiskModuleList();
-        renderDiskModules();
-        // Force layout system to pick up new modules
-        if (window.layoutSystem && window.layoutSystem.renderLayout) {
-          setTimeout(() => {
-            window.layoutSystem.renderLayout();
-            if (window.initDragAndDrop) window.initDragAndDrop();
-          }, 200);
+          if (isNew) {
+            const safeMount = mountPoint.replace(/[^a-zA-Z0-9]/g, '_');
+            const exists = diskModules.find(m => m.mountPoint === mountPoint);
+            if (exists) {
+              await window.popup.alert('This disk is already added', 'Duplicate');
+              return;
+            }
+            diskModules.push({
+              id: 'disk-' + safeMount,
+              mountPoint: mountPoint,
+              enabled: true
+            });
+          } else {
+            const safeMount = mountPoint.replace(/[^a-zA-Z0-9]/g, '_');
+            const exists = diskModules.find((m, i) => m.mountPoint === mountPoint && i !== index);
+            if (exists) {
+              await window.popup.alert('This disk is already added', 'Duplicate');
+              return;
+            }
+            diskModules[index].mountPoint = mountPoint;
+            diskModules[index].id = 'disk-' + safeMount;
+          }
+
+          saveDiskModules();
+          window.diskModules = diskModules;
+          renderDiskModuleList();
+          renderDiskModules();
+          // Force layout system to pick up new modules
+          if (window.layoutSystem && window.layoutSystem.renderLayout) {
+            setTimeout(() => {
+              window.layoutSystem.renderLayout();
+              if (window.initDragAndDrop) window.initDragAndDrop();
+            }, 200);
+          }
         }
-        closeDialog();
       });
     })
     .catch(async err => {

@@ -49,6 +49,153 @@ function startTimer(moduleName) {
   timer.timer = setInterval(() => updateTimer(moduleName), 1000);
 }
 
+// Generic module edit popup system
+function showModuleEditDialog(config) {
+  const {
+    title,
+    icon,
+    fields,
+    values = {},
+    onSave,
+    moduleType
+  } = config;
+
+  const dialog = document.createElement('div');
+  dialog.className = 'modal-overlay module-edit-overlay active';
+  dialog.innerHTML = `
+    <div class="modal module-edit" style="max-width:500px;">
+      <div class="modal-header">
+        <h2><i class="${icon}"></i> ${title}</h2>
+        <button class="modal-close module-dialog-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-content">
+        <div class="pref-section">
+          ${fields.map(field => generateFieldHTML(field, values[field.id])).join('')}
+        </div>
+        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+          <button class="btn-small module-dialog-close">Cancel</button>
+          <button class="btn-small" id="module-save" style="background:var(--accent); color:var(--bg);"><i class="fas fa-check"></i> Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+
+  function closeDialog() {
+    dialog.remove();
+  }
+
+  dialog.querySelectorAll('.module-dialog-close').forEach(btn => {
+    btn.addEventListener('click', closeDialog);
+  });
+
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) closeDialog();
+  });
+
+  // Set up field-specific handlers
+  fields.forEach(field => {
+    if (field.onChange) {
+      const element = dialog.querySelector(`#module-edit-${field.id}`);
+      if (element) {
+        const eventType = field.type === 'checkbox' ? 'change' : 'input';
+        element.addEventListener(eventType, () => field.onChange(dialog, field, element));
+      }
+    }
+  });
+
+  dialog.querySelector('#module-save').addEventListener('click', () => {
+    const formData = {};
+
+    // Validate required fields
+    let hasErrors = false;
+    fields.forEach(field => {
+      const element = dialog.querySelector(`#module-edit-${field.id}`);
+      if (!element) return;
+
+      let value;
+      if (field.type === 'checkbox') {
+        value = element.checked;
+      } else {
+        value = element.value.trim();
+      }
+
+      // Check required fields
+      if (field.required && !value) {
+        element.style.borderColor = '#bf616a';
+        hasErrors = true;
+      } else {
+        element.style.borderColor = '';
+      }
+
+      formData[field.id] = value;
+    });
+
+    if (hasErrors) {
+      return;
+    }
+
+    if (onSave) {
+      onSave(formData);
+    }
+    closeDialog();
+  });
+}
+
+function generateFieldHTML(field, currentValue) {
+  const {
+    id,
+    label,
+    type = 'text',
+    placeholder = '',
+    required = false,
+    options = [],
+    style = '',
+    min,
+    max,
+    step
+  } = field;
+
+  let inputHTML = '';
+
+  switch (type) {
+    case 'select':
+      inputHTML = `
+        <select id="module-edit-${id}" ${style ? `style="${style}"` : ''}>
+          ${options.map(opt => `<option value="${opt.value}" ${opt.value == currentValue ? 'selected' : ''}>${opt.label}</option>`).join('')}
+        </select>
+      `;
+      break;
+
+    case 'checkbox':
+      inputHTML = `
+        <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+          <input type="checkbox" id="module-edit-${id}" style="margin:0;" ${currentValue ? 'checked' : ''}>
+          <span>${label}</span>
+        </label>
+      `;
+      return `<div class="pref-row">${inputHTML}</div>`;
+
+    case 'number':
+      inputHTML = `<input type="number" id="module-edit-${id}" placeholder="${placeholder}" value="${currentValue || ''}" ${min !== undefined ? `min="${min}"` : ''} ${max !== undefined ? `max="${max}"` : ''} ${step !== undefined ? `step="${step}"` : ''} ${style ? `style="${style}"` : ''}>`;
+      break;
+
+    case 'textarea':
+      inputHTML = `<textarea id="module-edit-${id}" placeholder="${placeholder}" ${style ? `style="${style}"` : ''}>${currentValue || ''}</textarea>`;
+      break;
+
+    default: // text
+      inputHTML = `<input type="text" id="module-edit-${id}" placeholder="${placeholder}" value="${currentValue || ''}" ${style ? `style="${style}"` : ''}>`;
+  }
+
+  return `
+    <div class="pref-row">
+      ${type !== 'checkbox' ? `<label>${label}${required ? ' *' : ''}</label>` : ''}
+      ${inputHTML}
+    </div>
+  `;
+}
+
 // Update timer status from WebSocket
 function updateTimerStatus(timerStatus, timestamp) {
   if (!timerStatus) return;
