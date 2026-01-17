@@ -51,7 +51,7 @@ func GetModuleMetadata() map[string]ModuleMetadata {
 		"cpuid": {
 			Name:     "CPU Info",
 			Icon:     "fa-info-circle",
-			Desc:     "CPU model and specifications",
+			Desc:     "SMBIOS CPU module information",
 			HasTimer: false,
 			Enabled:  true,
 		},
@@ -74,7 +74,7 @@ func GetModuleMetadata() map[string]ModuleMetadata {
 		"firmware": {
 			Name:     "Firmware",
 			Icon:     "fa-microchip",
-			Desc:     "BIOS/Firmware information",
+			Desc:     "SMBIOS Firmware information",
 			HasTimer: false,
 			Enabled:  true,
 		},
