@@ -48,7 +48,17 @@ go build -o homepage
 ### Run
 
 ```bash
+# Basic usage (creates default config file)
 ./homepage
+
+# Custom port
+./homepage --port 3000
+
+# Custom IP and port
+./homepage --listen 192.168.1.100 --port 8080
+
+# Use custom config file
+./homepage --config /etc/homepage/config.json
 ```
 
 ### SMBIOS Access (Linux)
@@ -67,10 +77,18 @@ On startup, the dashboard displays all accessible addresses:
 
 ```
 Dashboard starting...
-  Listening on: :8080
+  Listening on: 0.0.0.0:8080
   http://192.168.1.100:8080
   http://10.0.0.5:8080
   http://localhost:8080
+```
+
+When using `--listen` to specify a specific IP:
+
+```
+Dashboard starting...
+  Listening on: 192.168.1.100:8080
+  http://192.168.1.100:8080
 ```
 
 This includes all IPv4 addresses from active network interfaces, making it easy to access the dashboard from other devices on your network.
@@ -79,12 +97,77 @@ This includes all IPv4 addresses from active network interfaces, making it easy 
 
 ### Command Line Flags
 
-- `--port`: Port to listen on (default: `8080`)
+The application uses Cobra for command-line argument parsing with the following options:
 
-### Example
+- `--port`: Port to listen on (overrides config file, default: `8080`)
+- `--listen`: IP address to listen on (overrides config file, default: `0.0.0.0`)
+- `--config`: Path to config file or directory (default: creates `homepage.config`)
+- `--debug`: Enable verbose debug output during startup
+- `--log`: Path to log file or directory for storing application logs
+
+### Configuration File
+
+The application supports JSON-based configuration files for persistent settings:
+
+**File Format**: JSON with the following fields:
+```json
+{
+  "port": "8080",
+  "ip": "0.0.0.0",
+  "id": "homepage",
+  "debug": false,
+  "log": ""
+}
+```
+
+**File Location**:
+- Specify a config file: `--config /path/to/my-config.json`
+- Specify a directory: `--config /etc/homepage/` (creates `/etc/homepage/homepage.config`)
+- Default: Creates `homepage.config` in current directory
+
+**Configuration Priority**:
+1. Load values from config file (if exists)
+2. Override with command-line flags (if provided)
+3. Use validation and defaults for missing values
+
+**Configurable Options**:
+- `port`: Server port (default: "8080")
+- `ip`: Server IP address (default: "0.0.0.0")
+- `id`: Application identifier (default: "homepage")
+- `debug`: Enable verbose debug output (default: false)
+- `log`: Path to log file or directory (default: "")
+
+**Auto-Creation**: If the specified config file doesn't exist, it's automatically created with default values.
+
+### Examples
 
 ```bash
-./homepage --port 8080
+# Use defaults (creates homepage.config if needed)
+./homepage
+
+# Specify custom port
+./homepage --port 3000
+
+# Specify custom IP and port
+./homepage --listen 192.168.1.100 --port 8080
+
+# Enable debug output
+./homepage --debug
+
+# Log to file
+./homepage --log /var/log/homepage.log
+
+# Log to directory (creates homepage.log)
+./homepage --log /var/log/
+
+# Use custom config file
+./homepage --config /etc/homepage/config.json
+
+# Use custom config directory (creates /etc/homepage/homepage.config)
+./homepage --config /etc/homepage/
+
+# Override config file with flags
+./homepage --config /etc/homepage/ --port 9090 --listen 127.0.0.1
 ```
 
 ### Preferences
@@ -606,6 +689,7 @@ Each theme includes multiple color schemes:
 ```
 homepage/
 ├── main.go                 # Main application code and API endpoints
+├── config.go               # Configuration file handling and validation
 ├── go.mod                  # Go module dependencies
 ├── go.sum                  # Go module checksums
 ├── README.md               # This file - project documentation
@@ -687,6 +771,7 @@ Display: Default
 ### Dependencies
 
 Key Go dependencies:
+- `github.com/spf13/cobra` - Command-line argument parsing and CLI framework
 - `github.com/shirou/gopsutil/v3` - System metrics (CPU, RAM, disk, network)
 - `github.com/earentir/gosmbios` - SMBIOS data (hardware information)
 - `github.com/earentir/cpuid` - CPU information and features

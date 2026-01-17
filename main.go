@@ -4,18 +4,22 @@ package main
 import (
 	"embed"
 	"encoding/json"
-	"flag"
+	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spf13/cobra"
 
 	"homepage/api"
 )
@@ -257,50 +261,63 @@ func parseSchemesFromTemplate(cssContent string) ([]SchemeInfo, string) {
 func init() {
 	templatesMap = make(map[string]*TemplateInfo)
 	templatesList = []string{}
+}
 
+func loadTemplates(debug bool) error {
 	indexHTML, err := templatesFS.ReadFile("templates/index.html")
 	if err != nil {
-		log.Fatalf("Failed to read index.html: %v", err)
+		return fmt.Errorf("failed to read index.html: %w", err)
 	}
 	indexTemplate = template.Must(template.New("index").Parse(string(indexHTML)))
 
 	entries, err := fs.ReadDir(templatesFS, "templates")
 	if err != nil {
-		log.Fatalf("Failed to read templates directory: %v", err)
+		return fmt.Errorf("failed to read templates directory: %w", err)
 	}
 
-	// List all files found for debugging
-	allFiles := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		allFiles = append(allFiles, entry.Name())
+	if debug {
+		// List all files found for debugging
+		allFiles := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			allFiles = append(allFiles, entry.Name())
+		}
+		log.Printf("Found %d entries in templates directory: %v", len(entries), allFiles)
 	}
-	log.Printf("Found %d entries in templates directory: %v", len(entries), allFiles)
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".css") {
-			if entry.IsDir() {
+			if debug && entry.IsDir() {
 				log.Printf("Skipping directory: %s", entry.Name())
 			}
 			continue
 		}
 
-		log.Printf("Processing template file: %s", entry.Name())
+		if debug {
+			log.Printf("Processing template file: %s", entry.Name())
+		}
 		cssContent, err := templatesFS.ReadFile("templates/" + entry.Name())
 		if err != nil {
-			log.Printf("Warning: failed to read template %s: %v", entry.Name(), err)
+			if debug {
+				log.Printf("Warning: failed to read template %s: %v", entry.Name(), err)
+			}
 			continue
 		}
 
 		schemes, baseCSS := parseSchemesFromTemplate(string(cssContent))
 		if len(schemes) == 0 {
-			log.Printf("Warning: no schemes found in template %s", entry.Name())
+			if debug {
+				log.Printf("Warning: no schemes found in template %s", entry.Name())
+			}
 			continue
 		}
-		schemeNames := make([]string, len(schemes))
-		for i, s := range schemes {
-			schemeNames[i] = s.Name
+
+		if debug {
+			schemeNames := make([]string, len(schemes))
+			for i, s := range schemes {
+				schemeNames[i] = s.Name
+			}
+			log.Printf("Found %d schemes in %s: %v", len(schemes), entry.Name(), schemeNames)
 		}
-		log.Printf("Found %d schemes in %s: %v", len(schemes), entry.Name(), schemeNames)
 
 		// Get template name from metadata - search for a metadata block with Template:
 		templateName := ""
@@ -347,14 +364,18 @@ func init() {
 
 	templatesList = sortTemplates(templatesList)
 
-	log.Printf("Loaded %d theme templates:", len(templatesMap))
-	for name, info := range templatesMap {
-		schemeNames := make([]string, 0, len(info.Schemes))
-		for schemeName := range info.Schemes {
-			schemeNames = append(schemeNames, schemeName)
+	if debug {
+		log.Printf("Loaded %d theme templates:", len(templatesMap))
+		for name, info := range templatesMap {
+			schemeNames := make([]string, 0, len(info.Schemes))
+			for schemeName := range info.Schemes {
+				schemeNames = append(schemeNames, schemeName)
+			}
+			log.Printf("  - %s: %d schemes (%s)", name, len(info.Schemes), strings.Join(schemeNames, ", "))
 		}
-		log.Printf("  - %s: %d schemes (%s)", name, len(info.Schemes), strings.Join(schemeNames, ", "))
 	}
+
+	return nil
 }
 
 func sortTemplates(templates []string) []string {
@@ -395,7 +416,7 @@ func sortTemplates(templates []string) []string {
 	return append(sorted, others...)
 }
 
-func listEmbeddedFiles(efs embed.FS, root string) []string {
+func listEmbeddedFiles(efs embed.FS, root string, debug bool) []string {
 	var files []string
 	err := fs.WalkDir(efs, root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -405,43 +426,183 @@ func listEmbeddedFiles(efs embed.FS, root string) []string {
 			// Actually try to read the file to verify it's in the binary
 			data, readErr := efs.ReadFile(path)
 			if readErr != nil {
-				log.Printf("WARNING: File %s listed but cannot be read: %v", path, readErr)
+				if debug {
+					log.Printf("WARNING: File %s listed but cannot be read: %v", path, readErr)
+				}
 				return nil // Continue walking
 			}
 			// File exists and is readable - include it and log size
 			files = append(files, path)
-			log.Printf("  Verified: %s (%d bytes)", path, len(data))
+			if debug {
+				log.Printf("  Verified: %s (%d bytes)", path, len(data))
+			}
 		}
 		return nil
 	})
 	if err != nil {
-		log.Printf("Error walking embedded filesystem %s: %v", root, err)
+		if debug {
+			log.Printf("Error walking embedded filesystem %s: %v", root, err)
+		}
 		return files
 	}
 	return files
 }
 
 func main() {
-	port := flag.String("port", "8080", "Port to listen on")
-	flag.Parse()
+	var rootCmd = &cobra.Command{
+		Use:   "homepage",
+		Short: "Homepage dashboard server",
+		Long:  "A homepage dashboard with system metrics, weather, GitHub integration, and customizable themes.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runServer(cmd)
+		},
+	}
+
+	rootCmd.Flags().String("port", "", "Port to listen on (overrides config file)")
+	rootCmd.Flags().String("listen", "", "IP address to listen on (overrides config file)")
+	rootCmd.Flags().String("config", "", "Path to config file or directory (default: homepage.config)")
+	rootCmd.Flags().Bool("debug", false, "Enable debug output")
+	rootCmd.Flags().String("log", "", "Path to log file or directory")
+
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// setupLogging configures logging to file
+func setupLogging(logPath string) error {
+	// Determine the log file path
+	logFile, err := resolveLogPath(logPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve log path: %w", err)
+	}
+
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(logFile)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	// Open log file
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	// Set log output to both file and stdout
+	multiWriter := &multiWriter{
+		writers: []io.Writer{file, os.Stdout},
+	}
+	log.SetOutput(multiWriter)
+
+	return nil
+}
+
+// resolveLogPath determines the full path to the log file
+func resolveLogPath(logPath string) (string, error) {
+	// Check if it's already a file
+	if info, err := os.Stat(logPath); err == nil {
+		if info.IsDir() {
+			// It's a directory, append default filename
+			return filepath.Join(logPath, "homepage.log"), nil
+		}
+		// It's a file, use as-is
+		return logPath, nil
+	}
+
+	// Path doesn't exist, check if it ends with a separator (indicating directory)
+	if strings.HasSuffix(logPath, string(filepath.Separator)) ||
+		strings.HasSuffix(logPath, "/") {
+		return filepath.Join(logPath, "homepage.log"), nil
+	}
+
+	// Assume it's a file path
+	return logPath, nil
+}
+
+// multiWriter writes to multiple writers
+type multiWriter struct {
+	writers []io.Writer
+}
+
+func (mw *multiWriter) Write(p []byte) (n int, err error) {
+	for _, w := range mw.writers {
+		if n, err = w.Write(p); err != nil {
+			return
+		}
+	}
+	return len(p), nil
+}
+
+func runServer(cmd *cobra.Command) error {
+	// Load configuration first
+	configPath, _ := cmd.Flags().GetString("config")
+	fileConfig, err := LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Get command line flags (these will override config file values)
+	portFlag, _ := cmd.Flags().GetString("port")
+	listenFlag, _ := cmd.Flags().GetString("listen")
+	debugFlag, _ := cmd.Flags().GetBool("debug")
+	logFlag, _ := cmd.Flags().GetString("log")
+
+	// Apply overrides from command line flags
+	if portFlag != "" {
+		fileConfig.Port = portFlag
+	}
+	if listenFlag != "" {
+		fileConfig.IP = listenFlag
+	}
+	if cmd.Flags().Changed("debug") {
+		fileConfig.Debug = debugFlag
+	}
+	if cmd.Flags().Changed("log") {
+		fileConfig.Log = logFlag
+	}
+
+	// Set up logging to file if specified
+	if fileConfig.Log != "" {
+		if err := setupLogging(fileConfig.Log); err != nil {
+			return fmt.Errorf("failed to set up logging: %w", err)
+		}
+	}
+
+	// Validate final config
+	if err := validateConfig(fileConfig); err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	// Use debug setting from final config
+	debug := fileConfig.Debug
+
+	// Load templates
+	if err := loadTemplates(debug); err != nil {
+		return fmt.Errorf("failed to load templates: %w", err)
+	}
 
 	// List and verify all embedded files (actually read them to confirm they're in binary)
-	log.Printf("Verifying embedded files in binary...")
+	if debug {
+		log.Printf("Verifying embedded files in binary...")
+	}
 	var allEmbeddedFiles []string
-	templateFiles := listEmbeddedFiles(templatesFS, "templates")
-	staticFiles := listEmbeddedFiles(staticFS, "static")
+	templateFiles := listEmbeddedFiles(templatesFS, "templates", debug)
+	staticFiles := listEmbeddedFiles(staticFS, "static", debug)
 	allEmbeddedFiles = append(allEmbeddedFiles, templateFiles...)
 	allEmbeddedFiles = append(allEmbeddedFiles, staticFiles...)
-	
+
 	// Sort alphabetically
 	sort.Slice(allEmbeddedFiles, func(i, j int) bool {
 		return strings.ToLower(allEmbeddedFiles[i]) < strings.ToLower(allEmbeddedFiles[j])
 	})
-	
-	// Print comma-separated list
-	log.Printf("Embedded files verified in binary (%d total): %s", len(allEmbeddedFiles), strings.Join(allEmbeddedFiles, ", "))
 
-	listenAddr := ":" + *port
+	// Print comma-separated list
+	if debug {
+		log.Printf("Embedded files verified in binary (%d total): %s", len(allEmbeddedFiles), strings.Join(allEmbeddedFiles, ", "))
+	}
+
+	listenAddr := fileConfig.GetListenAddr()
 	cfg := api.Config{
 		ListenAddr:      listenAddr,
 		Title:           "LAN Index",
@@ -812,6 +973,9 @@ func main() {
 	// Initialize debug logger and load preferences
 	api.GetDebugLogger().UpdatePrefs()
 
+	// Log app startup
+	log.Printf("Homepage Dashboard v%s starting...", appversion)
+
 	// Start timer manager
 	log.Printf("Starting timer manager...")
 	timerManager := api.GetTimerManager()
@@ -849,5 +1013,5 @@ func main() {
 	}
 	log.Printf("  http://localhost:%s", listenPort)
 
-	log.Fatal(srv.ListenAndServe())
+	return srv.ListenAndServe()
 }
