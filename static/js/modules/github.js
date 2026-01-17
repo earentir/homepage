@@ -277,11 +277,9 @@ function renderStats(container, countEl, data, accountType) {
       }
 
 
-      // Show PRs and Issues only for users (orgs don't have their own PRs/issues)
-      if (accountType === 'user') {
-        statsHTML += `<div class="kv"><div class="k">PRs</div><div class="v">${data.stats.openPRs || 0}/${data.stats.totalPRs || 0}</div></div>`;
-        statsHTML += `<div class="kv"><div class="k">Issues</div><div class="v">${data.stats.openIssues || 0}/${data.stats.totalIssues || 0}</div></div>`;
-      }
+      // Show PRs and Issues for both users and organizations
+      statsHTML += `<div class="kv"><div class="k">PRs</div><div class="v">${data.stats.openPRs || 0}/${data.stats.totalPRs || 0}</div></div>`;
+      statsHTML += `<div class="kv"><div class="k">Issues</div><div class="v">${data.stats.openIssues || 0}/${data.stats.totalIssues || 0}</div></div>`;
 
       if (accountType === 'user' && data.stats.totalCommits > 0) {
         statsHTML += `<div class="kv"><div class="k">Recent Commits</div><div class="v">${data.stats.totalCommits}</div></div>`;
@@ -361,6 +359,7 @@ async function refreshGitHubModule(mod, forceRefresh = false) {
     // Fetch from API (timer expired or forced refresh or no cache)
     const githubToken = window.loadFromStorage('githubToken') || '';
     const maxItems = mod.maxItems || 5;
+    console.log(`[GitHub Debug] Module ${mod.id}: name=${mod.name}, accountType=${accountType}, displayType=${displayType}`);
     let url = "/api/github/" + displayType + "?name=" + encodeURIComponent(mod.name) + "&type=" + accountType + "&count=" + maxItems;
     if (githubToken) url += "&token=" + encodeURIComponent(githubToken);
     const res = await fetch(url, {cache:"no-store"});

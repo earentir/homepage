@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -28,8 +29,15 @@ func makeGitHubRequest(ctx context.Context, url, token string) (*http.Response, 
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+		log.Printf("[github] Making request: %s", url)
+	} else {
+		log.Printf("[github] Making unauthenticated request: %s", url)
 	}
-	return githubHTTPClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
+	if err == nil {
+		log.Printf("[github] Response status: %d for %s", resp.StatusCode, url)
+	}
+	return resp, err
 }
 
 // FetchGitHubRepos fetches repos from hardcoded user and org.
@@ -716,17 +724,41 @@ func FetchGitHubIssues(ctx context.Context, name, accountType, token string) (Gi
 
 // FetchGitHubStats fetches stats for a repo, user, or organization.
 func FetchGitHubStats(ctx context.Context, name, accountType, token string) (GitHubStatsResponse, error) {
+	log.Printf("[github] FetchGitHubStats called: name=%s, type=%s, has_token=%t", name, accountType, token != "")
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var resp GitHubStatsResponse
 
+	// First, determine the actual account type by checking the GitHub API
+	var actualAccountType = accountType
+	if accountType != "repo" {
+		// Try org first
+		orgURL := "https://api.github.com/orgs/" + name
+		if orgResp, err := makeGitHubRequest(ctx, orgURL, token); err == nil {
+			defer orgResp.Body.Close()
+			if orgResp.StatusCode == 200 {
+				actualAccountType = "org"
+				log.Printf("[github] Detected %s as organization", name)
+			} else {
+				// Try user
+				userURL := "https://api.github.com/users/" + name
+				if userResp, err := makeGitHubRequest(ctx, userURL, token); err == nil {
+					defer userResp.Body.Close()
+					if userResp.StatusCode == 200 {
+						actualAccountType = "user"
+						log.Printf("[github] Detected %s as user", name)
+					}
+				}
+			}
+		}
+	}
 
 	var apiURL string
 	if accountType == "repo" {
 		// For repos: GET /repos/{owner}/{repo}
 		apiURL = "https://api.github.com/repos/" + name
-	} else if accountType == "org" {
+	} else if actualAccountType == "org" {
 		// For orgs: GET /orgs/{org}
 		apiURL = "https://api.github.com/orgs/" + name
 	} else {
@@ -1025,7 +1057,7 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 		// Convert name to lowercase for GitHub search (case-insensitive but let's be safe)
 		lowerName := strings.ToLower(name)
 		var openPrQuery, mergedPrQuery, openIssueQuery, closedIssueQuery string
-		if accountType == "org" {
+		if actualAccountType == "org" {
 			openPrQuery = "type:pr+org:" + lowerName + "+state:open"
 			mergedPrQuery = "type:pr+org:" + lowerName + "+is:merged"
 			openIssueQuery = "type:issue+org:" + lowerName + "+state:open"
@@ -1038,61 +1070,63 @@ func FetchGitHubStats(ctx context.Context, name, accountType, token string) (Git
 		}
 
 
-		// Only fetch PRs/issues for users (orgs don't have their own PRs/issues)
-		if accountType == "user" {
-			// Fetch open PRs
-			if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+openPrQuery+"&per_page=1", token); err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == 200 {
-					var result struct {
-						TotalCount int `json:"total_count"`
-					}
-					if json.NewDecoder(resp.Body).Decode(&result) == nil {
-						openPRs = result.TotalCount
-					}
+		// Fetch PRs/issues for both users and organizations
+		// Fetch open PRs
+		if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+openPrQuery+"&per_page=1", token); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					TotalCount int `json:"total_count"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					openPRs = result.TotalCount
+					log.Printf("[github] Open PRs result: %d", openPRs)
 				}
 			}
+		}
 
-			// Fetch merged PRs
-			var mergedPRs int
-			if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+mergedPrQuery+"&per_page=1", token); err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == 200 {
-					var result struct {
-						TotalCount int `json:"total_count"`
-					}
-					if json.NewDecoder(resp.Body).Decode(&result) == nil {
-						mergedPRs = result.TotalCount
-					}
+		// Fetch merged PRs
+		var mergedPRs int
+		if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+mergedPrQuery+"&per_page=1", token); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					TotalCount int `json:"total_count"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					mergedPRs = result.TotalCount
+					log.Printf("[github] Merged PRs result: %d", mergedPRs)
 				}
 			}
+		}
 
-			// Calculate total PRs as open + merged
-			totalPRs = openPRs + mergedPRs
+		// Calculate total PRs as open + merged
+		totalPRs = openPRs + mergedPRs
 
-			// Fetch open issues
-			if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+openIssueQuery+"&per_page=1", token); err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == 200 {
-					var result struct {
-						TotalCount int `json:"total_count"`
-					}
-					if json.NewDecoder(resp.Body).Decode(&result) == nil {
-						openIssues = result.TotalCount
-					}
+		// Fetch open issues
+		if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+openIssueQuery+"&per_page=1", token); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					TotalCount int `json:"total_count"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					openIssues = result.TotalCount
+					log.Printf("[github] Open issues result: %d", openIssues)
 				}
 			}
+		}
 
-			// Fetch closed issues and calculate total
-			if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+closedIssueQuery+"&per_page=1", token); err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == 200 {
-					var result struct {
-						TotalCount int `json:"total_count"`
-					}
-					if json.NewDecoder(resp.Body).Decode(&result) == nil {
-						totalIssues = openIssues + result.TotalCount
-					}
+		// Fetch closed issues and calculate total
+		if resp, err := makeGitHubRequest(ctx, "https://api.github.com/search/issues?q="+closedIssueQuery+"&per_page=1", token); err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var result struct {
+					TotalCount int `json:"total_count"`
+				}
+				if json.NewDecoder(resp.Body).Decode(&result) == nil {
+					totalIssues = openIssues + result.TotalCount
+					log.Printf("[github] Closed issues result: %d, Total issues: %d", result.TotalCount, totalIssues)
 				}
 			}
 		}
