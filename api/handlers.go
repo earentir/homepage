@@ -421,22 +421,32 @@ func (h *Handler) HandleGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, issues)
 }
 
-// HandleGitHubStats returns stats for a repo.
+// HandleGitHubStats returns stats for a repo, user, or organization.
 func (h *Handler) HandleGitHubStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := r.URL.Query().Get("name")
+	accountType := r.URL.Query().Get("type")
 	token := r.URL.Query().Get("token")
 
+	GetDebugLogger().Logf("api", "HandleGitHubStats called - name:%s, type:%s", name, accountType)
+
 	if name == "" {
+		GetDebugLogger().Logf("api", "HandleGitHubStats: Missing name parameter")
 		WriteJSON(w, map[string]string{"error": "Missing 'name' parameter"})
 		return
 	}
 
-	stats, err := FetchGitHubStats(ctx, name, token)
+	if accountType == "" {
+		accountType = "user" // Default to user
+	}
+
+	stats, err := FetchGitHubStats(ctx, name, accountType, token)
 	if err != nil {
+		GetDebugLogger().Logf("api", "HandleGitHubStats error: %v", err)
 		WriteJSON(w, map[string]any{"error": err.Error()})
 		return
 	}
+	GetDebugLogger().Logf("api", "HandleGitHubStats returning stats for %s", name)
 	WriteJSON(w, stats)
 }
 

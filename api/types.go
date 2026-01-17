@@ -369,13 +369,40 @@ type GitHubStatsResponse struct {
 	RemainingCalls int          `json:"remainingCalls,omitempty"`
 }
 
-// GitHubStats represents repository statistics.
+// GitHubStats represents repository or account statistics.
 type GitHubStats struct {
-	Stars      int    `json:"stars"`
-	Forks      int    `json:"forks"`
-	Watchers   int    `json:"watchers"`
-	OpenIssues int    `json:"openIssues"`
-	Language   string `json:"language,omitempty"`
+	// Repository stats
+	Stars        int      `json:"stars"`
+	Forks        int      `json:"forks"`
+	Watchers     int      `json:"watchers"`
+	OpenIssues   int      `json:"openIssues"`
+	TotalIssues  int      `json:"totalIssues"`             // Total issues (open + closed)
+	OpenPRs      int      `json:"openPRs"`                // Open pull requests
+	TotalPRs     int      `json:"totalPRs"`               // Total pull requests (open + closed)
+	Language     string   `json:"language,omitempty"`
+	Languages    []string `json:"languages,omitempty"`    // All languages used in repo
+	Size         int      `json:"size,omitempty"`         // Repository size in KB
+	RepoCreatedAt string  `json:"repoCreatedAt,omitempty"` // Repository creation date
+	RepoUpdatedAt string  `json:"repoUpdatedAt,omitempty"` // Last push date
+	License      string   `json:"license,omitempty"`      // Repository license
+	IsFork       bool     `json:"isFork,omitempty"`       // Whether it's a fork
+	IsArchived   bool     `json:"isArchived,omitempty"`   // Whether it's archived
+	Topics       []string `json:"topics,omitempty"`       // Repository topics
+
+	// Account stats (users/orgs)
+	PublicRepos   int    `json:"publicRepos,omitempty"`
+	PrivateRepos  int    `json:"privateRepos,omitempty"`
+	Followers     int    `json:"followers,omitempty"`
+	Following     int    `json:"following,omitempty"`
+	TotalCommits  int    `json:"totalCommits,omitempty"`
+	StarredRepos  int    `json:"starredRepos,omitempty"`  // Repos starred by this account
+	Gists         int    `json:"gists,omitempty"`          // Gist count (users only)
+	AccountType   string `json:"accountType,omitempty"`
+	AccountCreatedAt string `json:"accountCreatedAt,omitempty"` // Account creation date
+	Location      string `json:"location,omitempty"`       // Account location
+	Company       string `json:"company,omitempty"`       // Account company
+	Bio           string `json:"bio,omitempty"`            // Account bio
+	Blog          string `json:"blog,omitempty"`           // Account blog/website
 }
 
 // GitHubCache provides thread-safe caching for GitHub repository data.

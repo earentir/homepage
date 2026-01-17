@@ -463,6 +463,18 @@ function initGeneralSettings() {
     });
   }
 
+  // GitHub refresh now button
+  const githubRefreshBtn = document.getElementById('githubRefreshBtn');
+  if (githubRefreshBtn) {
+    githubRefreshBtn.addEventListener('click', async () => {
+      if (window.refreshGitHub) {
+        // Force refresh all GitHub modules
+        await window.refreshGitHub(true);
+        await window.popup.alert('GitHub data refreshed successfully.', 'Refresh Complete');
+      }
+    });
+  }
+
   // Reset order button
   const resetOrderBtn = document.getElementById('resetOrderBtn');
   if (resetOrderBtn) {
@@ -516,6 +528,28 @@ function initGeneralSettings() {
       window.timers.rss.interval = val * 1000;
       // Save as number
       window.saveToStorage('rssInterval', val);
+    });
+  }
+
+  // GitHub refresh interval
+  const githubIntervalInput = document.getElementById('pref-github-interval');
+  if (githubIntervalInput && window.timers) {
+    // Load saved value or use current timer value
+    const saved = window.loadFromStorage('githubInterval');
+    if (saved !== null && saved !== undefined) {
+      const interval = typeof saved === 'number' ? saved : parseInt(saved);
+      githubIntervalInput.value = interval || 900;
+      window.timers.github.interval = interval * 1000 || 900000;
+    } else {
+      githubIntervalInput.value = window.timers.github.interval / 1000;
+    }
+
+    githubIntervalInput.addEventListener('change', () => {
+      const val = Math.max(60, Math.min(3600, parseInt(githubIntervalInput.value) || 900));
+      githubIntervalInput.value = val;
+      window.timers.github.interval = val * 1000;
+      // Save as number
+      window.saveToStorage('githubInterval', val);
     });
   }
 }
