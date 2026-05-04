@@ -211,6 +211,7 @@ async function initApp() {
   // Setup handlers
   setupTimerHandlers();
   setupIntervals();
+  if (window.initGlobalEscapeToClose) window.initGlobalEscapeToClose();
 
   // Initialize WebSocket for real-time status detection
   if (window.initWebSocket) {

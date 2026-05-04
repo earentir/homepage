@@ -527,6 +527,12 @@ function initQuicklinks() {
     });
   }
 
+  const qlCardAdd = document.getElementById('qlCardAddBtn');
+  if (qlCardAdd) {
+    qlCardAdd.addEventListener('click', () => {
+      showQuicklinkEditDialog(-1);
+    });
+  }
 
   renderQuicklinks();
 }

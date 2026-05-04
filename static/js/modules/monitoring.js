@@ -738,6 +738,13 @@ function initMonitoring() {
     });
   }
 
+  const monCardAdd = document.getElementById('monCardAddBtn');
+  if (monCardAdd) {
+    monCardAdd.addEventListener('click', () => {
+      showMonitorEditDialog(-1);
+    });
+  }
+
   renderMonitorModuleList();
   renderMonitors();
 

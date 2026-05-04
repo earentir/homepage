@@ -9,10 +9,31 @@ let currentWeekDate = new Date();
 
 // Calendar settings
 let calendarSettings = {
-  workWeekOnly: false,  // true = Mon-Fri only
-  startDay: 1,          // 0 = Sunday, 1 = Monday (default)
-  dimWeekends: false    // true = show weekends dimmer in month view
+  workWeekOnly: false,
+  startDay: 1,
+  dimWeekends: false,
+  weekendShade: false,
+  weekendShadeColor: 'rgba(0,0,0,0.12)',
+  timeOffShade: true,
+  timeOffColor: 'rgba(140,100,30,0.22)',
+  timeOffDates: []
 };
+
+function normalizeCalendarSettingsShape() {
+  if (!Array.isArray(calendarSettings.timeOffDates)) {
+    calendarSettings.timeOffDates = [];
+  } else {
+    calendarSettings.timeOffDates = [...new Set(
+      calendarSettings.timeOffDates.map(function(d) { return String(d).slice(0, 10); }).filter(Boolean)
+    )].sort();
+  }
+  if (typeof calendarSettings.weekendShadeColor !== 'string' || !calendarSettings.weekendShadeColor) {
+    calendarSettings.weekendShadeColor = 'rgba(0,0,0,0.12)';
+  }
+  if (typeof calendarSettings.timeOffColor !== 'string' || !calendarSettings.timeOffColor) {
+    calendarSettings.timeOffColor = 'rgba(140,100,30,0.22)';
+  }
+}
 
 function loadCalendarSettings() {
   try {
@@ -23,10 +44,87 @@ function loadCalendarSettings() {
   } catch (e) {
     if (window.debugError) window.debugError('calendar', 'Failed to load calendar settings:', e);
   }
+  normalizeCalendarSettingsShape();
 }
 
 function saveCalendarSettings() {
+  normalizeCalendarSettingsShape();
   window.saveToStorage('calendarSettings', calendarSettings);
+}
+
+function parseTimeOffDatesFromJSON(text) {
+  const raw = JSON.parse(text);
+  const out = new Set();
+  function addOne(d) {
+    const s = String(d).trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) out.add(s);
+  }
+  if (Array.isArray(raw)) {
+    raw.forEach(addOne);
+  } else if (raw && typeof raw === 'object') {
+    if (Array.isArray(raw.dates)) raw.dates.forEach(addOne);
+    if (raw.byYear && typeof raw.byYear === 'object') {
+      Object.keys(raw.byYear).forEach(function(year) {
+        const arr = raw.byYear[year];
+        if (!Array.isArray(arr)) return;
+        arr.forEach(function(entry) {
+          const e = String(entry).trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(e)) addOne(e);
+          else if (/^\d{2}-\d{2}$/.test(e)) addOne(year + '-' + e);
+        });
+      });
+    }
+  }
+  return Array.from(out).sort();
+}
+
+function syncCalendarPreferenceWidgets() {
+  const wk = document.getElementById('pref-weekend-shade');
+  if (wk) wk.checked = !!calendarSettings.weekendShade;
+  const to = document.getElementById('pref-timeoff-shade');
+  if (to) to.checked = calendarSettings.timeOffShade !== false;
+  const ta = document.getElementById('cal-timeoff-json');
+  if (ta) {
+    try {
+      ta.value = JSON.stringify(calendarSettings.timeOffDates || [], null, 2);
+    } catch (err) {
+      ta.value = '';
+    }
+  }
+}
+
+function openCalendarColorPicker(title, key) {
+  let current = calendarSettings[key] || '#444444';
+  if (typeof current !== 'string' || current.indexOf('rgb') === 0) {
+    current = '#3b4252';
+  }
+  showModuleEditDialog({
+    title: title,
+    icon: 'fas fa-paint-brush',
+    fields: [{ id: 'color', label: 'Background', type: 'color', required: false }],
+    values: { color: current },
+    onSave: function(formData) {
+      calendarSettings[key] = formData.color || calendarSettings[key];
+      saveCalendarSettings();
+      syncCalendarPreferenceWidgets();
+      renderCalendar();
+      renderWeekCalendar();
+    }
+  });
+}
+
+function monthCellBackgroundStyle(dateStr, dayOfWeek, isToday) {
+  if (isToday) return '';
+  const timeOffSet = new Set(calendarSettings.timeOffDates || []);
+  const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+  const isTimeOff = timeOffSet.has(dateStr);
+  if (calendarSettings.timeOffShade !== false && isTimeOff) {
+    return 'background:' + (calendarSettings.timeOffColor || 'rgba(140,100,30,0.22)') + ';';
+  }
+  if (calendarSettings.weekendShade && isWeekend) {
+    return 'background:' + (calendarSettings.weekendShadeColor || 'rgba(0,0,0,0.12)') + ';';
+  }
+  return '';
 }
 
 // Load events from localStorage
@@ -184,7 +282,10 @@ async function renderCalendar() {
     if (isToday) classes += ' today';
     if (isWeekend && calendarSettings.dimWeekends) classes += ' dim';
 
-    html += `<div class="${classes}" data-date="${dateStr}" title="${hasEvents ? 'Has events' : ''}">${day}</div>`;
+    const bgStyle = monthCellBackgroundStyle(dateStr, dayOfWeek, isToday);
+    const styleAttr = bgStyle ? ' style="' + bgStyle + '"' : '';
+
+    html += `<div class="${classes}" data-date="${dateStr}" title="${hasEvents ? 'Has events' : ''}"${styleAttr}>${day}</div>`;
   }
 
   html += '</div>';
@@ -280,6 +381,16 @@ async function renderWeekCalendar() {
       if (day.hasEvents) classes += ' has-event';
       if (day.isToday) classes += ' today';
 
+      let dow = 0;
+      if (day.date) {
+        const parts = day.date.split('-');
+        if (parts.length === 3) {
+          dow = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)).getDay();
+        }
+      }
+      const bgStyle = day.date ? monthCellBackgroundStyle(day.date, dow, !!day.isToday) : '';
+      const weekStyleAttr = bgStyle ? ' style="' + bgStyle + '"' : '';
+
       let eventsHtml = '';
       if (day.events && day.events.length > 0) {
         day.events.slice(0, 3).forEach(evt => {
@@ -291,7 +402,7 @@ async function renderWeekCalendar() {
       }
 
       html += `
-        <div class="${classes}" data-date="${day.date}">
+        <div class="${classes}" data-date="${day.date}"${weekStyleAttr}>
           <div class="week-day-num">${day.dayNumber}</div>
           <div class="week-events">${eventsHtml}</div>
         </div>
@@ -588,6 +699,20 @@ function initCalendar() {
   if (weekNextBtn) weekNextBtn.addEventListener('click', nextWeek);
   if (weekTodayBtn) weekTodayBtn.addEventListener('click', goToCurrentWeek);
 
+  function openCalendarTabForNewEvent() {
+    if (window.openPreferencesTab) {
+      window.openPreferencesTab('calendar', function() {
+        if (window.showEventForm) window.showEventForm();
+      });
+    }
+  }
+  const calCardAdd = document.getElementById('calCardAddEventBtn');
+  if (calCardAdd) calCardAdd.addEventListener('click', openCalendarTabForNewEvent);
+  const eventsCardAdd = document.getElementById('eventsCardAddBtn');
+  if (eventsCardAdd) eventsCardAdd.addEventListener('click', openCalendarTabForNewEvent);
+  const weekCardAdd = document.getElementById('weekCardAddEventBtn');
+  if (weekCardAdd) weekCardAdd.addEventListener('click', openCalendarTabForNewEvent);
+
   // Add event button in preferences
   const addBtn = document.getElementById('addEventBtn');
   if (addBtn) {
@@ -638,6 +763,99 @@ function initCalendar() {
       renderCalendar(); // renderCalendar is now async but we don't await it (fire and forget)
     });
   }
+
+  const weekendShadeCb = document.getElementById('pref-weekend-shade');
+  if (weekendShadeCb) {
+    weekendShadeCb.checked = !!calendarSettings.weekendShade;
+    weekendShadeCb.addEventListener('change', () => {
+      calendarSettings.weekendShade = weekendShadeCb.checked;
+      saveCalendarSettings();
+      renderCalendar();
+      renderWeekCalendar();
+    });
+  }
+  const weekendColorBtn = document.getElementById('pref-weekend-shade-color-btn');
+  if (weekendColorBtn) {
+    weekendColorBtn.addEventListener('click', () => {
+      openCalendarColorPicker('Weekend background colour', 'weekendShadeColor');
+    });
+  }
+
+  const timeOffShadeCb = document.getElementById('pref-timeoff-shade');
+  if (timeOffShadeCb) {
+    timeOffShadeCb.checked = calendarSettings.timeOffShade !== false;
+    timeOffShadeCb.addEventListener('change', () => {
+      calendarSettings.timeOffShade = timeOffShadeCb.checked;
+      saveCalendarSettings();
+      renderCalendar();
+      renderWeekCalendar();
+    });
+  }
+  const timeOffColorBtn = document.getElementById('pref-timeoff-color-btn');
+  if (timeOffColorBtn) {
+    timeOffColorBtn.addEventListener('click', () => {
+      openCalendarColorPicker('Time-off / holiday background', 'timeOffColor');
+    });
+  }
+
+  const mergeBtn = document.getElementById('cal-timeoff-import-merge-btn');
+  const replaceBtn = document.getElementById('cal-timeoff-replace-btn');
+  const exportBtn = document.getElementById('cal-timeoff-export-btn');
+  const clearBtn = document.getElementById('cal-timeoff-clear-btn');
+  const ta = document.getElementById('cal-timeoff-json');
+
+  async function applyTimeOffFromTextarea(merge) {
+    if (!ta) return;
+    const text = ta.value.trim();
+    if (!text) {
+      await window.popup.alert('Paste JSON first.', 'Import');
+      return;
+    }
+    try {
+      const parsed = parseTimeOffDatesFromJSON(text);
+      if (parsed.length === 0 && merge) {
+        await window.popup.alert('No valid YYYY-MM-DD dates found. Use an array of dates or {"dates":[...]} / {"byYear":{...}}.', 'Import');
+        return;
+      }
+      if (merge) {
+        const set = new Set(calendarSettings.timeOffDates || []);
+        parsed.forEach(function(d) { set.add(d); });
+        calendarSettings.timeOffDates = Array.from(set).sort();
+      } else {
+        calendarSettings.timeOffDates = parsed;
+      }
+      saveCalendarSettings();
+      syncCalendarPreferenceWidgets();
+      renderCalendar();
+      renderWeekCalendar();
+      await window.popup.alert('Imported ' + calendarSettings.timeOffDates.length + ' date(s).', 'Time-off');
+    } catch (err) {
+      await window.popup.alert('Invalid JSON: ' + (err && err.message ? err.message : String(err)), 'Import error');
+    }
+  }
+  if (mergeBtn) mergeBtn.addEventListener('click', () => { applyTimeOffFromTextarea(true); });
+  if (replaceBtn) replaceBtn.addEventListener('click', () => { applyTimeOffFromTextarea(false); });
+  if (exportBtn) exportBtn.addEventListener('click', function() {
+    syncCalendarPreferenceWidgets();
+    const blob = new Blob([JSON.stringify({ dates: calendarSettings.timeOffDates || [] }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'homepage-timeoff.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  if (clearBtn) clearBtn.addEventListener('click', async function() {
+    const ok = await window.popup.confirm('Clear all imported time-off dates?', 'Clear');
+    if (!ok) return;
+    calendarSettings.timeOffDates = [];
+    saveCalendarSettings();
+    syncCalendarPreferenceWidgets();
+    renderCalendar();
+    renderWeekCalendar();
+  });
+
+  syncCalendarPreferenceWidgets();
 }
 
 // ICS Calendar Management
@@ -964,3 +1182,6 @@ window.renderUpcomingEvents = renderUpcomingEvents;
 window.renderEventsPreferenceList = renderEventsPreferenceList;
 window.initICSCalendars = initICSCalendars;
 window.showICSCalendarEditDialog = showICSCalendarEditDialog;
+window.showEventForm = showEventForm;
+window.hideEventForm = hideEventForm;
+window.syncCalendarPreferenceWidgets = syncCalendarPreferenceWidgets;

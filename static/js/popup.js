@@ -177,15 +177,16 @@
     closeBtn.addEventListener('click', () => closePopup(false));
     cancelBtn.addEventListener('click', () => closePopup(false));
     okBtn.addEventListener('click', () => closePopup(true));
-
-    // ESC key handler
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && popupContainer && popupContainer.classList.contains('show')) {
-        e.preventDefault();
-        closePopup(false);
-      }
-    });
   }
+
+  window.closePopupIfOpen = function() {
+    initPopup();
+    const pc = document.getElementById('popup-container');
+    if (!pc || !pc.classList.contains('show')) return false;
+    const ov = document.getElementById('popup-overlay');
+    if (ov) ov.click();
+    return true;
+  };
 
   // Show alert popup
   window.popup = {

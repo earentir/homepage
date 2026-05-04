@@ -1,5 +1,38 @@
 // Preferences modal management
 
+function refreshPreferenceListsOnOpen() {
+  if (window.renderGitHubModuleList) window.renderGitHubModuleList();
+  if (window.renderQuicklinksList) window.renderQuicklinksList();
+  if (window.renderMonitorModuleList) window.renderMonitorModuleList();
+  if (window.renderRssModuleList) window.renderRssModuleList();
+  if (window.renderSnmpModuleList) window.renderSnmpModuleList();
+  if (window.renderHistoryModuleList) window.renderHistoryModuleList();
+  if (window.renderSMBIOSModuleList) window.renderSMBIOSModuleList();
+  if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
+  if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
+  if (window.renderCalendarModuleList) window.renderCalendarModuleList();
+  if (window.renderTodoModuleList) window.renderTodoModuleList();
+  if (window.initICSCalendars) window.initICSCalendars();
+  if (window.loadServerConfigs) window.loadServerConfigs();
+  renderModuleList();
+  initDebugSettings();
+  if (window.syncCalendarPreferenceWidgets) window.syncCalendarPreferenceWidgets();
+}
+
+function openPreferencesModal() {
+  const modal = document.getElementById('prefsModal');
+  if (!modal) return;
+  modal.classList.add('active');
+  populateSchemeDropdown();
+  refreshPreferenceListsOnOpen();
+}
+
+function closePreferencesModal() {
+  const modal = document.getElementById('prefsModal');
+  if (modal) modal.classList.remove('active');
+  if (window.hideEventForm) window.hideEventForm();
+}
+
 function initPreferencesModal() {
   const openBtn = document.getElementById('prefsBtn');
   const closeBtn = document.getElementById('prefsClose');
@@ -9,41 +42,19 @@ function initPreferencesModal() {
 
   if (!modal || !openBtn) return;
 
-  // Open modal
   openBtn.addEventListener('click', () => {
-    modal.classList.add('active');
-    // Populate scheme dropdown (needs to happen after schemeMenu is in DOM)
-    populateSchemeDropdown();
-    // Render lists when modal opens
-    if (window.renderGitHubModuleList) window.renderGitHubModuleList();
-    if (window.renderQuicklinksList) window.renderQuicklinksList();
-    if (window.renderMonitorModuleList) window.renderMonitorModuleList();
-    if (window.renderRssModuleList) window.renderRssModuleList();
-    if (window.renderSnmpModuleList) window.renderSnmpModuleList();
-    if (window.renderHistoryModuleList) window.renderHistoryModuleList();
-    if (window.renderSMBIOSModuleList) window.renderSMBIOSModuleList();
-    if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
-    if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
-    if (window.renderCalendarModuleList) window.renderCalendarModuleList();
-    if (window.renderTodoModuleList) window.renderTodoModuleList();
-    if (window.initICSCalendars) window.initICSCalendars();
-    if (window.loadServerConfigs) window.loadServerConfigs();
-    renderModuleList();
-    // Initialize debug settings when modal opens
-    initDebugSettings();
+    openPreferencesModal();
   });
 
-  // Close modal
   if (closeBtn) {
     closeBtn.addEventListener('click', () => {
-      modal.classList.remove('active');
+      closePreferencesModal();
     });
   }
 
-  // Close on overlay click
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
-      modal.classList.remove('active');
+      closePreferencesModal();
     }
   });
 
@@ -80,6 +91,9 @@ function initPreferencesModal() {
       // Render events list when calendar tab is opened
       if (tabName === 'calendar' && window.renderEventsPreferenceList) {
         window.renderEventsPreferenceList();
+      }
+      if (tabName === 'calendar' && window.syncCalendarPreferenceWidgets) {
+        window.syncCalendarPreferenceWidgets();
       }
 
       // Render todos list when todo tab is opened
@@ -1440,3 +1454,17 @@ function applyPageTitle(title) {
 window.initPreferencesModal = initPreferencesModal;
 window.renderModuleList = renderModuleList;
 window.applyPageTitle = applyPageTitle;
+window.openPreferencesModal = openPreferencesModal;
+window.closePreferencesModal = closePreferencesModal;
+window.openPreferencesTab = function(tabName, afterOpen) {
+  openPreferencesModal();
+  const tabBtn = document.querySelector('.modal-tab[data-tab="' + tabName + '"]');
+  if (tabBtn) tabBtn.click();
+  if (typeof afterOpen === 'function') {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        afterOpen();
+      });
+    });
+  }
+};

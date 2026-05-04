@@ -895,7 +895,43 @@ if (typeof indexedDB !== 'undefined') {
   };
 }
 
+function initGlobalEscapeToClose() {
+  if (window.__homepageGlobalEsc) return;
+  window.__homepageGlobalEsc = true;
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    const moduleOverlays = document.querySelectorAll('.module-edit-overlay.active');
+    if (moduleOverlays.length) {
+      e.preventDefault();
+      e.stopPropagation();
+      const top = moduleOverlays[moduleOverlays.length - 1];
+      const closeBtn = top.querySelector('.module-dialog-close');
+      if (closeBtn) closeBtn.click();
+      return;
+    }
+    if (window.closePopupIfOpen && window.closePopupIfOpen()) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    const prefs = document.getElementById('prefsModal');
+    if (prefs && prefs.classList.contains('active')) {
+      const eventForm = document.getElementById('eventForm');
+      if (eventForm && eventForm.style.display === 'block') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.hideEventForm) window.hideEventForm();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.closePreferencesModal) window.closePreferencesModal();
+    }
+  }, true);
+}
+
 // Export to window
+window.initGlobalEscapeToClose = initGlobalEscapeToClose;
 window.timers = timers;
 window.updateTimer = updateTimer;
 window.startTimer = startTimer;

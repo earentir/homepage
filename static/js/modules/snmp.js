@@ -467,11 +467,15 @@ function initSnmp() {
   const addBtn = document.getElementById('addSnmpBtn');
   if (addBtn) {
     addBtn.addEventListener('click', () => {
-      console.log('SNMP Add button clicked');
       showSnmpEditDialog(-1);
     });
-  } else {
-    console.log('SNMP Add button not found');
+  }
+
+  const snmpCardAdd = document.getElementById('snmpCardAddBtn');
+  if (snmpCardAdd) {
+    snmpCardAdd.addEventListener('click', () => {
+      showSnmpEditDialog(-1);
+    });
   }
 
   renderSnmpQueries();

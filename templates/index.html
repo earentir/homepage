@@ -227,23 +227,23 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <div class="card span-6" data-module="links" draggable="true">
-        <h3><i class="fas fa-link"></i> Quick Links<div class="header-icons"><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-link"></i> Quick Links<div class="header-icons"><button type="button" class="btn-icon" id="qlCardAddBtn" title="Add link"><i class="fas fa-plus"></i></button><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div id="quicklinksContainer">
-          <div class="small" style="color:var(--muted);">Add links in Preferences → Quicklinks</div>
+          <div class="small" style="color:var(--muted);">Add via <span class="mono">+</span> above or Preferences → Quicklinks.</div>
         </div>
       </div>
 
       <div class="card span-6" data-module="monitoring" draggable="true">
-        <h3><i class="fas fa-heartbeat"></i> Monitoring<div class="header-icons"><div class="timer-circle" id="monitoringTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-heartbeat"></i> Monitoring<div class="header-icons"><button type="button" class="btn-icon" id="monCardAddBtn" title="Add service"><i class="fas fa-plus"></i></button><div class="timer-circle" id="monitoringTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div id="monitoringContainer">
-          <div class="small" style="color:var(--muted);">Add services in Preferences → Monitoring</div>
+          <div class="small" style="color:var(--muted);">Add via <span class="mono">+</span> above or Preferences → Modules.</div>
         </div>
       </div>
 
       <div class="card span-6" data-module="snmp" draggable="true">
-        <h3><i class="fas fa-network-wired"></i> SNMP<div class="header-icons"><div class="timer-circle" id="snmpTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-network-wired"></i> SNMP<div class="header-icons"><button type="button" class="btn-icon" id="snmpCardAddBtn" title="Add SNMP query"><i class="fas fa-plus"></i></button><div class="timer-circle" id="snmpTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div id="snmpContainer">
-          <div class="small" style="color:var(--muted);">Add queries in Preferences → SNMP</div>
+          <div class="small" style="color:var(--muted);">Add via <span class="mono">+</span> above or Preferences → Modules.</div>
         </div>
       </div>
 
@@ -255,7 +255,7 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <div class="card span-4" data-module="calendar" draggable="true">
-        <h3><i class="fas fa-calendar-alt"></i> Calendar<div class="header-icons"><button class="btn-icon" id="calTodayBtn" title="Go to current month"><i class="fas fa-dot-circle"></i></button><button class="btn-icon" id="calPrevBtn" title="Previous month"><i class="fas fa-chevron-left"></i></button><button class="btn-icon" id="calNextBtn" title="Next month"><i class="fas fa-chevron-right"></i></button><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-calendar-alt"></i> Calendar<div class="header-icons"><button type="button" class="btn-icon" id="calCardAddEventBtn" title="Add event"><i class="fas fa-plus"></i></button><button type="button" class="btn-icon" id="calTodayBtn" title="Go to current month"><i class="fas fa-dot-circle"></i></button><button type="button" class="btn-icon" id="calPrevBtn" title="Previous month"><i class="fas fa-chevron-left"></i></button><button type="button" class="btn-icon" id="calNextBtn" title="Next month"><i class="fas fa-chevron-right"></i></button><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div class="calendar-nav">
           <span id="calendarTitle"></span>
         </div>
@@ -263,21 +263,21 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <div class="card span-4" data-module="events" draggable="true">
-        <h3><i class="fas fa-calendar-check"></i> Upcoming Events<div class="header-icons"><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-calendar-check"></i> Upcoming Events<div class="header-icons"><button type="button" class="btn-icon" id="eventsCardAddBtn" title="Add event"><i class="fas fa-plus"></i></button><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div id="upcomingEventsList">
           <div class="muted" style="padding:8px 0;">No upcoming events</div>
         </div>
       </div>
 
       <div class="card span-4" data-module="todo" draggable="true">
-        <h3><i class="fas fa-tasks"></i> Next Todos<div class="header-icons"><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-tasks"></i> Next Todos<div class="header-icons"><button type="button" class="btn-icon" id="todoCardAddBtn" title="Add todo"><i class="fas fa-plus"></i></button><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div id="nextTodosList">
           <div class="muted" style="padding:8px 0;">No todos</div>
         </div>
       </div>
 
       <div class="card span-6" data-module="weekcalendar" draggable="true">
-        <h3><i class="fas fa-calendar-week"></i> Week<div class="header-icons"><button class="btn-icon" id="weekTodayBtn" title="Go to current week"><i class="fas fa-dot-circle"></i></button><button class="btn-icon" id="weekPrevBtn" title="Previous week"><i class="fas fa-chevron-left"></i></button><button class="btn-icon" id="weekNextBtn" title="Next week"><i class="fas fa-chevron-right"></i></button><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <h3><i class="fas fa-calendar-week"></i> Week<div class="header-icons"><button type="button" class="btn-icon" id="weekCardAddEventBtn" title="Add event"><i class="fas fa-plus"></i></button><button type="button" class="btn-icon" id="weekTodayBtn" title="Go to current week"><i class="fas fa-dot-circle"></i></button><button type="button" class="btn-icon" id="weekPrevBtn" title="Previous week"><i class="fas fa-chevron-left"></i></button><button type="button" class="btn-icon" id="weekNextBtn" title="Next week"><i class="fas fa-chevron-right"></i></button><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div class="calendar-nav">
           <span id="weekCalendarTitle"></span>
         </div>
@@ -296,6 +296,7 @@ if ('serviceWorker' in navigator) {
       <div class="badge"><span class="mono">/</span><span class="small">focus search</span></div>
       <div class="badge"><span class="mono">Enter</span><span class="small">search</span></div>
       <div class="badge"><span class="mono">E</span><span class="small">engine</span></div>
+      <div class="badge"><span class="mono">Esc</span><span class="small">close dialogs</span></div>
       <div id="syncStatus" class="sync-status" style="margin-left: 12px; display: none;" title="Data synced to backend">
         <span class="sync-icon"></span>
         <span class="sync-text" style="display: none;"></span>
@@ -454,6 +455,7 @@ if ('serviceWorker' in navigator) {
 
         <!-- Calendar Tab -->
         <div class="tab-content" id="tab-calendar">
+          <p class="small" style="color:var(--muted); margin:0 0 12px 0;">Tip: <span class="mono">+</span> on the Calendar, Week, or Upcoming Events card opens add-event here. <span class="mono">+</span> on Next Todos opens the add-todo dialog.</p>
           <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; align-items:start;">
             <!-- Column 1: Settings -->
             <div style="display:flex; flex-direction:column; gap:20px;">
@@ -462,6 +464,31 @@ if ('serviceWorker' in navigator) {
                 <div class="pref-row">
                   <label>Dim weekends</label>
                   <input type="checkbox" id="pref-dim-weekends" title="Show Saturday and Sunday dimmer">
+                </div>
+                <div class="pref-row">
+                  <label>Darker Sat/Sun background</label>
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <input type="checkbox" id="pref-weekend-shade" title="Tint weekend cells (month and week views)">
+                    <button type="button" class="btn-small" id="pref-weekend-shade-color-btn" title="Weekend tint colour"><i class="fas fa-paint-brush"></i> Colour</button>
+                  </div>
+                </div>
+                <div class="pref-row">
+                  <label>Time-off / holidays tint</label>
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <input type="checkbox" id="pref-timeoff-shade" title="Tint days from JSON import below">
+                    <button type="button" class="btn-small" id="pref-timeoff-color-btn" title="Time-off tint colour"><i class="fas fa-paint-brush"></i> Colour</button>
+                  </div>
+                </div>
+              </div>
+              <div class="pref-section">
+                <h3>Time-off &amp; holidays (JSON)</h3>
+                <p class="small" style="color:var(--muted); margin-bottom:8px;">Use a JSON array of <span class="mono">YYYY-MM-DD</span> dates, or <span class="mono">{"dates":["2026-01-01"]}</span>, or <span class="mono">{"byYear":{"2026":["01-01","12-25"]}}</span> for recurring month/day per year.</p>
+                <textarea id="cal-timeoff-json" rows="8" style="width:100%; font-family:monospace; font-size:12px; box-sizing:border-box;" spellcheck="false" placeholder='["2026-01-01","2026-12-24"]'></textarea>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
+                  <button type="button" class="btn-small" id="cal-timeoff-import-merge-btn"><i class="fas fa-file-import"></i> Merge import</button>
+                  <button type="button" class="btn-small" id="cal-timeoff-replace-btn"><i class="fas fa-sync"></i> Replace all</button>
+                  <button type="button" class="btn-small" id="cal-timeoff-export-btn"><i class="fas fa-download"></i> Export</button>
+                  <button type="button" class="btn-small" id="cal-timeoff-clear-btn"><i class="fas fa-eraser"></i> Clear dates</button>
                 </div>
               </div>
               <div class="pref-section">
@@ -630,10 +657,12 @@ if ('serviceWorker' in navigator) {
               </div>
               <div class="pref-section">
                 <h3>Monitoring Modules <button class="btn-small" id="addMonitorBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <p class="small" style="color:var(--muted); margin:0 0 8px 0;">Tip: the <span class="mono">+</span> on the Monitoring card opens the same add dialog.</p>
                 <div class="module-list" id="monitorModuleList"></div>
               </div>
               <div class="pref-section">
                 <h3>SNMP Modules <button class="btn-small" id="addSnmpBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <p class="small" style="color:var(--muted); margin:0 0 8px 0;">Tip: the <span class="mono">+</span> on the SNMP card opens the same add dialog.</p>
                 <div class="module-list" id="snmpModuleList"></div>
               </div>
               <div class="pref-section">
@@ -674,6 +703,7 @@ if ('serviceWorker' in navigator) {
 
         <!-- Quicklinks Tab -->
         <div class="tab-content" id="tab-quicklinks">
+          <p class="small" style="color:var(--muted); margin:0 0 12px 0;">Tip: use the <span class="mono">+</span> on the Quick Links card to add a link without opening Preferences.</p>
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; align-items:start;">
             <!-- Left Column: Settings -->
             <div>
