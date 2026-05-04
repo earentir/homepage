@@ -297,7 +297,6 @@ if ('serviceWorker' in navigator) {
           <div class="small" style="color:var(--muted);">Add time zones in Preferences → World clock.</div>
         </div>
         <div id="worldclockCalculator" class="worldclock-calculator" style="display:none;">
-          <div class="wc-calc-title small muted">Time zone calculator</div>
           <div class="wc-calc-grid">
             <div class="wc-calc-left">
               <div id="wc-calc-local-abbr" class="wc-calc-abbr"></div>
@@ -612,8 +611,8 @@ if ('serviceWorker' in navigator) {
               <input type="checkbox" id="pref-worldclock-two-cols" title="Show clocks in two columns inside the World clock card">
             </div>
             <div class="pref-row">
-              <label>Time zone calculator</label>
-              <input type="checkbox" id="pref-worldclock-calc-enabled" title="Show a converter on the card: your time → time in a target zone (abbreviation or IANA)">
+              <label>Converter on dashboard card</label>
+              <input type="checkbox" id="pref-worldclock-calc-enabled" title="Show your local UTC offset → target zone (IANA or common codes) on the World clock card">
             </div>
           </div>
           <div class="pref-section">
@@ -696,9 +695,11 @@ if ('serviceWorker' in navigator) {
               <div class="pref-section">
                 <h3>Row Layout Editor</h3>
                 <div id="layoutEditor"></div>
-                <div style="margin-top: 12px;">
-                  <button class="btn-small" id="addRowBtn"><i class="fas fa-plus"></i> Add Row</button>
+                <div style="margin-top: 12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                  <button type="button" class="btn-small" id="addRowBtn"><i class="fas fa-plus"></i> Add Row</button>
+                  <button type="button" class="btn-small" id="wipeLayoutStorageBtn" title="Remove saved layout/module-order from this browser, then save the grid as it looks now (beats stale backend/local versions)"><i class="fas fa-broom"></i> Reset layout storage from current grid</button>
                 </div>
+                <p class="small" style="color:var(--muted); margin:10px 0 0 0; max-width:52em;">Clears only the <span class="mono">layoutConfig</span> and <span class="mono">moduleOrder</span> keys (and their sync metadata), fetches the server’s version numbers so the next save wins over the backend, then writes the rows, columns, and modules currently on the page. Other preferences stay in local storage.</p>
               </div>
             </div>
           </div>
@@ -1418,6 +1419,11 @@ if ('serviceWorker' in navigator) {
   flex: 1;
   min-height: 0;
 }
+/* Split wrappers use overflow:hidden for flex sizing; theme .card:hover translateY clips top border/corners */
+.split-slot .card:hover,
+.split-slot .card.drag-over {
+  transform: none;
+}
 .split-slot.empty-split {
   border: 1px solid transparent;
   background: transparent;
@@ -1910,13 +1916,8 @@ if ('serviceWorker' in navigator) {
 }
 
 .worldclock-calculator{
-  margin-top:12px;
-  padding-top:12px;
-  border-top:1px solid var(--border);
-}
-.wc-calc-title{
-  margin-bottom:8px;
-  font-weight:600;
+  margin-top:6px;
+  padding-top:6px;
 }
 .wc-calc-grid{
   display:grid;
@@ -1940,7 +1941,7 @@ if ('serviceWorker' in navigator) {
 .wc-calc-arrow{
   align-self:center;
   font-size:18px;
-  padding-top:18px;
+  padding-top:4px;
 }
 .wc-calc-input{
   width:100%;
@@ -1956,6 +1957,100 @@ if ('serviceWorker' in navigator) {
 .wc-calc-err{
   margin-top:6px;
   color:var(--error,#bf616a);
+}
+
+/* DNSPlane: one full-width separator per row (not per half-column .kv) */
+.dnsplane-card-header {
+  margin-bottom: 0;
+  padding-bottom: 8px;
+}
+.dnsplane-stat-grid {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+}
+.dnsplane-stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dnsplane-stat-row:first-child {
+  border-top: 1px solid var(--border);
+}
+.dnsplane-stat-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.dnsplane-stat-cell .k {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.dnsplane-stat-cell .v {
+  font-weight: 600;
+  text-align: right;
+  min-width: 0;
+}
+.dnsplane-stat-cell .v .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
+}
+.dnsplane-tui-val {
+  font-size: 0.88em;
+  font-weight: 600;
+  text-align: right;
+  line-height: 1.35;
+}
+.dnsplane-stat-totals {
+  grid-template-columns: 1fr;
+}
+.dnsplane-stat-totals .dnsplane-stat-cell {
+  width: 100%;
+}
+
+/* Speedplane: same 2-column stat grid as DNSPlane */
+.speedplane-card-header {
+  margin-bottom: 0;
+  padding-bottom: 8px;
+}
+.speedplane-stat-grid {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+}
+.speedplane-stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.speedplane-stat-row:first-child {
+  border-top: 1px solid var(--border);
+}
+.speedplane-stat-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.speedplane-stat-cell .k {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.speedplane-stat-cell .v {
+  font-weight: 600;
+  text-align: right;
+  min-width: 0;
+}
+.speedplane-stat-cell .v .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
 }
 </style>
 </body>

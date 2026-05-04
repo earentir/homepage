@@ -33,11 +33,58 @@ function findFeature(features, key) {
   return null;
 }
 
-function featureValue(features, key) {
+const DNSPLANE_UP_WORDS = [
+  'on',
+  'enabled',
+  'yes',
+  'true',
+  'up',
+  'active',
+  'ok',
+  'running',
+  'connected',
+  'loaded',
+  'indexed',
+  'ready',
+  'healthy',
+  'open'
+];
+const DNSPLANE_DOWN_WORDS = [
+  'off',
+  'disabled',
+  'no',
+  'false',
+  'down',
+  'inactive',
+  'stopped',
+  'disconnected',
+  'error',
+  'failed'
+];
+
+/** Same green/red as boolLabel for feature rows (local_records, cache, etc.). */
+function featureValueColoredHtml(features, key) {
   const f = findFeature(features, key);
-  if (!f) return '—';
-  const v = f.value != null ? String(f.value) : '';
-  return v || '—';
+  if (!f) return '<span class="muted">—</span>';
+  if (typeof f.ok === 'boolean') return boolLabel(f.ok);
+  if (typeof f.enabled === 'boolean') return boolLabel(f.enabled);
+  if (typeof f.up === 'boolean') return boolLabel(f.up);
+  const v = f.value;
+  if (typeof v === 'boolean') return boolLabel(v);
+  const s = v != null ? String(v).trim() : '';
+  if (!s) return '<span class="muted">—</span>';
+  const lower = s.toLowerCase();
+  if (DNSPLANE_UP_WORDS.includes(lower)) {
+    return '<span class="mono" style="color:#a3be8c;">' + window.escapeHtml(s) + '</span>';
+  }
+  if (DNSPLANE_DOWN_WORDS.includes(lower)) {
+    return '<span class="mono" style="color:#bf616a;">' + window.escapeHtml(s) + '</span>';
+  }
+  const digitsOnly = s.replace(/,/g, '');
+  if (/^\d+$/.test(digitsOnly)) {
+    return '<span class="mono" style="color:#a3be8c;">' + window.escapeHtml(s) + '</span>';
+  }
+  return '<span class="mono">' + window.escapeHtml(s) + '</span>';
 }
 
 function boolLabel(ok) {
@@ -252,16 +299,10 @@ async function checkDnsplane() {
         ) +
         dnsplaneStatRow(
           dnsplaneStatCell('Ready', boolLabel(st.ready === true)),
-          dnsplaneStatCell(
-            'Local records',
-            '<span class="mono">' + window.escapeHtml(featureValue(feats, 'local_records')) + '</span>'
-          )
+          dnsplaneStatCell('Local records', featureValueColoredHtml(feats, 'local_records'))
         ) +
         dnsplaneStatRow(
-          dnsplaneStatCell(
-            'Resolver cache',
-            '<span class="mono">' + window.escapeHtml(featureValue(feats, 'cache')) + '</span>'
-          ),
+          dnsplaneStatCell('Resolver cache', featureValueColoredHtml(feats, 'cache')),
           dnsplaneStatCell('TUI client', '<span class="dnsplane-tui-val">' + window.escapeHtml(tuiLine) + '</span>')
         ) +
         '<div class="dnsplane-stat-row dnsplane-stat-totals">' +

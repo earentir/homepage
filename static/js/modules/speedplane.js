@@ -39,6 +39,20 @@ function constructServiceUrl(host, port) {
   return `http://${host}:${port}`;
 }
 
+function speedplaneStatCell(kLabel, vHtml) {
+  return (
+    '<div class="speedplane-stat-cell"><span class="k">' +
+    kLabel +
+    '</span><span class="v">' +
+    vHtml +
+    '</span></div>'
+  );
+}
+
+function speedplaneStatRow(leftCell, rightCell) {
+  return '<div class="speedplane-stat-row">' + leftCell + rightCell + '</div>';
+}
+
 function renderSpeedplane() {
   const container = document.getElementById('speedplaneContainer');
   if (!container) return;
@@ -58,12 +72,12 @@ function renderSpeedplane() {
     const nameText = window.escapeHtml(speedplaneConfig.name || speedplaneConfig.host + ':' + speedplaneConfig.port);
     const serviceUrl = constructServiceUrl(speedplaneConfig.host, speedplaneConfig.port);
     container.innerHTML = `
-      <div class="kv" style="margin-bottom:8px;">
+      <div class="kv speedplane-card-header">
         <div class="k">
           <span class="monitor-status" id="speedplane-status"><i class="fas fa-circle" style="color:var(--muted);"></i></span> ${nameText}
           <a href="${serviceUrl}" target="_blank" rel="noreferrer" title="Open Speedplane service" style="margin-left:6px; color:var(--muted); font-size:0.9em;"><i class="fas fa-external-link-alt"></i></a>
         </div>
-        <div class="v" id="speedplane-timestamp">—</div>
+        <div class="v mono" id="speedplane-timestamp">—</div>
       </div>
       <div id="speedplane-data">
         <div class="muted">Loading...</div>
@@ -222,7 +236,7 @@ async function checkSpeedplane() {
       const speedData = data.data;
       let html = '';
 
-      // Format timestamp
+      // Format timestamp (header right column)
       if (speedData.timestamp) {
         try {
           const timestamp = new Date(speedData.timestamp);
@@ -234,46 +248,50 @@ async function checkSpeedplane() {
         if (timestampEl) timestampEl.textContent = '—';
       }
 
-      // Download and Upload on same line
-      const downloadValue = speedData.download_mbps !== undefined ? formatMbps(speedData.download_mbps) : null;
-      const uploadValue = speedData.upload_mbps !== undefined ? formatMbps(speedData.upload_mbps) : null;
-      
-      if (downloadValue || uploadValue) {
-        html += '<div class="kv"><div class="k">Download / Upload</div><div class="v mono">';
-        if (downloadValue) html += downloadValue;
-        if (downloadValue && uploadValue) html += ' / ';
-        if (uploadValue) html += uploadValue;
-        html += '</div></div>';
-      }
-
-      // Ping, Jitter, and Packet Loss on same line - always show this line
-      const pingValue = speedData.ping_ms !== undefined ? formatMs(speedData.ping_ms) : '—';
-      const jitterValue = speedData.jitter_ms !== undefined ? formatMs(speedData.jitter_ms) : '—';
-      const packetLossValue = speedData.packet_loss_pct !== undefined ? formatPct(speedData.packet_loss_pct) : '—';
-      
-      html += '<div class="kv"><div class="k">Ping / Jitter / Packet Loss</div><div class="v mono">';
-      html += pingValue + ' / ' + jitterValue + ' / ' + packetLossValue;
-      html += '</div></div>';
-
-      // ISP
-      if (speedData.isp) {
-        html += '<div class="kv"><div class="k">ISP</div><div class="v">' + window.escapeHtml(speedData.isp) + '</div></div>';
-      }
-
-      // External IP
-      if (speedData.external_ip) {
-        html += '<div class="kv"><div class="k">External IP</div><div class="v mono">' + window.escapeHtml(speedData.external_ip) + '</div></div>';
-      }
-
-      // Server info
+      const downloadHtml =
+        speedData.download_mbps !== undefined
+          ? '<span class="mono">' + formatMbps(speedData.download_mbps) + '</span>'
+          : '<span class="muted">—</span>';
+      const uploadHtml =
+        speedData.upload_mbps !== undefined
+          ? '<span class="mono">' + formatMbps(speedData.upload_mbps) + '</span>'
+          : '<span class="muted">—</span>';
+      const pingHtml =
+        speedData.ping_ms !== undefined
+          ? '<span class="mono">' + formatMs(speedData.ping_ms) + '</span>'
+          : '<span class="muted">—</span>';
+      const jitterHtml =
+        speedData.jitter_ms !== undefined
+          ? '<span class="mono">' + formatMs(speedData.jitter_ms) + '</span>'
+          : '<span class="muted">—</span>';
+      const packetLossHtml =
+        speedData.packet_loss_pct !== undefined
+          ? '<span class="mono">' + formatPct(speedData.packet_loss_pct) + '</span>'
+          : '<span class="muted">—</span>';
+      const ispHtml = speedData.isp
+        ? window.escapeHtml(speedData.isp)
+        : '<span class="muted">—</span>';
+      const extIpHtml = speedData.external_ip
+        ? '<span class="mono">' + window.escapeHtml(speedData.external_ip) + '</span>'
+        : '<span class="muted">—</span>';
+      let serverHtml = '<span class="muted">—</span>';
       if (speedData.server_name || speedData.server_country) {
-        const serverInfo = [];
-        if (speedData.server_name) serverInfo.push(window.escapeHtml(speedData.server_name));
-        if (speedData.server_country) serverInfo.push(window.escapeHtml(speedData.server_country));
-        if (serverInfo.length > 0) {
-          html += '<div class="kv"><div class="k">Server</div><div class="v">' + serverInfo.join(', ') + '</div></div>';
-        }
+        const serverParts = [];
+        if (speedData.server_name) serverParts.push(window.escapeHtml(speedData.server_name));
+        if (speedData.server_country) serverParts.push(window.escapeHtml(speedData.server_country));
+        if (serverParts.length > 0) serverHtml = serverParts.join(', ');
       }
+
+      html +=
+        '<div class="speedplane-stat-grid">' +
+        speedplaneStatRow(speedplaneStatCell('Download', downloadHtml), speedplaneStatCell('Upload', uploadHtml)) +
+        speedplaneStatRow(speedplaneStatCell('Ping', pingHtml), speedplaneStatCell('Jitter', jitterHtml)) +
+        speedplaneStatRow(
+          speedplaneStatCell('Packet loss', packetLossHtml),
+          speedplaneStatCell('External IP', extIpHtml)
+        ) +
+        speedplaneStatRow(speedplaneStatCell('ISP', ispHtml), speedplaneStatCell('Server', serverHtml)) +
+        '</div>';
 
       dataEl.innerHTML = html;
     } else {

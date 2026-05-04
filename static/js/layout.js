@@ -1,5 +1,8 @@
 // Layout system and drag-and-drop
 
+/** Default modules per row when packing from DOM, overflow rows, and new rows (layout editor still allows 4+). */
+const LAYOUT_DEFAULT_COLS = 3;
+
 // Module configuration - loaded from backend API
 let moduleConfig = {};
 
@@ -44,6 +47,71 @@ let layoutConfig = {
   rows: []
 };
 
+/** Bumped on every renderLayout; stale /api/layout/process responses must not overwrite newer edits. */
+let layoutProcessGeneration = 0;
+
+/**
+ * Older saves omitted maxWidth; JSON then decoded as 0 on the server and overwrote the client with 0.
+ * Keep maxWidth in 1–100 and rows as an array.
+ * @param {number|string|undefined} prevMaxHint  Value to reuse when current maxWidth is invalid (e.g. before API merge).
+ * @returns {boolean} true if layoutConfig was modified
+ */
+function ensureLayoutDefaults(prevMaxHint) {
+  let changed = false;
+  if (!layoutConfig || typeof layoutConfig !== 'object') {
+    layoutConfig = { maxWidth: 80, rows: [] };
+    return true;
+  }
+  const rawMw = layoutConfig.maxWidth;
+  let mw = parseInt(rawMw, 10);
+  if (isNaN(mw) || mw < 1 || mw > 100) {
+    const hint = parseInt(prevMaxHint, 10);
+    mw = !isNaN(hint) && hint >= 1 && hint <= 100 ? hint : 80;
+    changed = true;
+  }
+  layoutConfig.maxWidth = mw;
+  if (!Array.isArray(layoutConfig.rows)) {
+    layoutConfig.rows = [{ cols: LAYOUT_DEFAULT_COLS, modules: [] }];
+    changed = true;
+  }
+  return changed;
+}
+
+/** Ensure each row.cols is valid and modules[] length matches cols (fixes API/local mangling). */
+function normalizeLayoutRowDimensions() {
+  if (!layoutConfig || !Array.isArray(layoutConfig.rows)) return false;
+  let changed = false;
+  layoutConfig.rows.forEach(function(row) {
+    if (!Array.isArray(row.modules)) {
+      row.modules = [];
+      changed = true;
+    }
+    let cols = parseInt(row.cols, 10);
+    const mlen = row.modules.length;
+    if (isNaN(cols) || cols < 1 || cols > 12) {
+      cols = Math.min(12, Math.max(mlen || 1, 1));
+      changed = true;
+    }
+    if (mlen > cols) {
+      cols = Math.min(12, mlen);
+      changed = true;
+    }
+    if (row.cols !== cols) {
+      changed = true;
+    }
+    row.cols = cols;
+    while (row.modules.length < cols) {
+      row.modules.push(null);
+      changed = true;
+    }
+    if (row.modules.length > cols) {
+      row.modules = row.modules.slice(0, cols);
+      changed = true;
+    }
+  });
+  return changed;
+}
+
 function loadLayoutConfig() {
   try {
     const saved = window.loadFromStorage('layoutConfig');
@@ -56,6 +124,11 @@ function loadLayoutConfig() {
     if (window.debugError) window.debugError('layout', 'Failed to load layout config:', e);
     initializeDefaultLayout();
   }
+  const e = ensureLayoutDefaults();
+  const n = normalizeLayoutRowDimensions();
+  if (e || n) {
+    saveLayoutConfig();
+  }
 }
 
 function initializeDefaultLayout() {
@@ -64,18 +137,18 @@ function initializeDefaultLayout() {
 
   const cards = Array.from(grid.querySelectorAll('.card[data-module]'));
   layoutConfig.rows = [];
-  let currentRow = { cols: 3, modules: [] };
+  let currentRow = { cols: LAYOUT_DEFAULT_COLS, modules: [] };
 
   cards.forEach((card) => {
     const moduleId = card.getAttribute('data-module');
     if (moduleId) {
       currentRow.modules.push(moduleId);
-      if (card.classList.contains('span-6') || currentRow.modules.length >= 3) {
+      if (card.classList.contains('span-6') || currentRow.modules.length >= LAYOUT_DEFAULT_COLS) {
         if (card.classList.contains('span-6')) {
           currentRow.cols = 2;
         }
         layoutConfig.rows.push(currentRow);
-        currentRow = { cols: 3, modules: [] };
+        currentRow = { cols: LAYOUT_DEFAULT_COLS, modules: [] };
       }
     }
   });
@@ -85,16 +158,62 @@ function initializeDefaultLayout() {
   }
 
   if (layoutConfig.rows.length === 0) {
-    layoutConfig.rows = [{ cols: 3, modules: [] }];
+    layoutConfig.rows = [{ cols: LAYOUT_DEFAULT_COLS, modules: [] }];
   }
 }
 
 function saveLayoutConfig() {
-  try {
-    window.saveToStorage('layoutConfig', layoutConfig);
-  } catch (e) {
-    if (window.debugError) window.debugError('layout', 'Failed to save layout config:', e);
-  }
+  (async () => {
+    try {
+      if (window.alignLocalStorageVersionWithBackendKey) {
+        await window.alignLocalStorageVersionWithBackendKey('layoutConfig');
+      }
+    } catch (e) {
+      if (window.debugError) window.debugError('layout', 'Version align before layout save:', e);
+    }
+    try {
+      window.saveToStorage('layoutConfig', layoutConfig);
+    } catch (e) {
+      if (window.debugError) window.debugError('layout', 'Failed to save layout config:', e);
+    }
+  })();
+}
+
+/** Remove a module id from all layout slots (including split columns). Returns true if layout changed. */
+function removeModuleFromLayout(moduleId) {
+  if (!moduleId || !layoutConfig.rows) return false;
+  let changed = false;
+  layoutConfig.rows.forEach(row => {
+    if (!row.modules) return;
+    for (let i = 0; i < row.modules.length; i++) {
+      const slot = row.modules[i];
+      if (Array.isArray(slot)) {
+        let touched = false;
+        if (slot[0] === moduleId) {
+          slot[0] = null;
+          touched = true;
+        }
+        if (slot[1] === moduleId) {
+          slot[1] = null;
+          touched = true;
+        }
+        if (touched) {
+          changed = true;
+          if (!slot[0] && !slot[1]) {
+            row.modules[i] = null;
+          } else if (slot[0] && !slot[1]) {
+            row.modules[i] = slot[0];
+          } else if (!slot[0] && slot[1]) {
+            row.modules[i] = slot[1];
+          }
+        }
+      } else if (slot === moduleId) {
+        row.modules[i] = null;
+        changed = true;
+      }
+    }
+  });
+  return changed;
 }
 
 // Helper function to check if a module is enabled
@@ -111,6 +230,13 @@ function cleanupLayoutConfig() {
   if (!layoutConfig.rows || layoutConfig.rows.length === 0) return false;
 
   let changed = false;
+
+  // SNMP: no layout slot when the card is not shown (module off or no enabled queries)
+  if (typeof window.shouldSnmpOccupyLayout === 'function' && !window.shouldSnmpOccupyLayout()) {
+    if (removeModuleFromLayout('snmp')) {
+      changed = true;
+    }
+  }
 
   // First pass: replace disabled modules with null
   layoutConfig.rows.forEach(row => {
@@ -154,7 +280,9 @@ function cleanupLayoutConfig() {
 
   // Ensure at least one row exists
   if (layoutConfig.rows.length === 0) {
-    layoutConfig.rows = [{ cols: 3, modules: [null, null, null] }];
+    layoutConfig.rows = [
+      { cols: LAYOUT_DEFAULT_COLS, modules: Array(LAYOUT_DEFAULT_COLS).fill(null) }
+    ];
     changed = true;
   }
 
@@ -170,6 +298,10 @@ function renderLayout() {
     saveLayoutConfig();
   }
 
+  if (ensureLayoutDefaults()) {
+    saveLayoutConfig();
+  }
+
   // Collect ALL cards from the DOM before clearing
   // Look in grid first (before clearing), then in containers, then anywhere in the grid (in case they're in layout rows)
   const gridCards = Array.from(grid.querySelectorAll('.card[data-module]'));
@@ -179,10 +311,12 @@ function renderLayout() {
   const rssCards = rssContainer ? Array.from(rssContainer.querySelectorAll('.card[data-module]')) : [];
   const diskContainer = document.getElementById('diskModulesContainer');
   const diskCards = diskContainer ? Array.from(diskContainer.querySelectorAll('.card[data-module]')) : [];
+  const parkingLot = document.getElementById('layoutParkingLot');
+  const parkedCards = parkingLot ? Array.from(parkingLot.querySelectorAll('.card[data-module]')) : [];
 
   // Combine and deduplicate by module ID (use first occurrence)
   // Also filter out disabled modules
-  const allCards = [...gridCards, ...githubCards, ...rssCards, ...diskCards];
+  const allCards = [...gridCards, ...githubCards, ...rssCards, ...diskCards, ...parkedCards];
   const cardsMap = new Map();
   allCards.forEach(card => {
     const moduleId = card.getAttribute('data-module');
@@ -201,22 +335,32 @@ function renderLayout() {
   grid.innerHTML = '';
   grid.className = 'layout-grid';
 
-  // Process layout config using backend (removes disabled modules)
-  // This is done asynchronously, but we continue with rendering using current config
-  // The processed config will be saved back on next sync
+  const processGen = ++layoutProcessGeneration;
+  const processPayload = JSON.stringify(layoutConfig);
+
+  // Process layout config using backend (removes disabled modules). Responses can arrive out of order;
+  // never apply a result from an older render — that was resetting column counts and max width.
   (async () => {
     try {
       const res = await fetch('/api/layout/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(layoutConfig),
+        body: processPayload,
         cache: 'no-store'
       });
+      if (processGen !== layoutProcessGeneration) {
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
+        if (processGen !== layoutProcessGeneration) {
+          return;
+        }
         if (data.layout) {
-          // Update local config with processed version
+          const prevMax = layoutConfig.maxWidth;
           layoutConfig = data.layout;
+          ensureLayoutDefaults(prevMax);
+          normalizeLayoutRowDimensions();
           saveLayoutConfig();
         }
       }
@@ -330,18 +474,36 @@ function renderLayout() {
     grid.appendChild(rowEl);
   });
 
+  // Keep SNMP out of the grid and out of layout rows when the card is hidden (no queries / off)
+  if (typeof window.shouldSnmpOccupyLayout === 'function' && !window.shouldSnmpOccupyLayout()) {
+    const snmpCard = cardsMap.get('snmp');
+    if (snmpCard) {
+      let lot = document.getElementById('layoutParkingLot');
+      if (!lot) {
+        lot = document.createElement('div');
+        lot.id = 'layoutParkingLot';
+        lot.setAttribute('aria-hidden', 'true');
+        lot.style.cssText =
+          'display:none;width:0;height:0;overflow:hidden;position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;';
+        document.body.appendChild(lot);
+      }
+      lot.appendChild(snmpCard);
+      cardsMap.delete('snmp');
+    }
+  }
+
   // Handle remaining modules that aren't in the layout config yet
   if (cardsMap.size > 0) {
     const remainingModules = Array.from(cardsMap.keys());
 
-    // Add remaining modules to new rows (3 modules per row) and render them immediately
+    // Add remaining modules to new rows (LAYOUT_DEFAULT_COLS per row) and render them immediately
     while (remainingModules.length > 0) {
-      const newRow = { cols: 3, modules: [] };
-      for (let i = 0; i < 3 && remainingModules.length > 0; i++) {
+      const newRow = { cols: LAYOUT_DEFAULT_COLS, modules: [] };
+      for (let i = 0; i < LAYOUT_DEFAULT_COLS && remainingModules.length > 0; i++) {
         newRow.modules.push(remainingModules.shift());
       }
       // Fill remaining slots with null
-      while (newRow.modules.length < 3) {
+      while (newRow.modules.length < LAYOUT_DEFAULT_COLS) {
         newRow.modules.push(null);
       }
       layoutConfig.rows.push(newRow);
@@ -386,6 +548,9 @@ function renderLayout() {
   if (mainContainer) {
     mainContainer.style.maxWidth = layoutConfig.maxWidth + '%';
   }
+
+  // New .layout-column nodes need drop targets; callers often forget to re-bind after innerHTML rebuild.
+  initDragAndDrop();
 
   // Adjust row heights after rendering
   requestAnimationFrame(() => {
@@ -610,6 +775,7 @@ function renderLayoutEditor() {
           <option value="1" ${row.cols === 1 ? 'selected' : ''}>1 Column</option>
           <option value="2" ${row.cols === 2 ? 'selected' : ''}>2 Columns</option>
           <option value="3" ${row.cols === 3 ? 'selected' : ''}>3 Columns</option>
+          <option value="4" ${row.cols === 4 ? 'selected' : ''}>4 Columns</option>
         </select>
         <button class="btn-small remove-row-btn" data-row="${rowIndex}"><i class="fas fa-trash"></i></button>
         <span style="margin-left: auto; color: var(--muted); font-size: 13px;">${modulesText}</span>
@@ -629,7 +795,6 @@ function renderLayoutEditor() {
       }
       saveLayoutConfig();
       renderLayout();
-      initDragAndDrop();
     });
 
     const removeBtn = rowEditor.querySelector('.remove-row-btn');
@@ -654,37 +819,230 @@ function renderLayoutEditor() {
       }
       layoutConfig.rows.splice(rowIndex, 1);
       if (layoutConfig.rows.length === 0) {
-        layoutConfig.rows = [{ cols: 3, modules: [] }];
+        layoutConfig.rows = [{ cols: LAYOUT_DEFAULT_COLS, modules: [] }];
       }
       saveLayoutConfig();
       renderLayout();
       renderLayoutEditor();
-      initDragAndDrop();
     });
 
     editor.appendChild(rowEditor);
   });
 }
 
+async function fetchStorageKeyVersion(key) {
+  try {
+    const res = await fetch('/api/storage/get?key=' + encodeURIComponent(key), { cache: 'no-store' });
+    if (!res.ok) return 0;
+    const data = await res.json();
+    if (!data) return 0;
+    const v = parseInt(data.version, 10);
+    return !isNaN(v) && v >= 0 ? v : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function captureLayoutRowsFromDOM(grid) {
+  const rows = [];
+  if (!grid) return rows;
+  grid.querySelectorAll(':scope > .layout-row').forEach(function(rowEl) {
+    const colEls = rowEl.querySelectorAll(':scope > .layout-column');
+    const n = colEls.length;
+    if (n === 0) return;
+    const modules = [];
+    colEls.forEach(function(colEl) {
+      if (colEl.classList.contains('split-column')) {
+        const top = colEl.querySelector('.split-slot-top .card[data-module]');
+        const bottom = colEl.querySelector('.split-slot-bottom .card[data-module]');
+        const t = top ? top.getAttribute('data-module') : null;
+        const b = bottom ? bottom.getAttribute('data-module') : null;
+        if (t && b) {
+          modules.push([t, b]);
+        } else if (t) {
+          modules.push(t);
+        } else if (b) {
+          modules.push(b);
+        } else {
+          modules.push(null);
+        }
+      } else {
+        const card = colEl.querySelector(':scope > .card[data-module]');
+        modules.push(card ? card.getAttribute('data-module') : null);
+      }
+    });
+    rows.push({ cols: n, modules: modules });
+  });
+  return rows;
+}
+
+function normalizeCapturedLayoutRows(rows) {
+  return rows.map(function(row) {
+    const cols = Math.min(Math.max(parseInt(row.cols, 10) || row.modules.length || 1, 1), 12);
+    let mods = Array.isArray(row.modules) ? row.modules.slice() : [];
+    while (mods.length < cols) {
+      mods.push(null);
+    }
+    if (mods.length > cols) {
+      mods = mods.slice(0, cols);
+    }
+    return { cols: cols, modules: mods };
+  });
+}
+
+function captureModuleOrderFromDOM() {
+  const grid = document.getElementById('moduleGrid');
+  if (!grid) return [];
+  const order = [];
+  grid.querySelectorAll(':scope > .layout-row').forEach(function(rowEl) {
+    rowEl.querySelectorAll(':scope > .layout-column').forEach(function(colEl) {
+      if (colEl.classList.contains('split-column')) {
+        const top = colEl.querySelector('.split-slot-top .card[data-module]');
+        const bottom = colEl.querySelector('.split-slot-bottom .card[data-module]');
+        if (top) order.push(top.getAttribute('data-module'));
+        if (bottom) order.push(bottom.getAttribute('data-module'));
+      } else {
+        const card = colEl.querySelector(':scope > .card[data-module]');
+        if (card) order.push(card.getAttribute('data-module'));
+      }
+    });
+  });
+  return order;
+}
+
+/**
+ * Clears local layoutConfig + moduleOrder (and *_meta), bumps version past the server,
+ * saves the current grid from the DOM, re-renders. Fixes refresh restoring old column counts.
+ */
+async function resetLayoutStorageFromCurrentView() {
+  const backendLayoutVer = await fetchStorageKeyVersion('layoutConfig');
+  const backendOrderVer = await fetchStorageKeyVersion('moduleOrder');
+
+  try {
+    localStorage.removeItem('layoutConfig');
+    localStorage.removeItem('layoutConfig_meta');
+    localStorage.removeItem('moduleOrder');
+    localStorage.removeItem('moduleOrder_meta');
+  } catch (e) {
+    if (window.debugError) window.debugError('layout', 'Could not remove layout keys:', e);
+  }
+
+  const grid = document.getElementById('moduleGrid');
+  let rows = normalizeCapturedLayoutRows(captureLayoutRowsFromDOM(grid));
+  if (rows.length === 0 && window.layoutSystem && typeof window.layoutSystem.getLayoutConfig === 'function') {
+    const mem = window.layoutSystem.getLayoutConfig();
+    if (mem && Array.isArray(mem.rows) && mem.rows.length) {
+      try {
+        rows = normalizeCapturedLayoutRows(JSON.parse(JSON.stringify(mem.rows)));
+      } catch (e) {}
+    }
+  }
+  if (rows.length === 0) {
+    rows = [{ cols: LAYOUT_DEFAULT_COLS, modules: Array(LAYOUT_DEFAULT_COLS).fill(null) }];
+  }
+
+  let maxWidth = 80;
+  const maxWidthSelect = document.getElementById('layoutMaxWidth');
+  if (maxWidthSelect && maxWidthSelect.value) {
+    const v = parseInt(maxWidthSelect.value, 10);
+    if (!isNaN(v) && v >= 1 && v <= 100) {
+      maxWidth = v;
+    }
+  } else if (typeof layoutConfig.maxWidth === 'number' && layoutConfig.maxWidth >= 1 && layoutConfig.maxWidth <= 100) {
+    maxWidth = layoutConfig.maxWidth;
+  }
+
+  layoutConfig.maxWidth = maxWidth;
+  layoutConfig.rows = rows;
+  ensureLayoutDefaults();
+  normalizeLayoutRowDimensions();
+
+  const order = captureModuleOrderFromDOM();
+
+  setStorageVersion('layoutConfig', backendLayoutVer);
+  window.saveToStorage('layoutConfig', layoutConfig);
+
+  setStorageVersion('moduleOrder', backendOrderVer);
+  window.saveToStorage('moduleOrder', order);
+
+  renderLayout();
+  renderLayoutEditor();
+  if (window.applyModuleVisibility) {
+    window.applyModuleVisibility();
+  }
+
+  if (maxWidthSelect) {
+    maxWidthSelect.value = String(layoutConfig.maxWidth);
+  }
+
+  if (window.popup && window.popup.alert) {
+    await window.popup.alert(
+      'Saved. Layout and module-order storage now match the current grid, with versions forced past the server copy so a refresh should not bring back old columns.',
+      'Layout storage reset'
+    );
+  }
+}
+
+function bindLayoutMaxWidthSelectDelegated() {
+  if (window._layoutMaxWidthDelegatedBound) return;
+  window._layoutMaxWidthDelegatedBound = true;
+  function applyFromSelect(sel) {
+    if (!sel || sel.id !== 'layoutMaxWidth') return;
+    const v = parseInt(sel.value, 10);
+    const next = !isNaN(v) && v >= 1 && v <= 100 ? v : 80;
+    layoutConfig.maxWidth = next;
+    saveLayoutConfig();
+    if (window.layoutSystem && window.layoutSystem.renderLayout) {
+      window.layoutSystem.renderLayout();
+    }
+  }
+  document.addEventListener('change', function(e) {
+    if (e.target && e.target.id === 'layoutMaxWidth') applyFromSelect(e.target);
+  });
+  document.addEventListener('input', function(e) {
+    if (e.target && e.target.id === 'layoutMaxWidth') applyFromSelect(e.target);
+  });
+}
+
 function initLayoutEditor() {
+  bindLayoutMaxWidthSelectDelegated();
+
   const addRowBtn = document.getElementById('addRowBtn');
   if (addRowBtn) {
     addRowBtn.addEventListener('click', () => {
-      layoutConfig.rows.push({ cols: 3, modules: [] });
+      layoutConfig.rows.push({ cols: LAYOUT_DEFAULT_COLS, modules: [] });
       saveLayoutConfig();
       renderLayout();
       renderLayoutEditor();
-      initDragAndDrop();
     });
   }
 
   const maxWidthSelect = document.getElementById('layoutMaxWidth');
   if (maxWidthSelect) {
-    maxWidthSelect.value = layoutConfig.maxWidth;
-    maxWidthSelect.addEventListener('change', (e) => {
-      layoutConfig.maxWidth = parseInt(e.target.value);
-      saveLayoutConfig();
-      renderLayout();
+    ensureLayoutDefaults();
+    maxWidthSelect.value = String(layoutConfig.maxWidth);
+  }
+
+  const wipeBtn = document.getElementById('wipeLayoutStorageBtn');
+  if (wipeBtn && wipeBtn.dataset.layoutWipeBound !== '1') {
+    wipeBtn.dataset.layoutWipeBound = '1';
+    wipeBtn.addEventListener('click', async function() {
+      const ok = await window.popup.confirm(
+        'Clear saved layout and module-order for this site, then save exactly what is on the grid now (rows, column counts, modules)? Other local storage keys are left as-is. The new copy is pushed to the server with a higher version so it should not be overwritten on refresh.',
+        'Reset layout storage'
+      );
+      if (!ok) return;
+      wipeBtn.disabled = true;
+      try {
+        await resetLayoutStorageFromCurrentView();
+      } catch (err) {
+        if (window.debugError) window.debugError('layout', 'resetLayoutStorageFromCurrentView:', err);
+        if (window.popup && window.popup.alert) {
+          await window.popup.alert('Could not reset layout storage: ' + (err.message || String(err)), 'Error');
+        }
+      } finally {
+        wipeBtn.disabled = false;
+      }
     });
   }
 }
@@ -758,6 +1116,7 @@ function createSplitOverlay(column) {
     zone.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
       zone.style.background = 'rgba(100, 160, 120, 0.5)';
     });
 
@@ -826,7 +1185,6 @@ function createSplitOverlay(column) {
         saveLayoutConfig();
         renderLayout();
         renderLayoutEditor();
-        setTimeout(() => initDragAndDrop(), 50);
       }
     });
   });
@@ -948,7 +1306,6 @@ function createDropZones() {
           saveLayoutConfig();
           renderLayout();
           renderLayoutEditor();
-          setTimeout(() => initDragAndDrop(), 50);
           if (window.applyModuleVisibility) window.applyModuleVisibility();
         }
       }
@@ -1295,7 +1652,6 @@ function initDragAndDrop() {
             saveLayoutConfig();
             renderLayout();
             renderLayoutEditor();
-            setTimeout(() => initDragAndDrop(), 50);
           }
         } else if (!draggedPos && targetPos) {
           if (layoutConfig.rows[targetPos.rowIndex]) {
@@ -1307,7 +1663,6 @@ function initDragAndDrop() {
             saveLayoutConfig();
             renderLayout();
             renderLayoutEditor();
-            setTimeout(() => initDragAndDrop(), 50);
           }
         } else if (draggedPos && !targetPos) {
           if (layoutConfig.rows[draggedPos.rowIndex]) {
@@ -1323,7 +1678,6 @@ function initDragAndDrop() {
             saveLayoutConfig();
             renderLayout();
             renderLayoutEditor();
-            setTimeout(() => initDragAndDrop(), 50);
           }
         } else if (!draggedPos && !targetPos) {
           if (window.renderGitHubModules) window.renderGitHubModules();
@@ -1337,13 +1691,20 @@ function initDragAndDrop() {
   });
 
   columns.forEach(column => {
+    if (column.dataset.layoutColDndBound === '1') return;
+    column.dataset.layoutColDndBound = '1';
+
     column.addEventListener('dragover', function(e) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       if (draggedElement) {
         this.classList.add('drag-over');
-        // Start split timer if not already active for this column
-        if (splitActiveColumn !== this && !splitHoverTimeout) {
+        // Split overlay only makes sense when the column already has a module (or split slots).
+        if (
+          !this.classList.contains('empty-column') &&
+          splitActiveColumn !== this &&
+          !splitHoverTimeout
+        ) {
           startSplitTimer(this);
         }
       }
@@ -1423,7 +1784,6 @@ function initDragAndDrop() {
         saveLayoutConfig();
         renderLayout();
         renderLayoutEditor();
-        setTimeout(() => initDragAndDrop(), 50);
       }
 
       this.classList.remove('drag-over');
@@ -1434,6 +1794,9 @@ function initDragAndDrop() {
   // Handle split slots (for already-split columns)
   const splitSlots = grid.querySelectorAll('.split-slot');
   splitSlots.forEach(slot => {
+    if (slot.dataset.layoutSlotDndBound === '1') return;
+    slot.dataset.layoutSlotDndBound = '1';
+
     slot.addEventListener('dragover', function(e) {
       e.preventDefault();
       e.stopPropagation();
@@ -1498,13 +1861,15 @@ function initDragAndDrop() {
         saveLayoutConfig();
         renderLayout();
         renderLayoutEditor();
-        setTimeout(() => initDragAndDrop(), 50);
       }
     });
   });
 
   const timerCircles = grid.querySelectorAll('.timer-circle');
   timerCircles.forEach(timer => {
+    if (timer.dataset.layoutTimerDndGuard === '1') return;
+    timer.dataset.layoutTimerDndGuard = '1';
+
     timer.addEventListener('mousedown', function(e) {
       e.stopPropagation();
     });
@@ -1523,6 +1888,8 @@ function initLayout() {
     return;
   }
 
+  bindLayoutMaxWidthSelectDelegated();
+
   loadLayoutConfig();
   loadModuleOrder();
 
@@ -1530,7 +1897,6 @@ function initLayout() {
     renderLayout();
     renderLayoutEditor();
     initLayoutEditor();
-    initDragAndDrop();
     // Apply module visibility after layout is rendered
     if (window.applyModuleVisibility) {
       window.applyModuleVisibility();
@@ -1547,6 +1913,8 @@ window.layoutSystem = {
   saveLayoutConfig,
   cleanupLayoutConfig,
   adjustRowHeights,
+  removeModuleFromLayout,
+  resetLayoutStorageFromCurrentView,
   getLayoutConfig: () => layoutConfig
 };
 window.initDragAndDrop = initDragAndDrop;

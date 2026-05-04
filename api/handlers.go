@@ -2010,8 +2010,12 @@ func ProcessLayoutConfig(config LayoutConfig, modulePrefs map[string]interface{}
 		})
 	}
 
+	mw := config.MaxWidth
+	if mw < 1 || mw > 100 {
+		mw = 80
+	}
 	return LayoutConfig{
-		MaxWidth: config.MaxWidth,
+		MaxWidth: mw,
 		Rows:     processedRows,
 	}
 }

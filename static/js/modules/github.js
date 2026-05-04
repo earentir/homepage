@@ -48,7 +48,8 @@ const githubDisplayTypes = {
 let githubModules = [];
 try {
   const saved = window.loadFromStorage('githubModules');
-  if (saved && Array.isArray(saved) && saved.length > 0) {
+  // Must accept [] — otherwise deleting all modules reverts to defaults on next load.
+  if (Array.isArray(saved)) {
     githubModules = saved;
   } else {
     githubModules = defaultGitHubModules;
@@ -449,10 +450,6 @@ function renderGitHubModules() {
   }
 
   githubModules.forEach((mod, index) => {
-    // TEMP: Force enable all modules for debugging
-    mod.enabled = true;
-    // GitHub modules can appear in their dedicated container even if they're also in the layout
-
     const displayType = mod.displayType || 'repos';
     const typeInfo = githubDisplayTypes[displayType] || githubDisplayTypes.repos;
 
@@ -460,7 +457,6 @@ function renderGitHubModules() {
     card.className = 'card span-6';
     card.setAttribute('data-module', mod.id);
     card.setAttribute('draggable', 'true');
-    // TEMP: Add visible styling to ensure card is visible
 
     const hasTimer = index === 0;
     const timerHtml = hasTimer ? '<div class="timer-circle" id="githubTimer" title="Double-click to refresh"></div>' : '';
@@ -535,10 +531,23 @@ function renderGitHubModuleList() {
     deleteBtn.addEventListener('click', async () => {
       const confirmed = await window.popup.confirm('Delete GitHub module "' + mod.name + '"?', 'Confirm Delete');
       if (confirmed) {
+        const removedId = githubModules[index].id;
         githubModules.splice(index, 1);
         saveGitHubModules();
+        if (window.layoutSystem && window.layoutSystem.removeModuleFromLayout) {
+          if (window.layoutSystem.removeModuleFromLayout(removedId)) {
+            window.layoutSystem.saveLayoutConfig();
+            window.layoutSystem.renderLayout();
+            if (window.layoutSystem.renderLayoutEditor) {
+              window.layoutSystem.renderLayoutEditor();
+            }
+          }
+        }
         renderGitHubModuleList();
         renderGitHubModules();
+        if (window.initDragAndDrop) {
+          setTimeout(() => window.initDragAndDrop(), 50);
+        }
       }
     });
   });

@@ -125,6 +125,10 @@ function applyModuleVisibility() {
       }
     }, 0);
   }
+
+  if (window.refreshSnmpCardVisibility) {
+    window.refreshSnmpCardVisibility();
+  }
 }
 
 // Set up refresh intervals (fallback only if WebSocket is not connected)
@@ -257,7 +261,7 @@ async function initApp() {
 
   // Sync storage from backend on initialization
   if (window.syncAllFromBackend) {
-    window.syncAllFromBackend().then(() => {
+    window.syncAllFromBackend().then((syncResult) => {
       if (window.debugLog) window.debugLog('app', 'Storage sync from backend completed');
       
       // Reload module settings after sync (in case backend had newer values)
@@ -269,11 +273,16 @@ async function initApp() {
         window.reloadQuicklinksSettings();
       }
       
-      // Reload layout if it changed
-      if (window.loadLayoutConfig) {
+      // Reload layout only if the backend actually overwrote layout storage (avoids clobbering in-memory edits / stale rows)
+      const keys = (syncResult && syncResult.updatedKeys) || [];
+      const layoutStorageTouched = keys.indexOf('layoutConfig') !== -1 || keys.indexOf('moduleOrder') !== -1;
+      if (layoutStorageTouched && window.loadLayoutConfig) {
         window.loadLayoutConfig();
         if (window.renderLayout) {
           window.renderLayout();
+        }
+        if (window.renderLayoutEditor) {
+          window.renderLayoutEditor();
         }
       }
       
