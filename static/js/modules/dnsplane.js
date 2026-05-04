@@ -46,6 +46,20 @@ function boolLabel(ok) {
   return '<span class="muted">—</span>';
 }
 
+function dnsplaneStatCell(kLabel, vHtml) {
+  return (
+    '<div class="dnsplane-stat-cell"><span class="k">' +
+    kLabel +
+    '</span><span class="v">' +
+    vHtml +
+    '</span></div>'
+  );
+}
+
+function dnsplaneStatRow(leftCell, rightCell) {
+  return '<div class="dnsplane-stat-row">' + leftCell + rightCell + '</div>';
+}
+
 function renderDnsplane() {
   const container = document.getElementById('dnsplaneContainer');
   if (!container) return;
@@ -62,7 +76,7 @@ function renderDnsplane() {
     const nameText = window.escapeHtml(dnsplaneConfig.name || dnsplaneConfig.host + ':' + dnsplaneConfig.port);
     const dashUrl = dashboardUrl(dnsplaneConfig.host, dnsplaneConfig.port);
     container.innerHTML =
-      '<div class="kv" style="margin-bottom:8px;">' +
+      '<div class="kv dnsplane-card-header">' +
       '<div class="k">' +
       '<span class="monitor-status" id="dnsplane-status"><i class="fas fa-circle" style="color:var(--muted);"></i></span> ' +
       nameText +
@@ -230,38 +244,38 @@ async function checkDnsplane() {
       if (tuiConnected && tui.addr) tuiLine += ' · ' + String(tui.addr);
       if (tuiConnected && tui.since_rfc3339) tuiLine += ' · since ' + String(tui.since_rfc3339);
 
-      const grid =
-        '<div class="dnsplane-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; align-items:start;">' +
-        '<div class="kv" style="margin:0;"><div class="k">DNS</div><div class="v">' +
-        boolLabel(st.dns_up === true) +
-        '</div></div>' +
-        '<div class="kv" style="margin:0;"><div class="k">API</div><div class="v">' +
-        boolLabel(st.api_up === true) +
-        '</div></div>' +
-        '<div class="kv" style="margin:0;"><div class="k">Ready</div><div class="v">' +
-        boolLabel(st.ready === true) +
-        '</div></div>' +
-        '<div class="kv" style="margin:0;"><div class="k">Local records</div><div class="v mono">' +
-        window.escapeHtml(featureValue(feats, 'local_records')) +
-        '</div></div>' +
-        '<div class="kv" style="margin:0;"><div class="k">Resolver cache</div><div class="v mono">' +
-        window.escapeHtml(featureValue(feats, 'cache')) +
-        '</div></div>' +
-        '<div class="kv" style="margin:0;"><div class="k">TUI client</div><div class="v" style="font-size:0.9em;">' +
-        window.escapeHtml(tuiLine) +
-        '</div></div>' +
-        '</div>';
-
-      const totals =
-        '<div class="kv" style="margin-top:10px;"><div class="k">Queries / answered</div><div class="v mono">' +
-        (counters.total_queries != null ? Number(counters.total_queries).toLocaleString() : '—') +
-        ' / ' +
-        (counters.total_queries_answered != null
-          ? Number(counters.total_queries_answered).toLocaleString()
-          : '—') +
+      dataEl.innerHTML =
+        '<div class="dnsplane-stat-grid">' +
+        dnsplaneStatRow(
+          dnsplaneStatCell('DNS', boolLabel(st.dns_up === true)),
+          dnsplaneStatCell('API', boolLabel(st.api_up === true))
+        ) +
+        dnsplaneStatRow(
+          dnsplaneStatCell('Ready', boolLabel(st.ready === true)),
+          dnsplaneStatCell(
+            'Local records',
+            '<span class="mono">' + window.escapeHtml(featureValue(feats, 'local_records')) + '</span>'
+          )
+        ) +
+        dnsplaneStatRow(
+          dnsplaneStatCell(
+            'Resolver cache',
+            '<span class="mono">' + window.escapeHtml(featureValue(feats, 'cache')) + '</span>'
+          ),
+          dnsplaneStatCell('TUI client', '<span class="dnsplane-tui-val">' + window.escapeHtml(tuiLine) + '</span>')
+        ) +
+        '<div class="dnsplane-stat-row dnsplane-stat-totals">' +
+        dnsplaneStatCell(
+          'Queries / answered',
+          '<span class="mono">' +
+            (counters.total_queries != null ? Number(counters.total_queries).toLocaleString() : '—') +
+            ' / ' +
+            (counters.total_queries_answered != null
+              ? Number(counters.total_queries_answered).toLocaleString()
+              : '—') +
+            '</span>'
+        ) +
         '</div></div>';
-
-      dataEl.innerHTML = grid + totals;
     } else {
       statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#bf616a;"></i>';
       dataEl.innerHTML =
