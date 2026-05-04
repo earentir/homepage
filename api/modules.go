@@ -181,5 +181,12 @@ func GetModuleMetadata() map[string]ModuleMetadata {
 			DefaultInterval: 300,
 			Enabled:         true,
 		},
+		"worldclock": {
+			Name:     "World clock",
+			Icon:     "fa-globe",
+			Desc:     "Local time and additional IANA time zones",
+			HasTimer: false,
+			Enabled:  true,
+		},
 	}
 }

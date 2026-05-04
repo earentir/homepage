@@ -17,6 +17,7 @@ function refreshPreferenceListsOnOpen() {
   renderModuleList();
   initDebugSettings();
   if (window.syncCalendarPreferenceWidgets) window.syncCalendarPreferenceWidgets();
+  if (window.renderWorldClockList) window.renderWorldClockList();
 }
 
 function openPreferencesModal() {
@@ -115,6 +116,10 @@ function initPreferencesModal() {
       // Initialize debug settings when debug tab is opened
       if (tabName === 'debug') {
         initDebugSettings();
+      }
+
+      if (tabName === 'worldclock' && window.renderWorldClockList) {
+        window.renderWorldClockList();
       }
     });
   });
@@ -575,7 +580,7 @@ function renderModuleList() {
   moduleList.innerHTML = '';
 
   // Exclude calendar, todo, rss, snmp, monitoring, smbios, history, and github modules from the main module list (they have their own sections)
-  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp', 'monitoring', 'cpuid', 'raminfo', 'firmware', 'systeminfo', 'baseboard', 'cpu', 'ram', 'disk', 'github'];
+  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp', 'monitoring', 'cpuid', 'raminfo', 'firmware', 'systeminfo', 'baseboard', 'cpu', 'ram', 'disk', 'github', 'worldclock'];
 
   Object.keys(window.moduleConfig).forEach(key => {
     // Skip excluded modules
@@ -1380,7 +1385,7 @@ window.renderSMBIOSModuleList = renderSMBIOSModuleList;
 let debugSettingsInitialized = false;
 
 function initDebugSettings() {
-  const debugModules = ['sw', 'network', 'websocket', 'search', 'app', 'core', 'system', 'weather', 'github', 'rss', 'layout', 'preferences', 'config', 'calendar', 'todo', 'quicklinks', 'timer', 'bookmarks'];
+  const debugModules = ['sw', 'network', 'websocket', 'search', 'app', 'core', 'system', 'weather', 'github', 'rss', 'layout', 'preferences', 'config', 'calendar', 'todo', 'quicklinks', 'timer', 'bookmarks', 'worldclock'];
 
   // Load saved debug preferences
   try {

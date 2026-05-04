@@ -204,6 +204,7 @@ async function initApp() {
   if (window.initDisk) window.initDisk();
   if (window.initCalendar) window.initCalendar();
   if (window.initTodo) window.initTodo();
+  if (window.initWorldClock) window.initWorldClock();
 
   // Init layout
   if (window.initLayout) window.initLayout();
