@@ -28,6 +28,29 @@ function saveSnmpQueries() {
   } catch (e) {}
 }
 
+function shouldSnmpOccupyLayout() {
+  const globallyEnabled = !!(
+    window.moduleConfig &&
+    window.moduleConfig.snmp &&
+    window.moduleConfig.snmp.enabled
+  );
+  const hasActiveQuery = snmpQueries.some(function(q) {
+    return q && q.enabled !== false;
+  });
+  return globallyEnabled && hasActiveQuery;
+}
+
+function refreshSnmpCardVisibility() {
+  const card = document.querySelector('.card[data-module="snmp"]');
+  if (!card) return;
+  const visible = shouldSnmpOccupyLayout();
+  const prev = card.style.display;
+  card.style.display = visible ? '' : 'none';
+  if (prev !== card.style.display && window.layoutSystem && window.layoutSystem.renderLayout) {
+    window.layoutSystem.renderLayout();
+  }
+}
+
 function renderSnmpQueries() {
   const container = document.getElementById('snmpContainer');
   if (!container) return;
@@ -35,6 +58,7 @@ function renderSnmpQueries() {
   const enabledQueries = snmpQueries.filter(q => q.enabled !== false);
   if (enabledQueries.length === 0) {
     container.innerHTML = '<div class="small" style="color:var(--muted);">Add queries in Preferences → Modules → SNMP Modules</div>';
+    refreshSnmpCardVisibility();
     return;
   }
 
@@ -57,6 +81,7 @@ function renderSnmpQueries() {
     row.appendChild(v);
     container.appendChild(row);
   });
+  refreshSnmpCardVisibility();
 }
 
 function moveSnmpQueryUp(index) {
@@ -467,11 +492,15 @@ function initSnmp() {
   const addBtn = document.getElementById('addSnmpBtn');
   if (addBtn) {
     addBtn.addEventListener('click', () => {
-      console.log('SNMP Add button clicked');
       showSnmpEditDialog(-1);
     });
-  } else {
-    console.log('SNMP Add button not found');
+  }
+
+  const snmpCardAdd = document.getElementById('snmpCardAddBtn');
+  if (snmpCardAdd) {
+    snmpCardAdd.addEventListener('click', () => {
+      showSnmpEditDialog(-1);
+    });
   }
 
   renderSnmpQueries();
@@ -491,5 +520,7 @@ window.snmpQueries = snmpQueries;
 window.renderSnmpQueries = renderSnmpQueries;
 window.renderSnmpModuleList = renderSnmpModuleList;
 window.refreshSnmp = refreshSnmp;
+window.refreshSnmpCardVisibility = refreshSnmpCardVisibility;
+window.shouldSnmpOccupyLayout = shouldSnmpOccupyLayout;
 window.showSnmpEditDialog = showSnmpEditDialog;
 window.initSnmp = initSnmp;

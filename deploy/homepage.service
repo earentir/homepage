@@ -1,0 +1,24 @@
+# Single deploy directory: binary, homepage.config, and runtime configs/ under /opt/homepage.
+#
+# Install: place homepage, homepage.service, and install.sh in one directory (see deploy/install.sh),
+# then run: sudo ./install.sh     Optional SMBIOS caps: sudo ./install.sh --smbios
+
+[Unit]
+Description=Homepage dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=homepage
+Group=homepage
+WorkingDirectory=/opt/homepage
+ExecStart=/opt/homepage/homepage --config /opt/homepage/homepage.config --listen 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -11,6 +11,7 @@ const timers = {
   monitoring: {interval: 60000, lastUpdate: 0, timer: null},
   snmp: {interval: 60000, lastUpdate: 0, timer: null},
   speedplane: {interval: 300000, lastUpdate: 0, timer: null},
+  dnsplane: {interval: 60000, lastUpdate: 0, timer: null},
   rss: {interval: 300000, lastUpdate: 0, timer: null},
   general: {interval: 30000, lastUpdate: 0, timer: null}
 };
@@ -404,6 +405,23 @@ function setStorageVersion(key, version) {
   }
 }
 
+/** If local *_meta version is behind the server, bump local meta to match so the next save sync wins (avoids rejected writes then refresh restoring old layout/maxWidth). */
+async function alignLocalStorageVersionWithBackendKey(key) {
+  try {
+    const res = await fetch('/api/storage/get?key=' + encodeURIComponent(key), { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const backendVer = parseInt(data && data.version, 10);
+    if (isNaN(backendVer) || backendVer < 0) return;
+    const localVer = getStorageVersion(key);
+    if (localVer < backendVer) {
+      setStorageVersion(key, backendVer);
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('core', 'alignLocalStorageVersionWithBackendKey', key, e);
+  }
+}
+
 // Sync single key to backend (async, non-blocking)
 function syncToBackend(key, value, version) {
   // Skip sync if backend sync is disabled
@@ -638,7 +656,7 @@ async function syncAllFromBackend() {
     if (!response.ok) {
       syncStatus.state = 'offline';
       updateSyncStatusIndicator();
-      return;
+      return { updatedCount: 0, updatedKeys: [] };
     }
 
     const data = await response.json();
@@ -646,10 +664,11 @@ async function syncAllFromBackend() {
       syncStatus.state = 'success';
       syncStatus.lastSync = Date.now();
       updateSyncStatusIndicator();
-      return;
+      return { updatedCount: 0, updatedKeys: [] };
     }
 
     let updatedCount = 0;
+    const updatedKeys = [];
     for (const item of data.items) {
       const localVersion = getStorageVersion(item.key);
       const backendVersion = item.version || 0;
@@ -679,6 +698,9 @@ async function syncAllFromBackend() {
         }
         
         updatedCount++;
+        if (item.key) {
+          updatedKeys.push(item.key);
+        }
       }
     }
 
@@ -690,11 +712,13 @@ async function syncAllFromBackend() {
     syncStatus.lastSync = Date.now();
     syncStatus.errorCount = 0;
     updateSyncStatusIndicator();
+    return { updatedCount, updatedKeys };
   } catch (e) {
     if (window.debugError) window.debugError('core', 'Error syncing all from backend:', e);
     syncStatus.state = 'offline';
     syncStatus.errorCount++;
     updateSyncStatusIndicator();
+    return { updatedCount: 0, updatedKeys: [] };
   }
 }
 
@@ -895,7 +919,43 @@ if (typeof indexedDB !== 'undefined') {
   };
 }
 
+function initGlobalEscapeToClose() {
+  if (window.__homepageGlobalEsc) return;
+  window.__homepageGlobalEsc = true;
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    const moduleOverlays = document.querySelectorAll('.module-edit-overlay.active');
+    if (moduleOverlays.length) {
+      e.preventDefault();
+      e.stopPropagation();
+      const top = moduleOverlays[moduleOverlays.length - 1];
+      const closeBtn = top.querySelector('.module-dialog-close');
+      if (closeBtn) closeBtn.click();
+      return;
+    }
+    if (window.closePopupIfOpen && window.closePopupIfOpen()) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    const prefs = document.getElementById('prefsModal');
+    if (prefs && prefs.classList.contains('active')) {
+      const eventForm = document.getElementById('eventForm');
+      if (eventForm && eventForm.style.display === 'block') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.hideEventForm) window.hideEventForm();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.closePreferencesModal) window.closePreferencesModal();
+    }
+  }, true);
+}
+
 // Export to window
+window.initGlobalEscapeToClose = initGlobalEscapeToClose;
 window.timers = timers;
 window.updateTimer = updateTimer;
 window.startTimer = startTimer;
@@ -909,6 +969,8 @@ window.loadFromStorage = loadFromStorage;
 window.syncFromBackend = syncFromBackend;
 window.syncAllFromBackend = syncAllFromBackend;
 window.getStorageVersion = getStorageVersion;
+window.setStorageVersion = setStorageVersion;
+window.alignLocalStorageVersionWithBackendKey = alignLocalStorageVersionWithBackendKey;
 window.updateSyncStatusIndicator = updateSyncStatusIndicator;
 window.moveArrayItemUp = moveArrayItemUp;
 window.moveArrayItemDown = moveArrayItemDown;

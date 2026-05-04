@@ -470,6 +470,11 @@ async function initTodo() {
   if (addBtn) {
     addBtn.addEventListener('click', () => showTodoEditDialog(-1));
   }
+
+  const todoCardAdd = document.getElementById('todoCardAddBtn');
+  if (todoCardAdd) {
+    todoCardAdd.addEventListener('click', () => showTodoEditDialog(-1));
+  }
 }
 
 // Expose functions globally

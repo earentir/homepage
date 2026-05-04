@@ -22,7 +22,8 @@
 - [ ] Add inoreader support
 - [ ] Add TTRSS
 - [ ] Add module that gets a json and builds a ui
-- [ ] Add World Clock
+- [x] Add World Clock
+- [x] Add timezone calculator
 
 ## IP Address Module
 - [x] Add PTR of public IP addresses

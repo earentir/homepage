@@ -11,6 +11,7 @@ const refreshHandlers = {
   monitoring: () => window.refreshMonitoring && window.refreshMonitoring(),
   snmp: () => window.refreshSnmp && window.refreshSnmp(),
   speedplane: () => window.refreshSpeedplane && window.refreshSpeedplane(),
+  dnsplane: () => window.refreshDnsplane && window.refreshDnsplane(),
   rss: () => window.refreshRss && window.refreshRss()
 };
 
@@ -124,6 +125,10 @@ function applyModuleVisibility() {
       }
     }, 0);
   }
+
+  if (window.refreshSnmpCardVisibility) {
+    window.refreshSnmpCardVisibility();
+  }
 }
 
 // Set up refresh intervals (fallback only if WebSocket is not connected)
@@ -200,10 +205,12 @@ async function initApp() {
   if (window.initMonitoring) window.initMonitoring();
   if (window.initSnmp) window.initSnmp();
   if (window.initSpeedplane) window.initSpeedplane();
+  if (window.initDnsplane) window.initDnsplane();
   if (window.initRss) window.initRss();
   if (window.initDisk) window.initDisk();
   if (window.initCalendar) window.initCalendar();
   if (window.initTodo) window.initTodo();
+  if (window.initWorldClock) window.initWorldClock();
 
   // Init layout
   if (window.initLayout) window.initLayout();
@@ -211,6 +218,7 @@ async function initApp() {
   // Setup handlers
   setupTimerHandlers();
   setupIntervals();
+  if (window.initGlobalEscapeToClose) window.initGlobalEscapeToClose();
 
   // Initialize WebSocket for real-time status detection
   if (window.initWebSocket) {
@@ -232,6 +240,7 @@ async function initApp() {
       'monitoring': () => window.refreshMonitoring && window.refreshMonitoring(),
       'snmp': () => window.refreshSnmp && window.refreshSnmp(),
       'speedplane': () => window.refreshSpeedplane && window.refreshSpeedplane(),
+      'dnsplane': () => window.refreshDnsplane && window.refreshDnsplane(),
       'rss': () => window.refreshRss && window.refreshRss()
     };
     
@@ -252,7 +261,7 @@ async function initApp() {
 
   // Sync storage from backend on initialization
   if (window.syncAllFromBackend) {
-    window.syncAllFromBackend().then(() => {
+    window.syncAllFromBackend().then((syncResult) => {
       if (window.debugLog) window.debugLog('app', 'Storage sync from backend completed');
       
       // Reload module settings after sync (in case backend had newer values)
@@ -264,11 +273,16 @@ async function initApp() {
         window.reloadQuicklinksSettings();
       }
       
-      // Reload layout if it changed
-      if (window.loadLayoutConfig) {
+      // Reload layout only if the backend actually overwrote layout storage (avoids clobbering in-memory edits / stale rows)
+      const keys = (syncResult && syncResult.updatedKeys) || [];
+      const layoutStorageTouched = keys.indexOf('layoutConfig') !== -1 || keys.indexOf('moduleOrder') !== -1;
+      if (layoutStorageTouched && window.loadLayoutConfig) {
         window.loadLayoutConfig();
         if (window.renderLayout) {
           window.renderLayout();
+        }
+        if (window.renderLayoutEditor) {
+          window.renderLayoutEditor();
         }
       }
       

@@ -1,5 +1,39 @@
 // Preferences modal management
 
+function refreshPreferenceListsOnOpen() {
+  if (window.renderGitHubModuleList) window.renderGitHubModuleList();
+  if (window.renderQuicklinksList) window.renderQuicklinksList();
+  if (window.renderMonitorModuleList) window.renderMonitorModuleList();
+  if (window.renderRssModuleList) window.renderRssModuleList();
+  if (window.renderSnmpModuleList) window.renderSnmpModuleList();
+  if (window.renderHistoryModuleList) window.renderHistoryModuleList();
+  if (window.renderSMBIOSModuleList) window.renderSMBIOSModuleList();
+  if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
+  if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
+  if (window.renderCalendarModuleList) window.renderCalendarModuleList();
+  if (window.renderTodoModuleList) window.renderTodoModuleList();
+  if (window.initICSCalendars) window.initICSCalendars();
+  if (window.loadServerConfigs) window.loadServerConfigs();
+  renderModuleList();
+  initDebugSettings();
+  if (window.syncCalendarPreferenceWidgets) window.syncCalendarPreferenceWidgets();
+  if (window.renderWorldClockList) window.renderWorldClockList();
+}
+
+function openPreferencesModal() {
+  const modal = document.getElementById('prefsModal');
+  if (!modal) return;
+  modal.classList.add('active');
+  populateSchemeDropdown();
+  refreshPreferenceListsOnOpen();
+}
+
+function closePreferencesModal() {
+  const modal = document.getElementById('prefsModal');
+  if (modal) modal.classList.remove('active');
+  if (window.hideEventForm) window.hideEventForm();
+}
+
 function initPreferencesModal() {
   const openBtn = document.getElementById('prefsBtn');
   const closeBtn = document.getElementById('prefsClose');
@@ -9,41 +43,19 @@ function initPreferencesModal() {
 
   if (!modal || !openBtn) return;
 
-  // Open modal
   openBtn.addEventListener('click', () => {
-    modal.classList.add('active');
-    // Populate scheme dropdown (needs to happen after schemeMenu is in DOM)
-    populateSchemeDropdown();
-    // Render lists when modal opens
-    if (window.renderGitHubModuleList) window.renderGitHubModuleList();
-    if (window.renderQuicklinksList) window.renderQuicklinksList();
-    if (window.renderMonitorModuleList) window.renderMonitorModuleList();
-    if (window.renderRssModuleList) window.renderRssModuleList();
-    if (window.renderSnmpModuleList) window.renderSnmpModuleList();
-    if (window.renderHistoryModuleList) window.renderHistoryModuleList();
-    if (window.renderSMBIOSModuleList) window.renderSMBIOSModuleList();
-    if (window.renderEventsPreferenceList) window.renderEventsPreferenceList();
-    if (window.renderTodosPreferenceList) window.renderTodosPreferenceList();
-    if (window.renderCalendarModuleList) window.renderCalendarModuleList();
-    if (window.renderTodoModuleList) window.renderTodoModuleList();
-    if (window.initICSCalendars) window.initICSCalendars();
-    if (window.loadServerConfigs) window.loadServerConfigs();
-    renderModuleList();
-    // Initialize debug settings when modal opens
-    initDebugSettings();
+    openPreferencesModal();
   });
 
-  // Close modal
   if (closeBtn) {
     closeBtn.addEventListener('click', () => {
-      modal.classList.remove('active');
+      closePreferencesModal();
     });
   }
 
-  // Close on overlay click
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
-      modal.classList.remove('active');
+      closePreferencesModal();
     }
   });
 
@@ -81,6 +93,9 @@ function initPreferencesModal() {
       if (tabName === 'calendar' && window.renderEventsPreferenceList) {
         window.renderEventsPreferenceList();
       }
+      if (tabName === 'calendar' && window.syncCalendarPreferenceWidgets) {
+        window.syncCalendarPreferenceWidgets();
+      }
 
       // Render todos list when todo tab is opened
       if (tabName === 'todo' && window.renderTodosPreferenceList) {
@@ -101,6 +116,10 @@ function initPreferencesModal() {
       // Initialize debug settings when debug tab is opened
       if (tabName === 'debug') {
         initDebugSettings();
+      }
+
+      if (tabName === 'worldclock' && window.renderWorldClockList) {
+        window.renderWorldClockList();
       }
     });
   });
@@ -561,7 +580,7 @@ function renderModuleList() {
   moduleList.innerHTML = '';
 
   // Exclude calendar, todo, rss, snmp, monitoring, smbios, history, and github modules from the main module list (they have their own sections)
-  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp', 'monitoring', 'cpuid', 'raminfo', 'firmware', 'systeminfo', 'baseboard', 'cpu', 'ram', 'disk', 'github'];
+  const excludedModules = ['calendar', 'events', 'weekcalendar', 'todo', 'rss', 'snmp', 'monitoring', 'cpuid', 'raminfo', 'firmware', 'systeminfo', 'baseboard', 'cpu', 'ram', 'disk', 'github', 'worldclock'];
 
   Object.keys(window.moduleConfig).forEach(key => {
     // Skip excluded modules
@@ -579,6 +598,7 @@ function renderModuleList() {
       <div class="module-controls">
         ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
         ${key === 'speedplane' ? `<button class="btn-small edit-speedplane-btn" data-module="${key}" title="Configure"><i class="fas fa-edit"></i></button>` : ''}
+        ${key === 'dnsplane' ? `<button class="btn-small edit-dnsplane-btn" data-module="${key}" title="Configure DNSPlane"><i class="fas fa-edit"></i></button>` : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -628,6 +648,14 @@ function renderModuleList() {
     btn.addEventListener('click', () => {
       if (window.showSpeedplaneEditDialog) {
         window.showSpeedplaneEditDialog();
+      }
+    });
+  });
+
+  moduleList.querySelectorAll('.edit-dnsplane-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.showDnsplaneEditDialog) {
+        window.showDnsplaneEditDialog();
       }
     });
   });
@@ -1366,7 +1394,7 @@ window.renderSMBIOSModuleList = renderSMBIOSModuleList;
 let debugSettingsInitialized = false;
 
 function initDebugSettings() {
-  const debugModules = ['sw', 'network', 'websocket', 'search', 'app', 'core', 'system', 'weather', 'github', 'rss', 'layout', 'preferences', 'config', 'calendar', 'todo', 'quicklinks', 'timer', 'bookmarks'];
+  const debugModules = ['sw', 'network', 'websocket', 'search', 'app', 'core', 'system', 'weather', 'github', 'rss', 'layout', 'preferences', 'config', 'calendar', 'todo', 'quicklinks', 'timer', 'bookmarks', 'worldclock'];
 
   // Load saved debug preferences
   try {
@@ -1440,3 +1468,17 @@ function applyPageTitle(title) {
 window.initPreferencesModal = initPreferencesModal;
 window.renderModuleList = renderModuleList;
 window.applyPageTitle = applyPageTitle;
+window.openPreferencesModal = openPreferencesModal;
+window.closePreferencesModal = closePreferencesModal;
+window.openPreferencesTab = function(tabName, afterOpen) {
+  openPreferencesModal();
+  const tabBtn = document.querySelector('.modal-tab[data-tab="' + tabName + '"]');
+  if (tabBtn) tabBtn.click();
+  if (typeof afterOpen === 'function') {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        afterOpen();
+      });
+    });
+  }
+};
