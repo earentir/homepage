@@ -66,6 +66,7 @@ func (h *Handler) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/monitor", h.HandleMonitor)
 	mux.HandleFunc("/api/snmp", h.HandleSNMP)
 	mux.HandleFunc("/api/speedplane", h.HandleSpeedplane)
+	mux.HandleFunc("/api/dnsplane", h.HandleDNSplane)
 	mux.HandleFunc("/api/rss", h.HandleRSS)
 	mux.HandleFunc("/api/config/upload", h.HandleConfigUpload)
 	mux.HandleFunc("/api/config/list", h.HandleConfigList)
@@ -723,6 +724,78 @@ func (h *Handler) HandleSpeedplane(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Decode JSON response
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to parse JSON: %v", err),
+		})
+		return
+	}
+
+	WriteJSON(w, map[string]any{
+		"success": true,
+		"data":    data,
+	})
+}
+
+// HandleDNSplane proxies DNSPlane dashboard JSON (same shape as /stats/dashboard/data).
+func (h *Handler) HandleDNSplane(w http.ResponseWriter, r *http.Request) {
+	host := r.URL.Query().Get("host")
+	port := r.URL.Query().Get("port")
+
+	if host == "" || port == "" {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   "Missing required parameters: host, port",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	apiURL := fmt.Sprintf("http://%s:%s/stats/dashboard/data", host, port)
+
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to create request: %v", err),
+		})
+		return
+	}
+	req.Header.Set("User-Agent", "lan-index/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to fetch data: %v", err),
+		})
+		return
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Error closing DNSplane response body: %v", closeErr)
+		}
+	}()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		WriteJSON(w, map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("HTTP error: %s", resp.Status),
+		})
+		return
+	}
+
 	var data map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		WriteJSON(w, map[string]any{
@@ -1674,6 +1747,8 @@ func ValidateInput(req InputValidationRequest) (bool, string) {
 		return validateMonitoring(req.Data)
 	case "speedplane":
 		return validateSpeedplane(req.Data)
+	case "dnsplane":
+		return validateDNSplane(req.Data)
 	default:
 		return false, "Unknown validation type: " + req.Type
 	}
@@ -1762,6 +1837,11 @@ func validateSpeedplane(data map[string]interface{}) (bool, string) {
 		return false, "Port must be between 1 and 65535"
 	}
 	return true, ""
+}
+
+// validateDNSplane validates DNSPlane host/port (same rules as Speedplane).
+func validateDNSplane(data map[string]interface{}) (bool, string) {
+	return validateSpeedplane(data)
 }
 
 // validateMonitoring validates a monitoring item.
@@ -2283,6 +2363,10 @@ func (h *Handler) HandleModuleConfig(w http.ResponseWriter, r *http.Request) {
 			if item, exists := storage.Get("speedplaneConfig"); exists {
 				configs = item.Value
 			}
+		case "dnsplane":
+			if item, exists := storage.Get("dnsplaneConfig"); exists {
+				configs = item.Value
+			}
 		case "quicklinks":
 			if item, exists := storage.Get("quickLinks"); exists {
 				configs = item.Value
@@ -2310,7 +2394,7 @@ func (h *Handler) HandleModuleConfig(w http.ResponseWriter, r *http.Request) {
 	// Validate module type
 		validTypes := map[string]bool{
 			"github": true, "rss": true, "disk": true,
-			"monitoring": true, "snmp": true, "speedplane": true, "quicklinks": true,
+			"monitoring": true, "snmp": true, "speedplane": true, "dnsplane": true, "quicklinks": true,
 		}
 	if !validTypes[req.Type] {
 		WriteJSON(w, map[string]any{"error": "Invalid module type"})
@@ -2332,6 +2416,8 @@ func (h *Handler) HandleModuleConfig(w http.ResponseWriter, r *http.Request) {
 		storageKey = "snmpQueries"
 	case "speedplane":
 		storageKey = "speedplaneConfig"
+	case "dnsplane":
+		storageKey = "dnsplaneConfig"
 	case "quicklinks":
 		storageKey = "quickLinks"
 	}
@@ -2427,6 +2513,25 @@ func ValidateModuleConfig(moduleType string, data interface{}) (bool, string) {
 		if portNum < 1 || portNum > 65535 {
 			return false, "Port must be between 1 and 65535"
 		}
+	case "dnsplane":
+		host, _ := dataMap["host"].(string)
+		port, _ := dataMap["port"]
+		if host == "" {
+			return false, "Host is required"
+		}
+		var portNum float64
+		var ok bool
+		portNum, ok = port.(float64)
+		if !ok {
+			portInt, ok := port.(int)
+			if !ok {
+				return false, "Port must be a number"
+			}
+			portNum = float64(portInt)
+		}
+		if portNum < 1 || portNum > 65535 {
+			return false, "Port must be between 1 and 65535"
+		}
 	case "quicklinks":
 		url, _ := dataMap["url"].(string)
 		title, _ := dataMap["title"].(string)
@@ -2481,6 +2586,8 @@ func (h *Handler) HandleModulesBatch(w http.ResponseWriter, r *http.Request) {
 				storageKey = "snmpQueries"
 			case "speedplane":
 				storageKey = "speedplaneConfig"
+			case "dnsplane":
+				storageKey = "dnsplaneConfig"
 			case "quicklinks":
 				storageKey = "quickLinks"
 			default:
@@ -2502,6 +2609,7 @@ func (h *Handler) HandleModulesBatch(w http.ResponseWriter, r *http.Request) {
 			"monitoring": "monitors",
 			"snmp":       "snmpQueries",
 			"speedplane": "speedplaneConfig",
+			"dnsplane":   "dnsplaneConfig",
 			"quicklinks": "quickLinks",
 		}
 

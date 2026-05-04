@@ -254,6 +254,13 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
 
+      <div class="card span-6" data-module="dnsplane" draggable="true">
+        <h3><i class="fas fa-network-wired"></i> DNSPlane<div class="header-icons"><div class="timer-circle" id="dnsplaneTimer" title="Double-click to refresh"></div><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
+        <div id="dnsplaneContainer">
+          <div class="small" style="color:var(--muted);">Configure host and API port in Preferences → Modules (edit).</div>
+        </div>
+      </div>
+
       <div class="card span-4" data-module="calendar" draggable="true">
         <h3><i class="fas fa-calendar-alt"></i> Calendar<div class="header-icons"><button type="button" class="btn-icon" id="calCardAddEventBtn" title="Add event"><i class="fas fa-plus"></i></button><button type="button" class="btn-icon" id="calTodayBtn" title="Go to current month"><i class="fas fa-dot-circle"></i></button><button type="button" class="btn-icon" id="calPrevBtn" title="Previous month"><i class="fas fa-chevron-left"></i></button><button type="button" class="btn-icon" id="calNextBtn" title="Next month"><i class="fas fa-chevron-right"></i></button><i class="fas fa-grip-vertical drag-handle" title="Drag to reorder"></i></div></h3>
         <div class="calendar-nav">
@@ -991,6 +998,7 @@ if ('serviceWorker' in navigator) {
 <script src="/static/js/modules/monitoring.js"></script>
 <script src="/static/js/modules/snmp.js"></script>
 <script src="/static/js/modules/speedplane.js"></script>
+<script src="/static/js/modules/dnsplane.js"></script>
 <script src="/static/js/modules/calendar.js"></script>
 <script src="/static/js/modules/todo.js"></script>
 <script src="/static/js/modules/worldclock.js"></script>

@@ -598,6 +598,7 @@ function renderModuleList() {
       <div class="module-controls">
         ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
         ${key === 'speedplane' ? `<button class="btn-small edit-speedplane-btn" data-module="${key}" title="Configure"><i class="fas fa-edit"></i></button>` : ''}
+        ${key === 'dnsplane' ? `<button class="btn-small edit-dnsplane-btn" data-module="${key}" title="Configure DNSPlane"><i class="fas fa-edit"></i></button>` : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -647,6 +648,14 @@ function renderModuleList() {
     btn.addEventListener('click', () => {
       if (window.showSpeedplaneEditDialog) {
         window.showSpeedplaneEditDialog();
+      }
+    });
+  });
+
+  moduleList.querySelectorAll('.edit-dnsplane-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.showDnsplaneEditDialog) {
+        window.showDnsplaneEditDialog();
       }
     });
   });

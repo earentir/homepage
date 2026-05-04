@@ -181,6 +181,15 @@ func GetModuleMetadata() map[string]ModuleMetadata {
 			DefaultInterval: 300,
 			Enabled:         true,
 		},
+		"dnsplane": {
+			Name:            "DNSPlane",
+			Icon:            "fa-network-wired",
+			Desc:            "DNSPlane resolver status from dashboard API",
+			HasTimer:        true,
+			TimerKey:        "dnsplane",
+			DefaultInterval: 60,
+			Enabled:         true,
+		},
 		"worldclock": {
 			Name:     "World clock",
 			Icon:     "fa-globe",
