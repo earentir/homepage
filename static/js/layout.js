@@ -35,7 +35,7 @@ async function loadModuleMetadata() {
   } catch (e) {
     if (window.debugError) window.debugError('layout', 'Error loading module metadata from backend:', e);
   }
-  
+
   // Fallback: use empty object if backend fails
   moduleConfig = {};
   window.moduleConfig = moduleConfig;
@@ -238,6 +238,13 @@ function cleanupLayoutConfig() {
     }
   }
 
+  // Monitoring: no layout slot when the module is off or there are no services
+  if (typeof window.shouldMonitoringOccupyLayout === 'function' && !window.shouldMonitoringOccupyLayout()) {
+    if (removeModuleFromLayout('monitoring')) {
+      changed = true;
+    }
+  }
+
   // First pass: replace disabled modules with null
   layoutConfig.rows.forEach(row => {
     for (let i = 0; i < row.modules.length; i++) {
@@ -322,8 +329,8 @@ function renderLayout() {
     const moduleId = card.getAttribute('data-module');
     if (moduleId && !cardsMap.has(moduleId)) {
       // Only include enabled modules
-      const isEnabled = window.moduleConfig && window.moduleConfig[moduleId] 
-        ? window.moduleConfig[moduleId].enabled !== false 
+      const isEnabled = window.moduleConfig && window.moduleConfig[moduleId]
+        ? window.moduleConfig[moduleId].enabled !== false
         : true; // Default to enabled if not in config
       if (isEnabled) {
         cardsMap.set(moduleId, card);
@@ -492,6 +499,24 @@ function renderLayout() {
     }
   }
 
+  // Same for Monitoring when there are no monitors or the module is disabled
+  if (typeof window.shouldMonitoringOccupyLayout === 'function' && !window.shouldMonitoringOccupyLayout()) {
+    const monitoringCard = cardsMap.get('monitoring');
+    if (monitoringCard) {
+      let lot = document.getElementById('layoutParkingLot');
+      if (!lot) {
+        lot = document.createElement('div');
+        lot.id = 'layoutParkingLot';
+        lot.setAttribute('aria-hidden', 'true');
+        lot.style.cssText =
+          'display:none;width:0;height:0;overflow:hidden;position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;';
+        document.body.appendChild(lot);
+      }
+      lot.appendChild(monitoringCard);
+      cardsMap.delete('monitoring');
+    }
+  }
+
   // Handle remaining modules that aren't in the layout config yet
   if (cardsMap.size > 0) {
     const remainingModules = Array.from(cardsMap.keys());
@@ -575,11 +600,11 @@ function adjustRowHeights() {
         const topSlot = col.querySelector('.split-slot-top');
         const bottomSlot = col.querySelector('.split-slot-bottom');
         let splitHeight = 0;
-        
+
         // Temporarily set to auto to measure natural height
         const originalHeight = col.style.height;
         col.style.height = 'auto';
-        
+
         if (topSlot) {
           const topCard = topSlot.querySelector('.card');
           if (topCard) {
@@ -596,11 +621,11 @@ function adjustRowHeights() {
             splitHeight += 60; // min-height for empty split
           }
         }
-        if (topSlot && bottomSlot && (topSlot.querySelector('.card') || topSlot.classList.contains('empty-split')) && 
+        if (topSlot && bottomSlot && (topSlot.querySelector('.card') || topSlot.classList.contains('empty-split')) &&
             (bottomSlot.querySelector('.card') || bottomSlot.classList.contains('empty-split'))) {
           splitHeight += 8; // gap
         }
-        
+
         col.style.height = originalHeight;
         maxHeight = Math.max(maxHeight, splitHeight);
       } else {
@@ -626,12 +651,12 @@ function adjustRowHeights() {
           // Set column to max height
           col.style.height = maxHeight + 'px';
           col.style.minHeight = maxHeight + 'px';
-          
+
           const topSlot = col.querySelector('.split-slot-top');
           const bottomSlot = col.querySelector('.split-slot-bottom');
           const gap = 8;
           const availableHeight = maxHeight - gap;
-          
+
           // Each slot should take at least 50% of available height
           // Use flex: 1 1 0 to make them equal by default, but allow growth
           if (topSlot && bottomSlot) {
@@ -1408,7 +1433,7 @@ function pinModule(element) {
     if (grid) {
       const emptyColumns = grid.querySelectorAll('.layout-column');
       emptyColumns.forEach(col => col.classList.add('dragging-active'));
-      
+
       // Also highlight empty split slots
       const emptySplitSlots = grid.querySelectorAll('.split-slot.empty-split');
       emptySplitSlots.forEach(slot => slot.classList.add('dragging-active'));
@@ -1426,7 +1451,7 @@ function pinModule(element) {
         c.classList.remove('drag-over');
         c.classList.remove('dragging-active');
       });
-      
+
       // Also remove from empty split slots
       const emptySplitSlots = grid.querySelectorAll('.split-slot.empty-split');
       emptySplitSlots.forEach(slot => {
@@ -1590,7 +1615,7 @@ function initDragAndDrop() {
 
       const emptyColumns = grid.querySelectorAll('.layout-column.empty-column');
       emptyColumns.forEach(col => col.classList.add('dragging-active'));
-      
+
       // Also highlight empty split slots
       const emptySplitSlots = grid.querySelectorAll('.split-slot.empty-split');
       emptySplitSlots.forEach(slot => slot.classList.add('dragging-active'));

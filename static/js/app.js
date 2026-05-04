@@ -62,7 +62,7 @@ async function saveModulePrefs() {
         };
       });
     }
-    
+
     // Process and validate using backend
     // Merge processed preferences back into original prefs to preserve all modules
     // The backend only returns modules that exist in metadata, so we need to keep all modules
@@ -93,7 +93,7 @@ async function saveModulePrefs() {
     } catch (e) {
       if (window.debugError) window.debugError('app', 'Error processing module prefs:', e);
     }
-    
+
     // Save all modules, not just processed ones, to preserve modules not in metadata
     window.saveToStorage('modulePrefs', prefs);
   } catch (e) {
@@ -128,6 +128,9 @@ function applyModuleVisibility() {
 
   if (window.refreshSnmpCardVisibility) {
     window.refreshSnmpCardVisibility();
+  }
+  if (window.refreshMonitoringCardVisibility) {
+    window.refreshMonitoringCardVisibility();
   }
 }
 
@@ -175,12 +178,12 @@ function initialLoad() {
 // Main initialization
 async function initApp() {
   if (window.debugLog) window.debugLog('app', 'initApp() called, readyState:', document.readyState);
-  
+
   // Load module metadata from backend first
   if (window.loadModuleMetadata) {
     await window.loadModuleMetadata();
   }
-  
+
   loadModulePrefs();
   applyModuleVisibility();
 
@@ -228,7 +231,7 @@ async function initApp() {
   // Set up WebSocket refresh handler - modules receive refresh notifications and fetch their own data
   window.onModuleRefresh = function(moduleName) {
     if (window.debugLog) window.debugLog('app', 'WebSocket refresh notification for:', moduleName);
-    
+
     // Map timer keys to refresh handlers - modules fetch their own data via HTTP
     const refreshMap = {
       'cpu': () => window.refreshCPU && window.refreshCPU(),
@@ -243,7 +246,7 @@ async function initApp() {
       'dnsplane': () => window.refreshDnsplane && window.refreshDnsplane(),
       'rss': () => window.refreshRss && window.refreshRss()
     };
-    
+
     const handler = refreshMap[moduleName];
     if (handler) {
       handler();
@@ -263,16 +266,16 @@ async function initApp() {
   if (window.syncAllFromBackend) {
     window.syncAllFromBackend().then((syncResult) => {
       if (window.debugLog) window.debugLog('app', 'Storage sync from backend completed');
-      
+
       // Reload module settings after sync (in case backend had newer values)
       loadModulePrefs();
       applyModuleVisibility();
-      
+
       // Reload other module settings
       if (window.reloadQuicklinksSettings) {
         window.reloadQuicklinksSettings();
       }
-      
+
       // Reload layout only if the backend actually overwrote layout storage (avoids clobbering in-memory edits / stale rows)
       const keys = (syncResult && syncResult.updatedKeys) || [];
       const layoutStorageTouched = keys.indexOf('layoutConfig') !== -1 || keys.indexOf('moduleOrder') !== -1;
@@ -285,17 +288,17 @@ async function initApp() {
           window.renderLayoutEditor();
         }
       }
-      
+
       // Reload graphs settings
       if (window.initGraphs) {
         window.initGraphs();
       }
-      
+
       // Reload search settings
       if (window.initSearch) {
         window.initSearch();
       }
-      
+
       // Initial load after sync completes
       initialLoad();
     }).catch(() => {

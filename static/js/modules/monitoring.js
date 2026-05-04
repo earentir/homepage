@@ -42,6 +42,26 @@ function saveMonitorInterval(seconds) {
   } catch (e) {}
 }
 
+function shouldMonitoringOccupyLayout() {
+  const globallyEnabled = !!(
+    window.moduleConfig &&
+    window.moduleConfig.monitoring &&
+    window.moduleConfig.monitoring.enabled
+  );
+  return globallyEnabled && monitors.length > 0;
+}
+
+function refreshMonitoringCardVisibility() {
+  const card = document.querySelector('.card[data-module="monitoring"]');
+  if (!card) return;
+  const visible = shouldMonitoringOccupyLayout();
+  const prev = card.style.display;
+  card.style.display = visible ? '' : 'none';
+  if (prev !== card.style.display && window.layoutSystem && window.layoutSystem.renderLayout) {
+    window.layoutSystem.renderLayout();
+  }
+}
+
 function formatTimeSince(ms) {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -68,6 +88,7 @@ function renderMonitors() {
 
   if (monitors.length === 0) {
     container.innerHTML = '<div class="small" style="color:var(--muted);">Add services in Preferences → Monitoring</div>';
+    refreshMonitoringCardVisibility();
     return;
   }
 
@@ -92,6 +113,7 @@ function renderMonitors() {
     row.appendChild(v);
     container.appendChild(row);
   });
+  refreshMonitoringCardVisibility();
 }
 
 async function checkMonitor(mon, index) {
@@ -767,3 +789,5 @@ window.refreshMonitoring = refreshMonitoring;
 window.renderMonitorModuleList = renderMonitorModuleList;
 window.showMonitorEditDialog = showMonitorEditDialog;
 window.initMonitoring = initMonitoring;
+window.refreshMonitoringCardVisibility = refreshMonitoringCardVisibility;
+window.shouldMonitoringOccupyLayout = shouldMonitoringOccupyLayout;
