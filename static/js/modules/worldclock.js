@@ -18,8 +18,6 @@
   // Abbreviations and typos → IANA (for calculator target field only).
   const CALC_SHORT_TO_IANA = {
     UTC: 'UTC',
-    /** User input only: GMT as a synonym for the universal zone (we display UTC, not GMT). */
-    GMT: 'UTC',
     Z: 'UTC',
     PST: 'America/Los_Angeles',
     PDT: 'America/Los_Angeles',
@@ -261,21 +259,14 @@
         timeZoneName: 'long'
       }).formatToParts(now);
       const p = parts.find(function(x) { return x.type === 'timeZoneName'; });
-      return (p && p.value) ? p.value : tz;
+      const v = (p && p.value) ? p.value : tz;
+      return String(v).replace(/GMT/gi, 'UTC');
     } catch (e) {
       return tz;
     }
   }
 
-  /** IANA zones that are the same instant as UTC; we label them UTC (Intl often returns "GMT" for short). */
-  function isUtcEquivalentIANA(tz) {
-    if (!tz || typeof tz !== 'string') return false;
-    const t = tz.trim();
-    if (t === 'UTC' || t === 'Etc/UTC' || t === 'Etc/UCT') return true;
-    if (t === 'Etc/GMT+0' || t === 'Etc/GMT-0') return true;
-    return false;
-  }
-
+  /** Numeric offset string from ICU; we never show "GMT" in UI, only "UTC". */
   function utcOffsetLabel(now, tz) {
     try {
       const parts = new Intl.DateTimeFormat('en-US', {
@@ -284,24 +275,10 @@
       }).formatToParts(now);
       const p = parts.find(function(x) { return x.type === 'timeZoneName'; });
       let s = (p && p.value) ? p.value : '';
-      // ICU uses a "GMT±…" prefix for offset strings; we prefer "UTC±…" (same numeric offset).
-      return s.replace(/^GMT/, 'UTC');
+      return s.replace(/GMT/gi, 'UTC');
     } catch (e) {
       return '';
     }
-  }
-
-  function shortTimeZoneAbbrev(now, tz) {
-    if (isUtcEquivalentIANA(tz)) return 'UTC';
-    try {
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        timeZoneName: 'short'
-      }).formatToParts(now);
-      const p = parts.find(function(x) { return x.type === 'timeZoneName'; });
-      if (p && p.value) return p.value;
-    } catch (e) {}
-    return utcOffsetLabel(now, tz) || '—';
   }
 
   function resolveCalculatorTarget(raw) {
@@ -358,7 +335,7 @@
     const abbrEl = document.getElementById('wc-calc-local-abbr');
     const subEl = document.getElementById('wc-calc-local-sub');
     const timeEl = document.getElementById('wc-calc-local-time');
-    if (abbrEl) abbrEl.textContent = shortTimeZoneAbbrev(now, localTz);
+    if (abbrEl) abbrEl.textContent = utcOffsetLabel(now, localTz) || '—';
     if (subEl) subEl.textContent = getLocalClockLabel() + ' · ' + localTz;
     if (timeEl) timeEl.textContent = formatHMSLocal(now);
 
@@ -396,7 +373,7 @@
     }
 
     if (meta) {
-      meta.textContent = shortTimeZoneAbbrev(now, resolved) + ' · ' + resolved;
+      meta.textContent = (utcOffsetLabel(now, resolved) || '—') + ' · ' + resolved;
     }
     if (ttime) ttime.textContent = formatHMS(now, resolved);
   }
