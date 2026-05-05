@@ -411,13 +411,11 @@ function renderLayout() {
         topWrapper.className = 'split-slot split-slot-top';
         topWrapper.dataset.splitPosition = 'top';
         topWrapper.style.flex = '0 1 auto';
-        topWrapper.style.overflow = 'hidden';
 
         if (moduleSlot[0] && isModuleEnabled(moduleSlot[0])) {
           const topCard = cardsMap.get(moduleSlot[0]);
           if (topCard) {
             topCard.style.height = 'auto';
-            topCard.style.overflow = 'hidden';
             topWrapper.appendChild(topCard);
             cardsMap.delete(moduleSlot[0]);
           } else {
@@ -434,13 +432,11 @@ function renderLayout() {
         bottomWrapper.className = 'split-slot split-slot-bottom';
         bottomWrapper.dataset.splitPosition = 'bottom';
         bottomWrapper.style.flex = '0 1 auto';
-        bottomWrapper.style.overflow = 'hidden';
 
         if (moduleSlot[1] && isModuleEnabled(moduleSlot[1])) {
           const bottomCard = cardsMap.get(moduleSlot[1]);
           if (bottomCard) {
             bottomCard.style.height = 'auto';
-            bottomCard.style.overflow = 'hidden';
             bottomWrapper.appendChild(bottomCard);
             cardsMap.delete(moduleSlot[1]);
           } else {
@@ -665,14 +661,10 @@ function adjustRowHeights() {
             topSlot.style.minHeight = `${halfHeight}px`;
             bottomSlot.style.flex = '1 1 0';
             bottomSlot.style.minHeight = `${halfHeight}px`;
-            topSlot.style.overflow = 'hidden';
-            bottomSlot.style.overflow = 'hidden';
           } else if (topSlot) {
             topSlot.style.flex = '1 1 auto';
-            topSlot.style.overflow = 'hidden';
           } else if (bottomSlot) {
             bottomSlot.style.flex = '1 1 auto';
-            bottomSlot.style.overflow = 'hidden';
           }
         } else {
           // Regular column - set to max height

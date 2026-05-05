@@ -112,17 +112,21 @@ async function renderNextTodos() {
     const priorityIcon = getPriorityIcon(todo.priority);
     // Use formatted date from backend
     const formattedDate = todo.formattedDueDate || '';
-    const dueDateHtml = formattedDate ? `<div class="muted" style="font-size:0.85em; margin-top:4px;">${formattedDate}</div>` : '';
-    const priorityIconHtml = todo.priority ? `<i class="fas ${priorityIcon} todo-priority-icon ${priorityClass}" title="${todo.priority} priority"></i>` : '';
+    const dueDateHtml = formattedDate
+      ? `<div class="todo-next-meta muted"><span class="todo-next-meta-dot" aria-hidden="true"></span><span>${formattedDate}</span></div>`
+      : '';
+    const priorityColHtml = todo.priority
+      ? `<div class="todo-next-priority"><i class="fas ${priorityIcon} todo-priority-icon ${priorityClass}" title="${todo.priority} priority"></i></div>`
+      : '';
 
     html += `
-      <div class="kv" style="flex-direction:column; align-items:flex-start; gap:4px; padding:8px 0; border-bottom:1px solid var(--border);">
-        <div style="display:flex; align-items:center; gap:8px; width:100%;">
-          <input type="checkbox" class="todo-checkbox" data-todo-id="${todo.id}" ${todo.completed ? 'checked' : ''} style="cursor:pointer;">
-          <div class="v" style="flex:1; font-weight:500;">${escapeHtml(todo.title)}</div>
-          ${priorityIconHtml}
+      <div class="kv todo-next-item">
+        <input type="checkbox" class="todo-checkbox todo-next-checkbox" data-todo-id="${todo.id}" ${todo.completed ? 'checked' : ''}>
+        <div class="todo-next-body">
+          <div class="v todo-next-title">${escapeHtml(todo.title)}</div>
+          ${dueDateHtml}
         </div>
-        ${dueDateHtml}
+        ${priorityColHtml}
       </div>
     `;
   }
