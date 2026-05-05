@@ -83,18 +83,7 @@ function getPriorityClass(priority) {
   return 'priority-' + priority;
 }
 
-// Get priority icon
-function getPriorityIcon(priority) {
-  if (!priority) return '';
-  const icons = {
-    low: 'fa-circle',
-    medium: 'fa-circle',
-    high: 'fa-circle'
-  };
-  return icons[priority] || '';
-}
-
-// Render next todos module - uses backend processing
+// Render next todos module - uses backend processing (same row layout as Preferences → Todos)
 async function renderNextTodos() {
   const container = document.getElementById('nextTodosList');
   if (!container) return;
@@ -108,35 +97,77 @@ async function renderNextTodos() {
 
   let html = '';
   for (const todo of nextTodos) {
+    const index = todos.findIndex(t => t.id === todo.id);
+    const canMoveUp = index > 0;
+    const canMoveDown = index >= 0 && index < todos.length - 1;
     const priorityClass = getPriorityClass(todo.priority);
-    const priorityIcon = getPriorityIcon(todo.priority);
-    // Use formatted date from backend
+    const priorityBadge = todo.priority
+      ? `<span class="todo-priority ${priorityClass}">${window.escapeHtml(todo.priority)}</span>`
+      : '';
     const formattedDate = todo.formattedDueDate || '';
-    const dueDateHtml = formattedDate
-      ? `<div class="todo-next-meta muted"><span class="todo-next-meta-dot" aria-hidden="true"></span><span>${formattedDate}</span></div>`
-      : '';
-    const priorityColHtml = todo.priority
-      ? `<div class="todo-next-priority"><i class="fas ${priorityIcon} todo-priority-icon ${priorityClass}" title="${todo.priority} priority"></i></div>`
-      : '';
+    const dueDateText = formattedDate ? ` - ${formattedDate}` : '';
 
     html += `
-      <div class="kv todo-next-item">
-        <input type="checkbox" class="todo-checkbox todo-next-checkbox" data-todo-id="${todo.id}" ${todo.completed ? 'checked' : ''}>
-        <div class="todo-next-body">
-          <div class="v todo-next-title">${escapeHtml(todo.title)}</div>
-          ${dueDateHtml}
+      <div class="module-item todo-next-card-item${todo.completed ? ' completed' : ''}" data-todo-id="${todo.id}" draggable="false">
+        <div class="module-icon todo-next-card-drag" style="color: var(--muted);" aria-hidden="true">
+          <i class="fas fa-grip-vertical"></i>
         </div>
-        ${priorityColHtml}
+        <div class="module-icon"><i class="fas fa-tasks"></i></div>
+        <div class="module-info">
+          <div class="module-name" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" class="todo-list-checkbox todo-checkbox" data-todo-id="${todo.id}" ${todo.completed ? 'checked' : ''} style="cursor:pointer;">
+            <span>${window.escapeHtml(todo.title)}</span>
+            ${priorityBadge}
+          </div>
+          <div class="module-desc">${todo.completed ? 'Completed' : 'Active'}${dueDateText}</div>
+        </div>
+        <div class="module-controls">
+          <button type="button" class="btn-small move-todo-up-btn" data-todo-id="${todo.id}" ${!canMoveUp ? 'disabled' : ''} title="Move up">
+            <i class="fas fa-arrow-up"></i>
+          </button>
+          <button type="button" class="btn-small move-todo-down-btn" data-todo-id="${todo.id}" ${!canMoveDown ? 'disabled' : ''} title="Move down">
+            <i class="fas fa-arrow-down"></i>
+          </button>
+          <button type="button" class="btn-small edit-todo-btn" data-todo-id="${todo.id}" title="Edit"><i class="fas fa-edit"></i></button>
+          <button type="button" class="btn-small delete-todo-btn" data-todo-id="${todo.id}" title="Delete"><i class="fas fa-trash"></i></button>
+        </div>
       </div>
     `;
   }
   container.innerHTML = html;
 
-  // Attach checkbox handlers
   container.querySelectorAll('.todo-checkbox').forEach(checkbox => {
-    checkbox.addEventListener('change', (e) => {
-      const id = e.target.getAttribute('data-todo-id');
+    checkbox.addEventListener('change', () => {
+      const id = checkbox.getAttribute('data-todo-id');
       toggleTodo(id);
+    });
+  });
+
+  container.querySelectorAll('.edit-todo-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editTodo(btn.getAttribute('data-todo-id'));
+    });
+  });
+
+  container.querySelectorAll('.delete-todo-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      deleteTodo(btn.getAttribute('data-todo-id'));
+    });
+  });
+
+  container.querySelectorAll('.move-todo-up-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-todo-id');
+      const idx = todos.findIndex(t => t.id === id);
+      if (idx >= 0) moveTodoUp(idx);
+    });
+  });
+
+  container.querySelectorAll('.move-todo-down-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-todo-id');
+      const idx = todos.findIndex(t => t.id === id);
+      if (idx >= 0) moveTodoDown(idx);
     });
   });
 }
