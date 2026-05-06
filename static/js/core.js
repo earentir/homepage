@@ -750,20 +750,30 @@ function moveArrayItem(array, fromIndex, toIndex) {
 
 // Drag and drop setup for module lists
 // Uses a shared draggedIndex variable stored on the list element
-function setupDragAndDrop(item, index, array, onMove, onUpdate) {
+// Optional dragHandle: only that element starts a drag (row stays non-draggable). Use inside
+// draggable module cards with stopPropagation so layout card DnD is not triggered.
+function setupDragAndDrop(item, index, array, onMove, onUpdate, dragHandle) {
   const list = item.closest('.module-list') || item.parentElement;
   if (!list._draggedIndex) {
     list._draggedIndex = null;
   }
 
-  item.addEventListener('dragstart', (e) => {
+  const dragSource = dragHandle || item;
+  const isolateFromParent = !!dragHandle;
+  if (dragHandle) {
+    item.draggable = false;
+    dragHandle.draggable = true;
+  }
+
+  dragSource.addEventListener('dragstart', (e) => {
     list._draggedIndex = index;
     item.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/html', item.innerHTML);
+    if (isolateFromParent) e.stopPropagation();
   });
 
-  item.addEventListener('dragend', (e) => {
+  dragSource.addEventListener('dragend', (e) => {
     item.classList.remove('dragging');
     if (list) {
       list.querySelectorAll('.module-item').forEach(i => {
@@ -771,11 +781,13 @@ function setupDragAndDrop(item, index, array, onMove, onUpdate) {
       });
     }
     list._draggedIndex = null;
+    if (isolateFromParent) e.stopPropagation();
   });
 
   item.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    if (isolateFromParent) e.stopPropagation();
     if (list._draggedIndex !== null && list._draggedIndex !== index) {
       item.classList.add('drag-over');
     }
@@ -783,10 +795,12 @@ function setupDragAndDrop(item, index, array, onMove, onUpdate) {
 
   item.addEventListener('dragleave', (e) => {
     item.classList.remove('drag-over');
+    if (isolateFromParent) e.stopPropagation();
   });
 
   item.addEventListener('drop', (e) => {
     e.preventDefault();
+    if (isolateFromParent) e.stopPropagation();
     item.classList.remove('drag-over');
     if (list._draggedIndex !== null && list._draggedIndex !== index) {
       if (onMove) {

@@ -21,8 +21,10 @@ type TodoProcessed struct {
 	FormattedDueDate string `json:"formattedDueDate,omitempty"`
 }
 
-// ProcessTodos processes and sorts todos by priority and due date.
-func ProcessTodos(todos []Todo, count int, includeCompleted bool) []TodoProcessed {
+// ProcessTodos filters todos, optionally sorts them, limits count, and adds formatted due dates.
+// When preserveOrder is false, sorts by priority (high > medium > low), then due date, then id.
+// When preserveOrder is true, keeps the order of the input slice after filtering (user-defined order).
+func ProcessTodos(todos []Todo, count int, includeCompleted bool, preserveOrder bool) []TodoProcessed {
 	// Filter todos
 	var filtered []Todo
 	for _, todo := range todos {
@@ -31,38 +33,40 @@ func ProcessTodos(todos []Todo, count int, includeCompleted bool) []TodoProcesse
 		}
 	}
 
-	// Sort by: priority (high > medium > low), then due date (earliest first)
-	priorityOrder := map[string]int{
-		"high":   3,
-		"medium": 2,
-		"low":    1,
+	if !preserveOrder {
+		// Sort by: priority (high > medium > low), then due date (earliest first)
+		priorityOrder := map[string]int{
+			"high":   3,
+			"medium": 2,
+			"low":    1,
+		}
+
+		sort.Slice(filtered, func(i, j int) bool {
+			a := filtered[i]
+			b := filtered[j]
+
+			// Priority first
+			aPriority := priorityOrder[a.Priority]
+			bPriority := priorityOrder[b.Priority]
+			if aPriority != bPriority {
+				return aPriority > bPriority
+			}
+
+			// Then due date (earliest first)
+			if a.DueDate != "" && b.DueDate != "" {
+				return a.DueDate < b.DueDate
+			}
+			if a.DueDate != "" {
+				return true
+			}
+			if b.DueDate != "" {
+				return false
+			}
+
+			// Finally by creation order (ID contains timestamp)
+			return a.ID < b.ID
+		})
 	}
-
-	sort.Slice(filtered, func(i, j int) bool {
-		a := filtered[i]
-		b := filtered[j]
-
-		// Priority first
-		aPriority := priorityOrder[a.Priority]
-		bPriority := priorityOrder[b.Priority]
-		if aPriority != bPriority {
-			return aPriority > bPriority
-		}
-
-		// Then due date (earliest first)
-		if a.DueDate != "" && b.DueDate != "" {
-			return a.DueDate < b.DueDate
-		}
-		if a.DueDate != "" {
-			return true
-		}
-		if b.DueDate != "" {
-			return false
-		}
-
-		// Finally by creation order (ID contains timestamp)
-		return a.ID < b.ID
-	})
 
 	// Limit to count
 	if count > 0 && len(filtered) > count {

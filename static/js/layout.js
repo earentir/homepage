@@ -380,7 +380,7 @@ function renderLayout() {
     const rowEl = document.createElement('div');
     rowEl.className = 'layout-row';
     rowEl.dataset.rowIndex = rowIndex;
-    rowEl.style.gridTemplateColumns = `repeat(${row.cols}, 1fr)`;
+    rowEl.style.gridTemplateColumns = `repeat(${row.cols}, minmax(0, 1fr))`;
 
     for (let col = 0; col < row.cols; col++) {
       const colEl = document.createElement('div');
@@ -533,7 +533,7 @@ function renderLayout() {
       const rowEl = document.createElement('div');
       rowEl.className = 'layout-row';
       rowEl.dataset.rowIndex = layoutConfig.rows.length - 1;
-      rowEl.style.gridTemplateColumns = `repeat(${newRow.cols}, 1fr)`;
+      rowEl.style.gridTemplateColumns = `repeat(${newRow.cols}, minmax(0, 1fr))`;
 
       for (let col = 0; col < newRow.cols; col++) {
         const colEl = document.createElement('div');

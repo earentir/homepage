@@ -1606,8 +1606,9 @@ func (h *Handler) HandleTodosProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	includeCompleted := r.URL.Query().Get("includeCompleted") == "true"
+	preserveOrder := r.URL.Query().Get("preserveOrder") == "true"
 
-	processed := ProcessTodos(todos, count, includeCompleted)
+	processed := ProcessTodos(todos, count, includeCompleted, preserveOrder)
 	WriteJSON(w, map[string]any{"todos": processed})
 }
 

@@ -50,12 +50,12 @@ function parseDateFromInput(datetimeString) {
   return datetimeString; // Fallback, though datetime-local should always have 'T'
 }
 
-// Get next N incomplete todos, sorted by priority and due date - uses backend processing
+// Get next N incomplete todos in list order (matches drag order in storage), with formatted dates from backend
 async function getNextTodos(count = 5) {
   if (todos.length === 0) return [];
 
   try {
-    const res = await fetch(`/api/todos/process?count=${count}&includeCompleted=false`, {
+    const res = await fetch(`/api/todos/process?count=${count}&includeCompleted=false&preserveOrder=true`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(todos),
@@ -109,10 +109,9 @@ async function renderNextTodos() {
 
     html += `
       <div class="module-item todo-next-card-item${todo.completed ? ' completed' : ''}" data-todo-id="${todo.id}" draggable="false">
-        <div class="module-icon todo-next-card-drag" style="color: var(--muted);" aria-hidden="true">
+        <div class="module-icon todo-reorder-handle" style="color: var(--muted);" title="Drag to reorder todos" aria-label="Reorder todo">
           <i class="fas fa-grip-vertical"></i>
         </div>
-        <div class="module-icon"><i class="fas fa-tasks"></i></div>
         <div class="module-info">
           <div class="module-name" style="display:flex; align-items:center; gap:8px;">
             <input type="checkbox" class="todo-list-checkbox todo-checkbox" data-todo-id="${todo.id}" ${todo.completed ? 'checked' : ''} style="cursor:pointer;">
@@ -169,6 +168,25 @@ async function renderNextTodos() {
       const idx = todos.findIndex(t => t.id === id);
       if (idx >= 0) moveTodoDown(idx);
     });
+  });
+
+  container.querySelectorAll('.todo-next-card-item').forEach(el => {
+    const id = el.getAttribute('data-todo-id');
+    const idx = todos.findIndex(t => t.id === id);
+    const handle = el.querySelector('.todo-reorder-handle');
+    if (idx < 0 || !handle || !window.setupDragAndDrop) return;
+    window.setupDragAndDrop(
+      el,
+      idx,
+      todos,
+      (fromIndex, toIndex) => moveTodo(fromIndex, toIndex),
+      () => {
+        saveTodos();
+        renderTodosPreferenceList();
+        renderNextTodos();
+      },
+      handle
+    );
   });
 }
 
@@ -245,7 +263,7 @@ async function renderTodosPreferenceList() {
   todos.forEach((todo, index) => {
     const item = document.createElement('div');
     item.className = 'module-item' + (todo.completed ? ' completed' : '');
-    item.draggable = true;
+    item.draggable = false;
     item.dataset.index = index;
     item.dataset.todoId = todo.id;
     const canMoveUp = index > 0;
@@ -257,10 +275,9 @@ async function renderTodosPreferenceList() {
     const dueDateText = formattedTodo && formattedTodo.formattedDueDate ? ` - ${formattedTodo.formattedDueDate}` : (todo.dueDate ? ` - ${todo.dueDate}` : '');
 
     item.innerHTML = `
-      <div class="module-icon drag-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder">
+      <div class="module-icon todo-reorder-handle" style="cursor: grab; color: var(--muted);" title="Drag to reorder todos">
         <i class="fas fa-grip-vertical"></i>
       </div>
-      <div class="module-icon"><i class="fas fa-tasks"></i></div>
       <div class="module-info">
         <div class="module-name" style="display:flex; align-items:center; gap:8px;">
           <input type="checkbox" class="todo-list-checkbox" data-todo-id="${todo.id}" ${todo.completed ? 'checked' : ''} style="cursor:pointer;">
@@ -284,13 +301,19 @@ async function renderTodosPreferenceList() {
 
     // Setup drag and drop using common function
     if (window.setupDragAndDrop) {
-      window.setupDragAndDrop(item, index, todos, (fromIndex, toIndex) => {
-        moveTodo(fromIndex, toIndex);
-      }, () => {
-        saveTodos();
-        renderTodosPreferenceList();
-        renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
-      });
+      const reorderHandle = item.querySelector('.todo-reorder-handle');
+      window.setupDragAndDrop(
+        item,
+        index,
+        todos,
+        (fromIndex, toIndex) => moveTodo(fromIndex, toIndex),
+        () => {
+          saveTodos();
+          renderTodosPreferenceList();
+          renderNextTodos(); // renderNextTodos is now async but we don't await it (fire and forget)
+        },
+        reorderHandle
+      );
     }
 
     // Setup move buttons using common function

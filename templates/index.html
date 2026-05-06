@@ -1386,6 +1386,11 @@ body {
   min-height: 100px;
   position: relative;
 }
+/* Let cards use height:100% + inner scroll instead of growing the whole layout row. */
+.layout-column:not(.empty-column) {
+  min-width: 0;
+  min-height: 0;
+}
 .layout-column.empty-column {
   border: 1px solid transparent;
   border-radius: 8px;
@@ -1424,6 +1429,8 @@ body {
 .split-column {
   position: relative;
   align-items: stretch;
+  min-width: 0;
+  min-height: 0;
 }
 .split-slot {
   border-radius: 0;
@@ -1437,6 +1444,11 @@ body {
   overflow: visible;
   flex: 1;
   min-height: 0;
+}
+/* Next Todos must clip + scroll inside the card (split-slot .card uses overflow:visible by default). */
+.split-slot .card[data-module="todo"],
+.layout-column:not(.empty-column) > .card[data-module="todo"] {
+  overflow: hidden;
 }
 /* Split wrappers use overflow:hidden for flex sizing; theme .card:hover translateY clips top border/corners */
 .split-slot .card:hover,
@@ -2072,17 +2084,40 @@ body {
   font-size: 0.92em;
 }
 
-/* Next Todos card — same .module-item row as Preferences; grip is visual only (card drag handles layout) */
+/* Next Todos card — body scrolls; card is a column flex so list gets a bounded height in layout rows */
+.card[data-module="todo"] {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.card[data-module="todo"] > h3 {
+  flex-shrink: 0;
+}
+/* Next Todos card — reorder grip is the only todo drag source; card uses header .drag-handle for layout */
 #nextTodosList {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Cap when the card is not in a height-constrained column (e.g. before layout init). */
+  max-height: min(320px, 50vh);
 }
-#nextTodosList .todo-next-card-drag {
-  cursor: default;
-  opacity: 0.45;
-  pointer-events: none;
+.layout-column:not(.empty-column) .card[data-module="todo"] #nextTodosList,
+.split-slot .card[data-module="todo"] #nextTodosList {
+  max-height: none;
+}
+#nextTodosList .todo-reorder-handle {
+  cursor: grab;
+  opacity: 0.85;
+}
+#nextTodosList .todo-reorder-handle:active {
+  cursor: grabbing;
 }
 #nextTodosList .module-item.todo-next-card-item {
   width: 100%;
