@@ -5,6 +5,7 @@ let monitors = [];
 const monitorDownSince = {};
 let monitorColumns = 1;
 let monitorShowFavicons = true;
+let monitorRequestTimeoutMs = 10000;
 
 // Load from localStorage
 (function() {
@@ -41,6 +42,27 @@ function saveMonitorInterval(seconds) {
     if (window.timers) {
       window.timers.monitoring.interval = seconds * 1000;
     }
+  } catch (e) {}
+}
+
+function getSavedMonitorTimeoutMs() {
+  try {
+    const saved = window.loadFromStorage('monitorTimeoutSeconds');
+    if (saved !== null && saved !== undefined) {
+      const seconds = typeof saved === 'number' ? saved : parseInt(saved, 10);
+      if (!Number.isNaN(seconds)) {
+        return Math.max(1, Math.min(120, seconds)) * 1000;
+      }
+    }
+  } catch (e) {}
+  return 10000;
+}
+
+function saveMonitorTimeout(seconds) {
+  const clamped = Math.max(1, Math.min(120, parseInt(seconds, 10) || 10));
+  monitorRequestTimeoutMs = clamped * 1000;
+  try {
+    window.saveToStorage('monitorTimeoutSeconds', clamped);
   } catch (e) {}
 }
 
@@ -263,7 +285,14 @@ async function checkMonitor(mon, index) {
       url += '&host=' + encodeURIComponent(mon.host);
     }
 
-    const res = await fetch(url, {cache: 'no-store'});
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), monitorRequestTimeoutMs);
+    let res;
+    try {
+      res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
     const data = await res.json();
 
     if (data.success) {
@@ -275,10 +304,19 @@ async function checkMonitor(mon, index) {
       if (!monitorDownSince[index]) {
         monitorDownSince[index] = Date.now();
       }
-      const timeSince = formatTimeSince(Date.now() - monitorDownSince[index]);
-      statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#bf616a;"></i>';
-      resultEl.textContent = timeSince;
-      resultEl.style.color = '#bf616a';
+      const timeoutLike = typeof data.error === 'string' && /timeout|timed out/i.test(data.error);
+      if (timeoutLike) {
+        statusEl.innerHTML = '<i class="fas fa-hourglass-half" style="color:#ebcb8b;"></i>';
+        resultEl.textContent = 'timeout';
+        resultEl.style.color = '#ebcb8b';
+        resultEl.title = data.error;
+      } else {
+        const timeSince = formatTimeSince(Date.now() - monitorDownSince[index]);
+        statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#bf616a;"></i>';
+        resultEl.textContent = timeSince;
+        resultEl.style.color = '#bf616a';
+        resultEl.title = '';
+      }
     }
 
     if (sslEl) {
@@ -310,10 +348,18 @@ async function checkMonitor(mon, index) {
     if (!monitorDownSince[index]) {
       monitorDownSince[index] = Date.now();
     }
-    const timeSince = formatTimeSince(Date.now() - monitorDownSince[index]);
-    statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#bf616a;"></i>';
-    resultEl.textContent = timeSince;
-    resultEl.style.color = '#bf616a';
+    if (e && e.name === 'AbortError') {
+      statusEl.innerHTML = '<i class="fas fa-hourglass-half" style="color:#ebcb8b;"></i>';
+      resultEl.textContent = 'timeout';
+      resultEl.style.color = '#ebcb8b';
+      resultEl.title = 'Request timed out';
+    } else {
+      const timeSince = formatTimeSince(Date.now() - monitorDownSince[index]);
+      statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#bf616a;"></i>';
+      resultEl.textContent = timeSince;
+      resultEl.style.color = '#bf616a';
+      resultEl.title = '';
+    }
     if (sslEl) sslEl.innerHTML = '';
   }
 }
@@ -329,9 +375,8 @@ function updateDownMonitorsDisplay() {
 }
 
 async function refreshMonitoring() {
-  for (let i = 0; i < monitors.length; i++) {
-    await checkMonitor(monitors[i], i);
-  }
+  const checks = monitors.map((mon, index) => checkMonitor(mon, index));
+  await Promise.allSettled(checks);
   window.startTimer('monitoring');
 }
 
@@ -882,6 +927,7 @@ function renderMonitorModuleList() {
 function initMonitoring() {
   monitorColumns = getSavedMonitorColumns();
   monitorShowFavicons = getSavedMonitorShowFavicons();
+  monitorRequestTimeoutMs = getSavedMonitorTimeoutMs();
 
   // Set up add button event listener
   const addBtn = document.getElementById('addMonitorBtn');
@@ -912,6 +958,15 @@ function initMonitoring() {
     monitorFaviconsCheckbox.addEventListener('change', () => {
       saveMonitorShowFavicons(monitorFaviconsCheckbox.checked);
       renderMonitors();
+    });
+  }
+  const monitorTimeoutInput = document.getElementById('monitor-timeout');
+  if (monitorTimeoutInput) {
+    monitorTimeoutInput.value = String(Math.round(monitorRequestTimeoutMs / 1000));
+    monitorTimeoutInput.addEventListener('change', () => {
+      const val = Math.max(1, Math.min(120, parseInt(monitorTimeoutInput.value, 10) || 10));
+      monitorTimeoutInput.value = String(val);
+      saveMonitorTimeout(val);
     });
   }
   document.querySelectorAll('.monitor-layout-btn').forEach(btn => {
