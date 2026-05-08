@@ -1053,6 +1053,28 @@ body {
   min-height: 100%;
   min-height: 100dvh;
 }
+/* App-wide scrollbars: thin accent thumb, transparent track (Firefox + Chrome/Safari/WebKit) */
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 5px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  filter: brightness(1.08);
+}
 .footer {
   width: 100%;
   box-sizing: border-box;
@@ -1500,12 +1522,14 @@ body {
 }
 .layout-column:not(.empty-column) > .card > .card-body-scroll,
 .split-slot > .card > .card-body-scroll {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
-/* Split wrappers use overflow:hidden for flex sizing; theme .card:hover translateY clips top border/corners */
+ /* Split wrappers use overflow:hidden for flex sizing; theme .card:hover translateY clips top border/corners */
 .split-slot .card:hover,
 .split-slot .card.drag-over {
   transform: none;

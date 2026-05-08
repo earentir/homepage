@@ -303,25 +303,35 @@ function applyModuleHeightForCard(card) {
   const defaultHeight = getCardDefaultHeight(card, moduleId, naturalHeight);
   const maxHeight = defaultHeight * 2;
   const mode = getModuleHeightMode(moduleId);
-  let targetHeight = naturalHeight;
-  if (mode === MODULE_HEIGHT_MODE_ONE_X) {
-    targetHeight = defaultHeight;
-  } else if (mode === MODULE_HEIGHT_MODE_DOUBLE) {
-    targetHeight = maxHeight;
-  } else if (mode === MODULE_HEIGHT_MODE_FIT) {
-    targetHeight = naturalHeight;
-  } else {
-    targetHeight = Math.min(Math.max(naturalHeight, defaultHeight), maxHeight);
-  }
-  card.style.height = targetHeight + 'px';
+
   if (mode === MODULE_HEIGHT_MODE_FIT) {
+    // True content-fit mode: do not set a measured fixed height.
+    card.style.height = 'auto';
     card.style.minHeight = '0px';
     card.style.maxHeight = 'none';
-    body.style.overflowY = 'hidden';
+    body.style.flex = '0 0 auto';
+    body.style.overflowY = 'visible';
+    body.style.overflowX = 'visible';
   } else {
+    let targetHeight = naturalHeight;
+    if (mode === MODULE_HEIGHT_MODE_ONE_X) {
+      targetHeight = defaultHeight;
+    } else if (mode === MODULE_HEIGHT_MODE_DOUBLE) {
+      targetHeight = maxHeight;
+    } else {
+      targetHeight = Math.min(Math.max(naturalHeight, defaultHeight), maxHeight);
+    }
+    card.style.height = targetHeight + 'px';
     card.style.minHeight = defaultHeight + 'px';
     card.style.maxHeight = maxHeight + 'px';
-    body.style.overflowY = naturalHeight > targetHeight ? 'auto' : 'hidden';
+    body.style.flex = '';
+    // Todo keeps its own internal scroll container (#nextTodosList).
+    if (moduleId === 'todo') {
+      body.style.overflowY = 'hidden';
+    } else {
+      body.style.overflowY = naturalHeight > targetHeight ? 'auto' : 'hidden';
+    }
+    body.style.overflowX = 'hidden';
   }
 }
 
