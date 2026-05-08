@@ -46,6 +46,16 @@ let layoutConfig = {
   maxWidth: 80,
   rows: []
 };
+let moduleHeightModes = {};
+let moduleHeightObserver = null;
+let moduleResizeObserver = null;
+let moduleHeightDebounceTimer = null;
+
+const MODULE_HEIGHT_MODE_AUTO = 'auto';
+const MODULE_HEIGHT_MODE_ONE_X = 'oneX';
+const MODULE_HEIGHT_MODE_DOUBLE = 'double';
+const MODULE_HEIGHT_MODE_FIT = 'fit';
+const UNIVERSAL_CARD_DEFAULT_HEIGHT = 230;
 
 /** Bumped on every renderLayout; stale /api/layout/process responses must not overwrite newer edits. */
 let layoutProcessGeneration = 0;
@@ -177,6 +187,260 @@ function saveLayoutConfig() {
       if (window.debugError) window.debugError('layout', 'Failed to save layout config:', e);
     }
   })();
+}
+
+function loadModuleHeightModes() {
+  try {
+    const saved = window.loadFromStorage('moduleHeightModes');
+    if (saved && typeof saved === 'object') {
+      moduleHeightModes = saved;
+    }
+  } catch (e) {
+    moduleHeightModes = {};
+  }
+}
+
+function saveModuleHeightModes() {
+  try {
+    window.saveToStorage('moduleHeightModes', moduleHeightModes);
+  } catch (e) {}
+}
+
+function getModuleHeightMode(moduleId) {
+  const mode = moduleHeightModes[moduleId];
+  if (
+    mode === MODULE_HEIGHT_MODE_ONE_X ||
+    mode === MODULE_HEIGHT_MODE_DOUBLE ||
+    mode === MODULE_HEIGHT_MODE_AUTO ||
+    mode === MODULE_HEIGHT_MODE_FIT
+  ) {
+    return mode;
+  }
+  // Backward compatibility with older stored value.
+  if (mode === 'default') return MODULE_HEIGHT_MODE_ONE_X;
+  return MODULE_HEIGHT_MODE_AUTO;
+}
+
+function setModuleHeightMode(moduleId, mode) {
+  if (!moduleId) return;
+  let normalized = mode;
+  if (normalized === 'default') normalized = MODULE_HEIGHT_MODE_ONE_X;
+  const nextMode = (
+    normalized === MODULE_HEIGHT_MODE_ONE_X ||
+    normalized === MODULE_HEIGHT_MODE_DOUBLE ||
+    normalized === MODULE_HEIGHT_MODE_AUTO ||
+    normalized === MODULE_HEIGHT_MODE_FIT
+  ) ? normalized : MODULE_HEIGHT_MODE_AUTO;
+  moduleHeightModes[moduleId] = nextMode;
+  saveModuleHeightModes();
+}
+
+function ensureCardBodyWrapper(card) {
+  if (!card) return null;
+  let body = card.querySelector(':scope > .card-body-scroll');
+  if (body) return body;
+  const children = Array.from(card.children);
+  const header = children.find(el => el.tagName === 'H3');
+  body = document.createElement('div');
+  body.className = 'card-body-scroll';
+  children.forEach(child => {
+    if (child !== header) {
+      body.appendChild(child);
+    }
+  });
+  card.appendChild(body);
+  return body;
+}
+
+function getCardNaturalHeight(card, body) {
+  if (!card || !body) return 0;
+  const prevCardHeight = card.style.height;
+  const prevCardMinHeight = card.style.minHeight;
+  const prevCardMaxHeight = card.style.maxHeight;
+  const prevBodyOverflowY = body.style.overflowY;
+  const prevBodyOverflowX = body.style.overflowX;
+  const prevBodyHeight = body.style.height;
+  const prevBodyMaxHeight = body.style.maxHeight;
+  const prevBodyFlex = body.style.flex;
+
+  // Measure unconstrained "natural" height.
+  card.style.height = 'auto';
+  card.style.minHeight = '0px';
+  card.style.maxHeight = 'none';
+  body.style.overflowY = 'visible';
+  body.style.overflowX = 'visible';
+  body.style.height = 'auto';
+  body.style.maxHeight = 'none';
+  body.style.flex = '0 0 auto';
+
+  // Force layout and then read full content height.
+  const natural = Math.ceil(card.scrollHeight);
+
+  // Restore styles before normal sizing pass continues.
+  card.style.height = prevCardHeight;
+  card.style.minHeight = prevCardMinHeight;
+  card.style.maxHeight = prevCardMaxHeight;
+  body.style.overflowY = prevBodyOverflowY;
+  body.style.overflowX = prevBodyOverflowX;
+  body.style.height = prevBodyHeight;
+  body.style.maxHeight = prevBodyMaxHeight;
+  body.style.flex = prevBodyFlex;
+
+  return natural;
+}
+
+function getCardDefaultHeight(card, moduleId, naturalHeight) {
+  return UNIVERSAL_CARD_DEFAULT_HEIGHT;
+}
+
+function applyModuleHeightForCard(card) {
+  if (!card) return;
+  const moduleId = card.getAttribute('data-module');
+  if (!moduleId) return;
+  const body = ensureCardBodyWrapper(card);
+  if (!body) return;
+  const naturalHeight = getCardNaturalHeight(card, body);
+  const defaultHeight = getCardDefaultHeight(card, moduleId, naturalHeight);
+  const maxHeight = defaultHeight * 2;
+  const mode = getModuleHeightMode(moduleId);
+  let targetHeight = naturalHeight;
+  if (mode === MODULE_HEIGHT_MODE_ONE_X) {
+    targetHeight = defaultHeight;
+  } else if (mode === MODULE_HEIGHT_MODE_DOUBLE) {
+    targetHeight = maxHeight;
+  } else if (mode === MODULE_HEIGHT_MODE_FIT) {
+    targetHeight = naturalHeight;
+  } else {
+    targetHeight = Math.min(Math.max(naturalHeight, defaultHeight), maxHeight);
+  }
+  card.style.height = targetHeight + 'px';
+  if (mode === MODULE_HEIGHT_MODE_FIT) {
+    card.style.minHeight = '0px';
+    card.style.maxHeight = 'none';
+    body.style.overflowY = 'hidden';
+  } else {
+    card.style.minHeight = defaultHeight + 'px';
+    card.style.maxHeight = maxHeight + 'px';
+    body.style.overflowY = naturalHeight > targetHeight ? 'auto' : 'hidden';
+  }
+}
+
+function applyModuleHeights() {
+  const cards = document.querySelectorAll('.card[data-module]');
+  cards.forEach(card => applyModuleHeightForCard(card));
+}
+
+function debouncedApplyModuleHeights() {
+  if (moduleHeightDebounceTimer) {
+    clearTimeout(moduleHeightDebounceTimer);
+  }
+  moduleHeightDebounceTimer = setTimeout(() => {
+    applyModuleHeights();
+  }, 120);
+}
+
+function setupModuleHeightObserver() {
+  if (moduleHeightObserver) {
+    moduleHeightObserver.disconnect();
+  }
+  if (moduleResizeObserver) {
+    moduleResizeObserver.disconnect();
+  }
+  moduleHeightObserver = new MutationObserver(() => {
+    debouncedApplyModuleHeights();
+  });
+  const gridEl = document.getElementById('moduleGrid');
+  if (gridEl) {
+    moduleHeightObserver.observe(gridEl, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['style', 'class']
+    });
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    moduleResizeObserver = new ResizeObserver(() => {
+      debouncedApplyModuleHeights();
+    });
+    const cards = document.querySelectorAll('.card[data-module]');
+    cards.forEach(card => {
+      moduleResizeObserver.observe(card);
+      const body = card.querySelector(':scope > .card-body-scroll');
+      if (body) moduleResizeObserver.observe(body);
+    });
+  }
+}
+
+function getAllKnownModuleIds() {
+  const ids = new Set();
+  const cards = document.querySelectorAll('.card[data-module]');
+  cards.forEach(card => {
+    const moduleId = card.getAttribute('data-module');
+    if (moduleId) ids.add(moduleId);
+  });
+  if (window.moduleConfig) {
+    Object.keys(window.moduleConfig).forEach(id => ids.add(id));
+  }
+  return Array.from(ids);
+}
+
+function renderModuleHeightModesEditor() {
+  const list = document.getElementById('moduleHeightModesList');
+  if (!list) return;
+  const moduleIds = getAllKnownModuleIds();
+  moduleIds.sort((a, b) => getModuleName(a).localeCompare(getModuleName(b)));
+  list.innerHTML = '';
+  moduleIds.forEach(moduleId => {
+    const row = document.createElement('div');
+    row.className = 'pref-row';
+    row.innerHTML = `
+      <label>${getModuleName(moduleId)}</label>
+      <select class="module-height-mode-select" data-module="${moduleId}">
+        <option value="${MODULE_HEIGHT_MODE_AUTO}">Auto</option>
+        <option value="${MODULE_HEIGHT_MODE_ONE_X}">1x</option>
+        <option value="${MODULE_HEIGHT_MODE_DOUBLE}">2x</option>
+        <option value="${MODULE_HEIGHT_MODE_FIT}">Fit</option>
+      </select>
+    `;
+    const select = row.querySelector('select');
+    select.value = getModuleHeightMode(moduleId);
+    select.addEventListener('change', () => {
+      setModuleHeightMode(moduleId, select.value);
+      applyModuleHeights();
+    });
+    list.appendChild(row);
+  });
+}
+
+function bindModuleHeightModeBulkControls() {
+  const modeSelect = document.getElementById('moduleHeightModeAll');
+  const applyBtn = document.getElementById('applyModuleHeightModeAllBtn');
+  if (!modeSelect || !applyBtn || applyBtn.dataset.bound === '1') return;
+  applyBtn.dataset.bound = '1';
+
+  applyBtn.addEventListener('click', () => {
+    const mode = modeSelect.value;
+    const moduleIds = getAllKnownModuleIds();
+    moduleIds.forEach(moduleId => {
+      setModuleHeightMode(moduleId, mode);
+    });
+    renderModuleHeightModesEditor();
+    applyModuleHeights();
+  });
+}
+
+function getModuleHeightModeSelectHtml(moduleId) {
+  const mode = getModuleHeightMode(moduleId);
+  return `
+    <select class="module-height-mode-select" data-module="${moduleId}" title="Card height mode">
+      <option value="${MODULE_HEIGHT_MODE_AUTO}" ${mode === MODULE_HEIGHT_MODE_AUTO ? 'selected' : ''}>Auto</option>
+      <option value="${MODULE_HEIGHT_MODE_ONE_X}" ${mode === MODULE_HEIGHT_MODE_ONE_X ? 'selected' : ''}>1x</option>
+      <option value="${MODULE_HEIGHT_MODE_DOUBLE}" ${mode === MODULE_HEIGHT_MODE_DOUBLE ? 'selected' : ''}>2x</option>
+      <option value="${MODULE_HEIGHT_MODE_FIT}" ${mode === MODULE_HEIGHT_MODE_FIT ? 'selected' : ''}>Fit</option>
+    </select>
+  `;
 }
 
 /** Remove a module id from all layout slots (including split columns). Returns true if layout changed. */
@@ -573,154 +837,22 @@ function renderLayout() {
   // New .layout-column nodes need drop targets; callers often forget to re-bind after innerHTML rebuild.
   initDragAndDrop();
 
-  // Adjust row heights after rendering
+  // Apply per-module height constraints after rendering
   requestAnimationFrame(() => {
-    adjustRowHeights();
-    // Also adjust after content loads
-    setTimeout(() => adjustRowHeights(), 200);
-    // Setup resize observer for dynamic content
-    setupCardResizeObserver();
+    applyModuleHeights();
+    setTimeout(() => applyModuleHeights(), 200);
+    setupModuleHeightObserver();
+    renderModuleHeightModesEditor();
   });
 }
 
 function adjustRowHeights() {
-  const rows = document.querySelectorAll('.layout-row');
-  rows.forEach(row => {
-    const columns = row.querySelectorAll('.layout-column');
-    let maxHeight = 0;
-
-    // First pass: find the tallest column
-    columns.forEach(col => {
-      if (col.classList.contains('split-column')) {
-        // For split columns, measure total height needed
-        const topSlot = col.querySelector('.split-slot-top');
-        const bottomSlot = col.querySelector('.split-slot-bottom');
-        let splitHeight = 0;
-
-        // Temporarily set to auto to measure natural height
-        const originalHeight = col.style.height;
-        col.style.height = 'auto';
-
-        if (topSlot) {
-          const topCard = topSlot.querySelector('.card');
-          if (topCard) {
-            splitHeight += topCard.scrollHeight;
-          } else if (topSlot.classList.contains('empty-split')) {
-            splitHeight += 60; // min-height for empty split
-          }
-        }
-        if (bottomSlot) {
-          const bottomCard = bottomSlot.querySelector('.card');
-          if (bottomCard) {
-            splitHeight += bottomCard.scrollHeight;
-          } else if (bottomSlot.classList.contains('empty-split')) {
-            splitHeight += 60; // min-height for empty split
-          }
-        }
-        if (topSlot && bottomSlot && (topSlot.querySelector('.card') || topSlot.classList.contains('empty-split')) &&
-            (bottomSlot.querySelector('.card') || bottomSlot.classList.contains('empty-split'))) {
-          splitHeight += 8; // gap
-        }
-
-        col.style.height = originalHeight;
-        maxHeight = Math.max(maxHeight, splitHeight);
-      } else {
-        // Regular column - measure card height
-        const card = col.querySelector('.card');
-        if (card) {
-          const originalColHeight = col.style.height;
-          const originalCardHeight = card.style.height;
-          // Reset both to auto to get natural content height
-          col.style.height = 'auto';
-          card.style.height = 'auto';
-          maxHeight = Math.max(maxHeight, card.scrollHeight);
-          col.style.height = originalColHeight;
-          card.style.height = originalCardHeight;
-        }
-      }
-    });
-
-    // Second pass: set all columns to max height and adjust split slots
-    if (maxHeight > 0) {
-      columns.forEach(col => {
-        if (col.classList.contains('split-column')) {
-          // Set column to max height
-          col.style.height = maxHeight + 'px';
-          col.style.minHeight = maxHeight + 'px';
-
-          const topSlot = col.querySelector('.split-slot-top');
-          const bottomSlot = col.querySelector('.split-slot-bottom');
-          const gap = 8;
-          const availableHeight = maxHeight - gap;
-
-          // Each slot should take at least 50% of available height
-          // Use flex: 1 1 0 to make them equal by default, but allow growth
-          if (topSlot && bottomSlot) {
-            const halfHeight = availableHeight / 2;
-            topSlot.style.flex = '1 1 0';
-            topSlot.style.minHeight = `${halfHeight}px`;
-            bottomSlot.style.flex = '1 1 0';
-            bottomSlot.style.minHeight = `${halfHeight}px`;
-          } else if (topSlot) {
-            topSlot.style.flex = '1 1 auto';
-          } else if (bottomSlot) {
-            bottomSlot.style.flex = '1 1 auto';
-          }
-        } else {
-          // Regular column - set to max height
-          col.style.height = maxHeight + 'px';
-          col.style.minHeight = maxHeight + 'px';
-          const card = col.querySelector('.card');
-          if (card) {
-            card.style.height = '100%';
-          }
-        }
-      });
-    }
-  });
+  applyModuleHeights();
 }
 
 // Observers to automatically adjust row heights when card content changes
-let cardMutationObserver = null;
-let heightAdjustDebounceTimer = null;
-
-function debouncedAdjustRowHeights() {
-  if (heightAdjustDebounceTimer) {
-    clearTimeout(heightAdjustDebounceTimer);
-  }
-  heightAdjustDebounceTimer = setTimeout(() => {
-    adjustRowHeights();
-  }, 150);
-}
-
 function setupCardResizeObserver() {
-  // Clean up existing observer
-  if (cardMutationObserver) {
-    cardMutationObserver.disconnect();
-  }
-
-  // Use MutationObserver to detect content changes within cards
-  cardMutationObserver = new MutationObserver((mutations) => {
-    // Only trigger if there are actual content changes
-    const hasContentChange = mutations.some(mutation => {
-      return mutation.type === 'childList' ||
-             (mutation.type === 'characterData') ||
-             (mutation.type === 'attributes' && mutation.attributeName === 'style');
-    });
-    if (hasContentChange) {
-      debouncedAdjustRowHeights();
-    }
-  });
-
-  // Observe the grid for content changes in cards
-  const grid = document.getElementById('moduleGrid');
-  if (grid) {
-    cardMutationObserver.observe(grid, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    });
-  }
+  setupModuleHeightObserver();
 }
 
 function getModuleName(moduleId) {
@@ -845,6 +977,8 @@ function renderLayoutEditor() {
 
     editor.appendChild(rowEditor);
   });
+
+  renderModuleHeightModesEditor();
 }
 
 async function fetchStorageKeyVersion(key) {
@@ -1906,6 +2040,7 @@ function initLayout() {
   }
 
   bindLayoutMaxWidthSelectDelegated();
+  loadModuleHeightModes();
 
   loadLayoutConfig();
   loadModuleOrder();
@@ -1927,6 +2062,11 @@ window.loadModuleMetadata = loadModuleMetadata;
 window.layoutSystem = {
   renderLayout,
   renderLayoutEditor,
+  renderModuleHeightModesEditor,
+  getModuleHeightMode,
+  setModuleHeightMode,
+  getModuleHeightModeSelectHtml,
+  applyModuleHeights,
   saveLayoutConfig,
   cleanupLayoutConfig,
   adjustRowHeights,

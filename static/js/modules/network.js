@@ -24,12 +24,12 @@ async function copyToClipboard(text) {
 }
 
 // Helper function to create a clickable element that copies to clipboard
-function createClickableElement(text, className = '') {
+function createClickableElement(text, className = '', titleText = 'Click to copy') {
   const span = document.createElement('span');
   span.textContent = text;
   span.className = className;
   span.style.cursor = 'pointer';
-  span.title = 'Click to copy';
+  span.title = titleText;
   span.addEventListener('click', async () => {
     if (await copyToClipboard(text)) {
       // Visual feedback - briefly change opacity
@@ -106,14 +106,11 @@ async function refreshIP() {
 
     // Update label based on whether it's local or remote
     const lanIpLabel = document.getElementById("lanIpLabel");
-    const networkNote = document.getElementById("networkNote");
     if (lanIpLabel) {
       if (isLocal) {
         lanIpLabel.textContent = "LAN IPs";
-        if (networkNote) networkNote.textContent = "";
       } else {
         lanIpLabel.textContent = "Client IP";
-        if (networkNote) networkNote.textContent = "Note: Showing client's IP. Server LAN IPs are not shown when accessed remotely.";
       }
     }
 
@@ -124,6 +121,12 @@ async function refreshIP() {
       const ips = j.network.hostIps.map(ipInfo => ipInfo.ip);
       const ptrs = j.network.hostIps.map(ipInfo => ipInfo.ptr).filter(p => p);
       renderClickableList(lanIpsEl, ips);
+      if (!isLocal && lanIpsEl) {
+        const remoteHint = "Showing client's IP. Server LAN IPs are not shown when accessed remotely. Click to copy.";
+        lanIpsEl.querySelectorAll('span').forEach(el => {
+          el.title = remoteHint;
+        });
+      }
       if (ptrs.length > 0) {
         renderClickableList(lanPtrEl, ptrs);
       } else {
@@ -336,7 +339,13 @@ async function refresh() {
         if (clientIPEl) {
           if (j.client.ip) {
             clientIPEl.innerHTML = '';
-            clientIPEl.appendChild(createClickableElement(j.client.ip));
+            clientIPEl.appendChild(
+              createClickableElement(
+                j.client.ip,
+                '',
+                "This is your client IP. Server LAN IPs are shown only when accessed locally. Click to copy."
+              )
+            );
           } else {
             clientIPEl.textContent = "—";
           }

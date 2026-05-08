@@ -606,7 +606,9 @@
 
   function openWorldClockPrefs() {
     if (window.openPreferencesTab) {
-      window.openPreferencesTab('worldclock');
+      window.openPreferencesTab('modules', function() {
+        if (window.renderWorldClockList) window.renderWorldClockList();
+      });
     }
   }
 

@@ -126,7 +126,6 @@ if ('serviceWorker' in navigator) {
         <div class="kv"><div class="k" id="lanIpLabel">LAN IPs</div><div class="v mono" style="text-align: right;"><span id="lanIps">—</span><div class="small ptr" id="lanPtr"></div></div></div>
         <div class="kv"><div class="k">Public IP</div><div class="v mono" style="text-align: right;"><span id="pubIp">—</span><div class="small ptr" id="pubPtr"></div></div></div>
         <div class="small" id="pubIpErr"></div>
-        <div class="small" id="networkNote" style="margin-top:8px; color:var(--muted);"></div>
       </div>
 
       <div class="card span-4" data-module="weather" draggable="true">
@@ -352,7 +351,6 @@ if ('serviceWorker' in navigator) {
         <button class="modal-tab" data-tab="modules"><i class="fas fa-th-large"></i> Modules</button>
         <button class="modal-tab" data-tab="quicklinks"><i class="fas fa-link"></i> Quicklinks</button>
         <button class="modal-tab" data-tab="calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
-        <button class="modal-tab" data-tab="worldclock"><i class="fas fa-globe"></i> World clock</button>
         <button class="modal-tab" data-tab="search"><i class="fas fa-search"></i> Search</button>
         <button class="modal-tab" data-tab="weather"><i class="fas fa-cloud-sun"></i> Weather</button>
         <button class="modal-tab" data-tab="debug"><i class="fas fa-bug"></i> Debug</button>
@@ -598,31 +596,6 @@ if ('serviceWorker' in navigator) {
           </div>
         </div>
 
-        <!-- World clock Tab -->
-        <div class="tab-content" id="tab-worldclock">
-          <div class="pref-section">
-            <h3>Display</h3>
-            <div class="pref-row">
-              <label>Your time zone label</label>
-              <input type="text" id="pref-worldclock-local-label" placeholder="Blank = automatic (e.g. Athens from Europe/Athens)" style="max-width:320px;" autocomplete="off" spellcheck="false" title="Shown on the first row of the World clock card instead of the automatic name">
-            </div>
-            <div class="pref-row">
-              <label>Two columns on dashboard</label>
-              <input type="checkbox" id="pref-worldclock-two-cols" title="Show clocks in two columns inside the World clock card">
-            </div>
-            <div class="pref-row">
-              <label>Converter on dashboard card</label>
-              <input type="checkbox" id="pref-worldclock-calc-enabled" title="Show your local UTC offset → target zone (IANA or common codes) on the World clock card">
-            </div>
-          </div>
-          <div class="pref-section">
-            <h3>Time zones <button type="button" class="btn-small" id="addWorldClockBtn"><i class="fas fa-plus"></i> Add</button></h3>
-            <p class="small" style="color:var(--muted); margin-bottom:12px;">Use <a href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones" target="_blank" rel="noreferrer">IANA</a> names (e.g. <span class="mono">Europe/Athens</span> for Greece). A few non-IANA spellings are mapped automatically (e.g. <span class="mono">Switzerland/Geneva</span>). Hover a clock for the full zone name.</p>
-            <datalist id="worldclock-tz-suggestions"></datalist>
-            <div class="module-list" id="worldclockList" style="max-height:420px; overflow-y:auto;"></div>
-          </div>
-        </div>
-
         <!-- Search Tab -->
         <div class="tab-content" id="tab-search">
           <div class="sub-tabs">
@@ -717,6 +690,15 @@ if ('serviceWorker' in navigator) {
                 <h3>Monitoring Modules <button class="btn-small" id="addMonitorBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <p class="small" style="color:var(--muted); margin:0 0 8px 0;">Tip: the <span class="mono">+</span> on the Monitoring card opens the same add dialog.</p>
                 <div class="pref-row">
+                  <label>Monitoring card height mode</label>
+                  <select data-module-height-single="monitoring">
+                    <option value="auto">Auto</option>
+                    <option value="oneX">1x</option>
+                    <option value="double">2x</option>
+                    <option value="fit">Fit</option>
+                  </select>
+                </div>
+                <div class="pref-row">
                   <label>Monitoring card columns</label>
                   <div style="display:flex; align-items:center; gap:8px;">
                     <select id="monitor-columns">
@@ -744,6 +726,15 @@ if ('serviceWorker' in navigator) {
               <div class="pref-section">
                 <h3>SNMP Modules <button class="btn-small" id="addSnmpBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <p class="small" style="color:var(--muted); margin:0 0 8px 0;">Tip: the <span class="mono">+</span> on the SNMP card opens the same add dialog.</p>
+                <div class="pref-row">
+                  <label>SNMP card height mode</label>
+                  <select data-module-height-single="snmp">
+                    <option value="auto">Auto</option>
+                    <option value="oneX">1x</option>
+                    <option value="double">2x</option>
+                    <option value="fit">Fit</option>
+                  </select>
+                </div>
                 <div class="module-list" id="snmpModuleList"></div>
               </div>
               <div class="pref-section">
@@ -777,6 +768,24 @@ if ('serviceWorker' in navigator) {
               <div class="pref-section">
                 <h3>Disk Modules <button class="btn-small" id="addDiskBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <div class="module-list" id="diskModuleList"></div>
+              </div>
+              <div class="pref-section">
+                <h3>World clock <button type="button" class="btn-small" id="addWorldClockBtn"><i class="fas fa-plus"></i> Add</button></h3>
+                <div class="pref-row">
+                  <label>Your time zone label</label>
+                  <input type="text" id="pref-worldclock-local-label" placeholder="Blank = automatic (e.g. Athens from Europe/Athens)" style="max-width:260px;" autocomplete="off" spellcheck="false" title="Shown on the first row of the World clock card instead of the automatic name">
+                </div>
+                <div class="pref-row">
+                  <label>Two columns on dashboard</label>
+                  <input type="checkbox" id="pref-worldclock-two-cols" title="Show clocks in two columns inside the World clock card">
+                </div>
+                <div class="pref-row">
+                  <label>Converter on dashboard card</label>
+                  <input type="checkbox" id="pref-worldclock-calc-enabled" title="Show your local UTC offset → target zone (IANA or common codes) on the World clock card">
+                </div>
+                <p class="small" style="color:var(--muted); margin:8px 0 12px 0;">Use <a href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones" target="_blank" rel="noreferrer">IANA</a> names (e.g. <span class="mono">Europe/Athens</span>).</p>
+                <datalist id="worldclock-tz-suggestions"></datalist>
+                <div class="module-list" id="worldclockList" style="max-height:320px; overflow-y:auto;"></div>
               </div>
             </div>
           </div>
@@ -1447,7 +1456,7 @@ body {
 }
 .layout-column:not(.empty-column) .card {
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 .split-column {
   position: relative;
@@ -1463,15 +1472,38 @@ body {
   overflow: visible;
 }
 .split-slot .card {
-  height: 100%;
+  height: auto;
   overflow: visible;
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
 }
 /* Next Todos must clip + scroll inside the card (split-slot .card uses overflow:visible by default). */
 .split-slot .card[data-module="todo"],
 .layout-column:not(.empty-column) > .card[data-module="todo"] {
   overflow: hidden;
+}
+/* Per-module height system */
+:root {
+  --card-min-h: 220px;
+}
+.layout-column:not(.empty-column) > .card,
+.split-slot > .card {
+  min-height: var(--card-min-h);
+  max-height: calc(var(--card-min-h) * 2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.layout-column:not(.empty-column) > .card > h3,
+.split-slot > .card > h3 {
+  flex-shrink: 0;
+}
+.layout-column:not(.empty-column) > .card > .card-body-scroll,
+.split-slot > .card > .card-body-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 /* Split wrappers use overflow:hidden for flex sizing; theme .card:hover translateY clips top border/corners */
 .split-slot .card:hover,

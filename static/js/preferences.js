@@ -18,6 +18,26 @@ function refreshPreferenceListsOnOpen() {
   initDebugSettings();
   if (window.syncCalendarPreferenceWidgets) window.syncCalendarPreferenceWidgets();
   if (window.renderWorldClockList) window.renderWorldClockList();
+  syncSingleModuleHeightModeSelectors();
+}
+
+function syncSingleModuleHeightModeSelectors() {
+  const controls = document.querySelectorAll('select[data-module-height-single]');
+  controls.forEach(select => {
+    const moduleId = select.getAttribute('data-module-height-single');
+    if (!moduleId) return;
+    if (window.layoutSystem && window.layoutSystem.getModuleHeightMode) {
+      select.value = window.layoutSystem.getModuleHeightMode(moduleId);
+    }
+    if (select.dataset.bound === '1') return;
+    select.dataset.bound = '1';
+    select.addEventListener('change', () => {
+      if (window.layoutSystem && window.layoutSystem.setModuleHeightMode) {
+        window.layoutSystem.setModuleHeightMode(moduleId, select.value);
+        if (window.layoutSystem.applyModuleHeights) window.layoutSystem.applyModuleHeights();
+      }
+    });
+  });
 }
 
 function openPreferencesModal() {
@@ -111,6 +131,7 @@ function initPreferencesModal() {
         if (window.renderSnmpModuleList) window.renderSnmpModuleList();
         if (window.renderHistoryModuleList) window.renderHistoryModuleList();
         if (window.renderSMBIOSModuleList) window.renderSMBIOSModuleList();
+        syncSingleModuleHeightModeSelectors();
       }
 
       // Initialize debug settings when debug tab is opened
@@ -118,7 +139,7 @@ function initPreferencesModal() {
         initDebugSettings();
       }
 
-      if (tabName === 'worldclock' && window.renderWorldClockList) {
+      if (tabName === 'modules' && window.renderWorldClockList) {
         window.renderWorldClockList();
       }
     });
@@ -597,6 +618,7 @@ function renderModuleList() {
       </div>
       <div class="module-controls">
         ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
+        ${window.layoutSystem && window.layoutSystem.getModuleHeightModeSelectHtml ? window.layoutSystem.getModuleHeightModeSelectHtml(key) : ''}
         ${key === 'speedplane' ? `<button class="btn-small edit-speedplane-btn" data-module="${key}" title="Configure"><i class="fas fa-edit"></i></button>` : ''}
         ${key === 'dnsplane' ? `<button class="btn-small edit-dnsplane-btn" data-module="${key}" title="Configure DNSPlane"><i class="fas fa-edit"></i></button>` : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
@@ -639,6 +661,16 @@ function renderModuleList() {
         // Update local timer for immediate UI feedback (backend will sync and update via WebSocket)
         window.timers[mod.timerKey].interval = val * 1000;
         if (window.saveModulePrefs) window.saveModulePrefs();
+      }
+    });
+  });
+
+  moduleList.querySelectorAll('.module-height-mode-select').forEach(select => {
+    select.addEventListener('change', () => {
+      const moduleId = select.dataset.module;
+      if (window.layoutSystem && window.layoutSystem.setModuleHeightMode) {
+        window.layoutSystem.setModuleHeightMode(moduleId, select.value);
+        if (window.layoutSystem.applyModuleHeights) window.layoutSystem.applyModuleHeights();
       }
     });
   });
@@ -1138,6 +1170,7 @@ function renderCalendarModuleList() {
       </div>
       <div class="module-controls">
         ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
+        ${window.layoutSystem && window.layoutSystem.getModuleHeightModeSelectHtml ? window.layoutSystem.getModuleHeightModeSelectHtml(key) : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -1172,6 +1205,16 @@ function renderCalendarModuleList() {
           intervalInput.value = val;
           window.timers[mod.timerKey].interval = val * 1000;
           if (window.saveModulePrefs) window.saveModulePrefs();
+        }
+      });
+    }
+
+    const heightModeSelect = item.querySelector('.module-height-mode-select');
+    if (heightModeSelect) {
+      heightModeSelect.addEventListener('change', () => {
+        if (window.layoutSystem && window.layoutSystem.setModuleHeightMode) {
+          window.layoutSystem.setModuleHeightMode(key, heightModeSelect.value);
+          if (window.layoutSystem.applyModuleHeights) window.layoutSystem.applyModuleHeights();
         }
       });
     }
@@ -1211,6 +1254,7 @@ function renderTodoModuleList() {
       </div>
       <div class="module-controls">
         ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
+        ${window.layoutSystem && window.layoutSystem.getModuleHeightModeSelectHtml ? window.layoutSystem.getModuleHeightModeSelectHtml(key) : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -1245,6 +1289,16 @@ function renderTodoModuleList() {
           intervalInput.value = val;
           window.timers[mod.timerKey].interval = val * 1000;
           if (window.saveModulePrefs) window.saveModulePrefs();
+        }
+      });
+    }
+
+    const heightModeSelect = item.querySelector('.module-height-mode-select');
+    if (heightModeSelect) {
+      heightModeSelect.addEventListener('change', () => {
+        if (window.layoutSystem && window.layoutSystem.setModuleHeightMode) {
+          window.layoutSystem.setModuleHeightMode(key, heightModeSelect.value);
+          if (window.layoutSystem.applyModuleHeights) window.layoutSystem.applyModuleHeights();
         }
       });
     }
@@ -1284,6 +1338,7 @@ function renderHistoryModuleList() {
       </div>
       <div class="module-controls">
         ${mod.hasTimer ? `<input type="number" class="interval-input" data-module="${key}" value="${window.timers && window.timers[mod.timerKey] ? window.timers[mod.timerKey].interval / 1000 : mod.defaultInterval}" min="1" max="86400" style="width:60px;">` : ''}
+        ${window.layoutSystem && window.layoutSystem.getModuleHeightModeSelectHtml ? window.layoutSystem.getModuleHeightModeSelectHtml(key) : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -1318,6 +1373,16 @@ function renderHistoryModuleList() {
           intervalInput.value = val;
           window.timers[mod.timerKey].interval = val * 1000;
           if (window.saveModulePrefs) window.saveModulePrefs();
+        }
+      });
+    }
+
+    const heightModeSelect = item.querySelector('.module-height-mode-select');
+    if (heightModeSelect) {
+      heightModeSelect.addEventListener('change', () => {
+        if (window.layoutSystem && window.layoutSystem.setModuleHeightMode) {
+          window.layoutSystem.setModuleHeightMode(key, heightModeSelect.value);
+          if (window.layoutSystem.applyModuleHeights) window.layoutSystem.applyModuleHeights();
         }
       });
     }
@@ -1357,6 +1422,7 @@ function renderSMBIOSModuleList() {
         <div class="module-desc">${mod.desc}</div>
       </div>
       <div class="module-controls">
+        ${window.layoutSystem && window.layoutSystem.getModuleHeightModeSelectHtml ? window.layoutSystem.getModuleHeightModeSelectHtml(key) : ''}
         <input type="checkbox" class="module-toggle" data-module="${key}" ${mod.enabled ? 'checked' : ''}>
       </div>
     `;
@@ -1381,6 +1447,16 @@ function renderSMBIOSModuleList() {
         }
       }
     });
+
+    const heightModeSelect = item.querySelector('.module-height-mode-select');
+    if (heightModeSelect) {
+      heightModeSelect.addEventListener('change', () => {
+        if (window.layoutSystem && window.layoutSystem.setModuleHeightMode) {
+          window.layoutSystem.setModuleHeightMode(key, heightModeSelect.value);
+          if (window.layoutSystem.applyModuleHeights) window.layoutSystem.applyModuleHeights();
+        }
+      });
+    }
   });
 }
 

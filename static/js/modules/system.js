@@ -591,6 +591,7 @@ function renderDiskModuleList() {
         <div class="module-desc">${mod.mountPoint}</div>
       </div>
       <div class="module-controls">
+        ${window.layoutSystem && window.layoutSystem.getModuleHeightModeSelectHtml ? window.layoutSystem.getModuleHeightModeSelectHtml(mod.id) : ''}
         <button class="btn-small edit-disk-btn" data-index="${index}"><i class="fas fa-edit"></i></button>
         <button class="btn-small delete-disk-btn" data-index="${index}"><i class="fas fa-trash"></i></button>
         <input type="checkbox" ${mod.enabled ? 'checked' : ''} data-index="${index}" title="Enable/disable">
@@ -605,6 +606,16 @@ function renderDiskModuleList() {
       saveDiskModules();
       renderDiskModules();
     });
+
+    const heightModeSelect = item.querySelector('.module-height-mode-select');
+    if (heightModeSelect) {
+      heightModeSelect.addEventListener('change', () => {
+        if (window.layoutSystem && window.layoutSystem.setModuleHeightMode) {
+          window.layoutSystem.setModuleHeightMode(mod.id, heightModeSelect.value);
+          if (window.layoutSystem.applyModuleHeights) window.layoutSystem.applyModuleHeights();
+        }
+      });
+    }
 
     const editBtn = item.querySelector('.edit-disk-btn');
     editBtn.addEventListener('click', () => {
