@@ -716,6 +716,25 @@ if ('serviceWorker' in navigator) {
               <div class="pref-section">
                 <h3>Monitoring Modules <button class="btn-small" id="addMonitorBtn"><i class="fas fa-plus"></i> Add</button></h3>
                 <p class="small" style="color:var(--muted); margin:0 0 8px 0;">Tip: the <span class="mono">+</span> on the Monitoring card opens the same add dialog.</p>
+                <div class="pref-row">
+                  <label>Monitoring card columns</label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <select id="monitor-columns">
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                    </select>
+                    <div class="monitor-layout-buttons">
+                      <button type="button" class="monitor-layout-btn" data-cols="1" title="1 monitor per row"><i class="fas fa-bars"></i></button>
+                      <button type="button" class="monitor-layout-btn" data-cols="2" title="2 monitors per row"><i class="fas fa-th-large"></i></button>
+                      <button type="button" class="monitor-layout-btn" data-cols="3" title="3 monitors per row"><i class="fas fa-th"></i></button>
+                    </div>
+                  </div>
+                </div>
+                <div class="pref-row">
+                  <label>Show favicons (HTTPS)</label>
+                  <input type="checkbox" id="monitor-show-favicons">
+                </div>
                 <div class="module-list" id="monitorModuleList"></div>
               </div>
               <div class="pref-section">
@@ -1523,6 +1542,33 @@ body {
   border-color: var(--accent);
   color: var(--bg);
 }
+.monitor-layout-buttons {
+  display: flex;
+  gap: 8px;
+}
+.monitor-layout-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+.monitor-layout-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.monitor-layout-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
 .quicklinks-grid {
   display: grid;
   gap: 8px;
@@ -1535,6 +1581,75 @@ body {
 }
 .quicklinks-grid.cols-3 {
   grid-template-columns: repeat(3, 1fr);
+}
+#monitoringContainer {
+  display: grid;
+  gap: 8px;
+}
+#monitoringContainer.monitor-cols-1 {
+  grid-template-columns: 1fr;
+}
+#monitoringContainer.monitor-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#monitoringContainer.monitor-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#monitoringContainer .monitor-row {
+  min-width: 0;
+}
+#monitoringContainer .monitor-row .k,
+#monitoringContainer .monitor-row .v {
+  min-width: 0;
+}
+#monitoringContainer .monitor-row .k {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#monitoringContainer .monitor-row .monitor-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#monitoringContainer .monitor-row .monitor-favicon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+#monitoringContainer .monitor-row .monitor-favicon img {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+.monitor-cols-2 .monitor-row,
+.monitor-cols-3 .monitor-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.monitor-cols-2 .monitor-row .k,
+.monitor-cols-3 .monitor-row .k {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.monitor-cols-2 .monitor-row .v,
+.monitor-cols-3 .monitor-row .v {
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  #monitoringContainer.monitor-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  #monitoringContainer.monitor-cols-2,
+  #monitoringContainer.monitor-cols-3 {
+    grid-template-columns: 1fr;
+  }
 }
 .quicklinks-grid.icons-only.equal-size {
   display: flex;

@@ -3,6 +3,8 @@
 const defaultMonitors = [];
 let monitors = [];
 const monitorDownSince = {};
+let monitorColumns = 1;
+let monitorShowFavicons = true;
 
 // Load from localStorage
 (function() {
@@ -40,6 +42,109 @@ function saveMonitorInterval(seconds) {
       window.timers.monitoring.interval = seconds * 1000;
     }
   } catch (e) {}
+}
+
+function getSavedMonitorColumns() {
+  try {
+    const saved = window.loadFromStorage('monitorColumns');
+    const parsed = parseInt(saved, 10);
+    if (parsed >= 1 && parsed <= 3) {
+      return parsed;
+    }
+  } catch (e) {}
+  return 1;
+}
+
+function getSavedMonitorShowFavicons() {
+  try {
+    const saved = window.loadFromStorage('monitorShowFavicons');
+    if (saved === null || saved === undefined) return true;
+    if (typeof saved === 'boolean') return saved;
+    return saved === 'true';
+  } catch (e) {}
+  return true;
+}
+
+function applyMonitorColumns(columns) {
+  const container = document.getElementById('monitoringContainer');
+  if (!container) return;
+  container.classList.remove('monitor-cols-1', 'monitor-cols-2', 'monitor-cols-3');
+  container.classList.add('monitor-cols-' + columns);
+}
+
+function saveMonitorColumns(columns) {
+  const clamped = Math.max(1, Math.min(3, parseInt(columns, 10) || 1));
+  monitorColumns = clamped;
+  try {
+    window.saveToStorage('monitorColumns', clamped);
+  } catch (e) {}
+  applyMonitorColumns(clamped);
+  updateMonitorLayoutButtons();
+}
+
+function saveMonitorShowFavicons(enabled) {
+  monitorShowFavicons = !!enabled;
+  try {
+    window.saveToStorage('monitorShowFavicons', monitorShowFavicons);
+  } catch (e) {}
+}
+
+function updateMonitorLayoutButtons() {
+  const buttons = document.querySelectorAll('.monitor-layout-btn');
+  buttons.forEach(btn => {
+    const cols = parseInt(btn.dataset.cols, 10);
+    btn.classList.toggle('active', cols === monitorColumns);
+  });
+}
+
+function getFaviconCache() {
+  try {
+    const cache = window.loadFromStorage('faviconCache');
+    return cache || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveFaviconCache(cache) {
+  try {
+    window.saveToStorage('faviconCache', cache);
+  } catch (e) {}
+}
+
+function getCachedFavicon(url) {
+  try {
+    const cache = getFaviconCache();
+    const cacheKey = new URL(url).origin;
+    if (cache[cacheKey] && cache[cacheKey].expires > Date.now()) {
+      return cache[cacheKey].data;
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function fetchAndCacheFavicon(url) {
+  try {
+    const cacheKey = new URL(url).origin;
+    const cache = getFaviconCache();
+    if (cache[cacheKey] && cache[cacheKey].expires > Date.now()) {
+      return cache[cacheKey].data;
+    }
+
+    const res = await fetch('/api/favicon?url=' + encodeURIComponent(url));
+    const data = await res.json();
+    if (data && data.favicon) {
+      cache[cacheKey] = {
+        data: data.favicon,
+        expires: Date.now() + (7 * 24 * 60 * 60 * 1000)
+      };
+      saveFaviconCache(cache);
+      return data.favicon;
+    }
+  } catch (e) {
+    if (window.debugError) window.debugError('monitoring', 'Error fetching monitor favicon:', e);
+  }
+  return null;
 }
 
 function shouldMonitoringOccupyLayout() {
@@ -85,6 +190,7 @@ function formatTimeSince(ms) {
 function renderMonitors() {
   const container = document.getElementById('monitoringContainer');
   if (!container) return;
+  applyMonitorColumns(monitorColumns);
 
   if (monitors.length === 0) {
     container.innerHTML = '<div class="small" style="color:var(--muted);">Add services in Preferences → Monitoring</div>';
@@ -102,7 +208,16 @@ function renderMonitors() {
     k.className = 'k';
     const isHttps = mon.type === 'http' && mon.url && mon.url.startsWith('https://');
     const sslIconHtml = isHttps ? '<span class="ssl-status" id="mon-ssl-' + index + '" style="margin-left:4px;"></span>' : '';
-    k.innerHTML = '<span class="monitor-status" id="mon-status-' + index + '"><i class="fas fa-circle" style="color:var(--muted);"></i></span>' + sslIconHtml + ' ' + mon.name;
+    let faviconHtml = '';
+    if (monitorShowFavicons && isHttps) {
+      const cachedFavicon = getCachedFavicon(mon.url);
+      if (cachedFavicon) {
+        faviconHtml = '<span class="monitor-favicon"><img src="' + cachedFavicon + '" width="14" height="14" alt=""></span>';
+      } else {
+        faviconHtml = '<span class="monitor-favicon" id="mon-favicon-' + index + '"><i class="fas fa-globe"></i></span>';
+      }
+    }
+    k.innerHTML = '<span class="monitor-status" id="mon-status-' + index + '"><i class="fas fa-circle" style="color:var(--muted);"></i></span>' + sslIconHtml + faviconHtml + ' <span class="monitor-name">' + mon.name + '</span>';
 
     const v = document.createElement('div');
     v.className = 'v mono';
@@ -112,6 +227,19 @@ function renderMonitors() {
     row.appendChild(k);
     row.appendChild(v);
     container.appendChild(row);
+
+    if (monitorShowFavicons && isHttps && !getCachedFavicon(mon.url)) {
+      const faviconEl = document.getElementById('mon-favicon-' + index);
+      if (faviconEl) {
+        fetchAndCacheFavicon(mon.url).then(favicon => {
+          if (favicon) {
+            faviconEl.innerHTML = '<img src="' + favicon + '" width="14" height="14" alt="">';
+          } else {
+            faviconEl.innerHTML = '<i class="fas fa-globe"></i>';
+          }
+        });
+      }
+    }
   });
   refreshMonitoringCardVisibility();
 }
@@ -752,6 +880,9 @@ function renderMonitorModuleList() {
 }
 
 function initMonitoring() {
+  monitorColumns = getSavedMonitorColumns();
+  monitorShowFavicons = getSavedMonitorShowFavicons();
+
   // Set up add button event listener
   const addBtn = document.getElementById('addMonitorBtn');
   if (addBtn) {
@@ -766,6 +897,32 @@ function initMonitoring() {
       showMonitorEditDialog(-1);
     });
   }
+
+  const monitorColsSelect = document.getElementById('monitor-columns');
+  if (monitorColsSelect) {
+    monitorColsSelect.value = String(monitorColumns);
+    monitorColsSelect.addEventListener('change', () => {
+      saveMonitorColumns(monitorColsSelect.value);
+      renderMonitors();
+    });
+  }
+  const monitorFaviconsCheckbox = document.getElementById('monitor-show-favicons');
+  if (monitorFaviconsCheckbox) {
+    monitorFaviconsCheckbox.checked = monitorShowFavicons;
+    monitorFaviconsCheckbox.addEventListener('change', () => {
+      saveMonitorShowFavicons(monitorFaviconsCheckbox.checked);
+      renderMonitors();
+    });
+  }
+  document.querySelectorAll('.monitor-layout-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cols = parseInt(btn.dataset.cols, 10) || 1;
+      saveMonitorColumns(cols);
+      if (monitorColsSelect) monitorColsSelect.value = String(monitorColumns);
+      renderMonitors();
+    });
+  });
+  updateMonitorLayoutButtons();
 
   renderMonitorModuleList();
   renderMonitors();
