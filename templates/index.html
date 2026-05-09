@@ -1445,6 +1445,79 @@ body {
   height: auto;
   margin: 0 !important;
 }
+.insert-drop-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12px;
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.insert-drop-zone.insert-before {
+  top: -6px;
+}
+.insert-drop-zone.insert-after {
+  bottom: -6px;
+}
+.layout-grid.dragging-active .insert-drop-zone {
+  opacity: 0.45;
+  pointer-events: auto;
+}
+.insert-drop-zone::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top: 2px dashed var(--border);
+}
+.insert-drop-zone.drag-over::before {
+  border-top-color: var(--accent);
+  border-top-style: solid;
+}
+.insert-drop-zone::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--bg);
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.insert-drop-zone.insert-before.drag-over::after {
+  content: 'Insert before';
+  opacity: 1;
+}
+.insert-drop-zone.insert-after.drag-over::after {
+  content: 'Insert after';
+  opacity: 1;
+}
+.drag-order-badge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(34px, 6vw, 74px);
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.16);
+  text-shadow: 0 0 1px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 4;
+  user-select: none;
+}
 .layout-slot.drag-over .card {
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 2px var(--accent) !important;

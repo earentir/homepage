@@ -585,6 +585,10 @@ function renderLayout() {
     slot.className = 'layout-slot';
     slot.dataset.module = entry.id;
     slot.dataset.span = String(span);
+    slot.innerHTML = `
+      <div class="insert-drop-zone insert-before" data-target="${entry.id}" data-where="before"></div>
+      <div class="insert-drop-zone insert-after" data-target="${entry.id}" data-where="after"></div>
+    `;
     card.style.height = 'auto';
     slot.appendChild(card);
     grid.appendChild(slot);
@@ -597,6 +601,10 @@ function renderLayout() {
     slot.className = 'layout-slot';
     slot.dataset.module = id;
     slot.dataset.span = '1';
+    slot.innerHTML = `
+      <div class="insert-drop-zone insert-before" data-target="${id}" data-where="before"></div>
+      <div class="insert-drop-zone insert-after" data-target="${id}" data-where="after"></div>
+    `;
     grid.appendChild(slot);
     slot.appendChild(card);
     if (!layoutConfig.modules.some(m => m.id === id)) {
@@ -766,6 +774,81 @@ function reorderByModuleId(sourceId, targetId) {
   return true;
 }
 
+function swapModulePositions(sourceId, targetId) {
+  if (!sourceId || !targetId || sourceId === targetId) return false;
+  const srcIndex = layoutConfig.modules.findIndex(m => m.id === sourceId);
+  const dstIndex = layoutConfig.modules.findIndex(m => m.id === targetId);
+  if (srcIndex === -1 || dstIndex === -1) return false;
+  const tmp = layoutConfig.modules[srcIndex];
+  layoutConfig.modules[srcIndex] = layoutConfig.modules[dstIndex];
+  layoutConfig.modules[dstIndex] = tmp;
+  return true;
+}
+
+function insertModuleRelative(sourceId, targetId, placeBefore) {
+  if (!sourceId || !targetId || sourceId === targetId) return false;
+  const srcIndex = layoutConfig.modules.findIndex(m => m.id === sourceId);
+  const dstIndex = layoutConfig.modules.findIndex(m => m.id === targetId);
+  if (srcIndex === -1 || dstIndex === -1) return false;
+  const [item] = layoutConfig.modules.splice(srcIndex, 1);
+  const targetIndexAfterRemoval = layoutConfig.modules.findIndex(m => m.id === targetId);
+  if (targetIndexAfterRemoval === -1) return false;
+  const insertIndex = placeBefore ? targetIndexAfterRemoval : targetIndexAfterRemoval + 1;
+  layoutConfig.modules.splice(insertIndex, 0, item);
+  return true;
+}
+
+function clearDragOrderOverlay() {
+  if (!grid) return;
+  const badges = grid.querySelectorAll('.drag-order-badge');
+  badges.forEach(b => b.remove());
+}
+
+function renderDragOrderOverlay() {
+  if (!grid) return;
+  clearDragOrderOverlay();
+  const slots = Array.from(grid.querySelectorAll(':scope > .layout-slot'));
+  const gridRect = grid.getBoundingClientRect();
+  const slotWithPos = slots
+    .map((slot, domIndex) => {
+      const card = slot.querySelector(':scope > .card[data-module]');
+      if (!card) return null;
+      const rect = slot.getBoundingClientRect();
+      const style = window.getComputedStyle(card);
+      const visible =
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        rect.width > 1 &&
+        rect.height > 1;
+      if (!visible) return null;
+      return {
+        slot,
+        domIndex,
+        top: rect.top - gridRect.top,
+        left: rect.left - gridRect.left
+      };
+    })
+    .filter(Boolean);
+
+  // Visual reading order: top-to-bottom, then left-to-right.
+  // Small tolerance avoids unstable ordering from sub-pixel/rounding noise.
+  const TOP_TOLERANCE_PX = 4;
+  slotWithPos.sort((a, b) => {
+    const dy = a.top - b.top;
+    if (Math.abs(dy) > TOP_TOLERANCE_PX) return dy;
+    const dx = a.left - b.left;
+    if (Math.abs(dx) > 1) return dx;
+    return a.domIndex - b.domIndex;
+  });
+
+  slotWithPos.forEach((entry, idx) => {
+    const badge = document.createElement('div');
+    badge.className = 'drag-order-badge';
+    badge.textContent = String(idx + 1);
+    entry.slot.appendChild(badge);
+  });
+}
+
 function initDragAndDrop() {
   if (!grid) grid = document.getElementById('moduleGrid');
   if (!grid) return;
@@ -790,14 +873,20 @@ function initDragAndDrop() {
 
       draggedElement = this;
       this.style.opacity = '0.5';
+      grid.classList.add('dragging-active');
+      renderDragOrderOverlay();
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', this.getAttribute('data-module') || '');
     });
 
     card.addEventListener('dragend', function() {
       this.style.opacity = '1';
+      grid.classList.remove('dragging-active');
       const allCards = Array.from(grid.querySelectorAll('.card[data-module]'));
       allCards.forEach(c => c.classList.remove('drag-over'));
+      const allZones = Array.from(grid.querySelectorAll('.insert-drop-zone'));
+      allZones.forEach(z => z.classList.remove('drag-over'));
+      clearDragOrderOverlay();
       draggedElement = null;
     });
 
@@ -822,7 +911,7 @@ function initDragAndDrop() {
       if (draggedElement && this !== draggedElement) {
         const draggedModuleId = draggedElement.getAttribute('data-module');
         const targetModuleId = this.getAttribute('data-module');
-        if (reorderByModuleId(draggedModuleId, targetModuleId)) {
+        if (swapModulePositions(draggedModuleId, targetModuleId)) {
           saveLayoutConfig();
           renderLayout();
           renderLayoutEditor();
@@ -845,6 +934,40 @@ function initDragAndDrop() {
       e.preventDefault();
       e.stopPropagation();
       return false;
+    });
+  });
+
+  const insertZones = Array.from(grid.querySelectorAll('.insert-drop-zone'));
+  insertZones.forEach(zone => {
+    if (zone.dataset.layoutInsertBound === '1') return;
+    zone.dataset.layoutInsertBound = '1';
+
+    zone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!draggedElement) return;
+      this.classList.add('drag-over');
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    zone.addEventListener('dragleave', function() {
+      this.classList.remove('drag-over');
+    });
+
+    zone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.classList.remove('drag-over');
+      if (!draggedElement) return;
+      const sourceId = draggedElement.getAttribute('data-module');
+      const targetId = this.dataset.target;
+      const where = this.dataset.where;
+      if (!sourceId || !targetId || !where) return;
+      if (insertModuleRelative(sourceId, targetId, where === 'before')) {
+        saveLayoutConfig();
+        renderLayout();
+        renderLayoutEditor();
+      }
     });
   });
 }
