@@ -430,25 +430,6 @@ function renderGitHubModules() {
   if (!container) return;
   container.innerHTML = '';
 
-  const layoutConfig = window.layoutSystem ? window.layoutSystem.getLayoutConfig() : null;
-  const modulesInLayout = new Set();
-  if (layoutConfig) {
-    layoutConfig.rows.forEach(row => {
-      row.modules.forEach(moduleId => {
-        if (Array.isArray(moduleId)) {
-          // Handle split modules (array of two module IDs)
-          moduleId.forEach(id => {
-            if (id && (id.startsWith('github-') || id.startsWith('rss-'))) {
-              modulesInLayout.add(id);
-            }
-          });
-        } else if (moduleId && (moduleId.startsWith('github-') || moduleId.startsWith('rss-'))) {
-          modulesInLayout.add(moduleId);
-        }
-      });
-    });
-  }
-
   githubModules.forEach((mod, index) => {
     const displayType = mod.displayType || 'repos';
     const typeInfo = githubDisplayTypes[displayType] || githubDisplayTypes.repos;

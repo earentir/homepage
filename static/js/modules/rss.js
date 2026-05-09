@@ -126,20 +126,30 @@ function renderRssModules() {
   const layoutConfig = window.layoutSystem ? window.layoutSystem.getLayoutConfig() : null;
   const modulesInLayout = new Set();
   if (layoutConfig) {
-    layoutConfig.rows.forEach(row => {
-      row.modules.forEach(moduleId => {
-        if (Array.isArray(moduleId)) {
-          // Handle split modules (array of two module IDs)
-          moduleId.forEach(id => {
-            if (id && id.startsWith('rss-')) {
-              modulesInLayout.add(id);
-            }
-          });
-        } else if (moduleId && moduleId.startsWith('rss-')) {
+    if (Array.isArray(layoutConfig.modules)) {
+      layoutConfig.modules.forEach(entry => {
+        const moduleId = entry && typeof entry === 'object' ? entry.id : entry;
+        if (moduleId && typeof moduleId === 'string' && moduleId.startsWith('rss-')) {
           modulesInLayout.add(moduleId);
         }
       });
-    });
+    } else if (Array.isArray(layoutConfig.rows)) {
+      // Backward compatibility for old row-based saves still in memory.
+      layoutConfig.rows.forEach(row => {
+        if (!row || !Array.isArray(row.modules)) return;
+        row.modules.forEach(moduleId => {
+          if (Array.isArray(moduleId)) {
+            moduleId.forEach(id => {
+              if (id && typeof id === 'string' && id.startsWith('rss-')) {
+                modulesInLayout.add(id);
+              }
+            });
+          } else if (moduleId && typeof moduleId === 'string' && moduleId.startsWith('rss-')) {
+            modulesInLayout.add(moduleId);
+          }
+        });
+      });
+    }
   }
 
   rssModules.forEach((mod, index) => {

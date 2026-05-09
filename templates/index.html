@@ -648,7 +648,7 @@ if ('serviceWorker' in navigator) {
           <div style="display:grid; grid-template-columns: 1fr 2fr; gap:20px; align-items:start;">
             <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
-                <h3>Container Width</h3>
+                <h3>Layout Settings</h3>
                 <div class="pref-row">
                   <label>Max Width</label>
                   <select id="layoutMaxWidth">
@@ -662,17 +662,21 @@ if ('serviceWorker' in navigator) {
                     <option value="100">100%</option>
                   </select>
                 </div>
+                <div class="pref-row">
+                  <label>Total Columns</label>
+                  <select id="layoutColumns">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
               </div>
             </div>
             <div style="display:flex; flex-direction:column; gap:20px;">
               <div class="pref-section">
-                <h3>Row Layout Editor</h3>
-                <div id="layoutEditor"></div>
-                <div style="margin-top: 12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-                  <button type="button" class="btn-small" id="addRowBtn"><i class="fas fa-plus"></i> Add Row</button>
-                  <button type="button" class="btn-small" id="wipeLayoutStorageBtn" title="Remove saved layout/module-order from this browser, then save the grid as it looks now (beats stale backend/local versions)"><i class="fas fa-broom"></i> Reset layout storage from current grid</button>
-                </div>
-                <p class="small" style="color:var(--muted); margin:10px 0 0 0; max-width:52em;">Clears only the <span class="mono">layoutConfig</span> and <span class="mono">moduleOrder</span> keys (and their sync metadata), fetches the server’s version numbers so the next save wins over the backend, then writes the rows, columns, and modules currently on the page. Other preferences stay in local storage.</p>
+                <h3>Spans</h3>
+                <p class="small" style="color:var(--muted); margin:10px 0 0 0; max-width:52em;">Set each module span next to its height mode in the Modules tab.</p>
               </div>
             </div>
           </div>
@@ -1427,133 +1431,46 @@ body {
   border-color: var(--accent);
 }
 .layout-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.layout-row {
-  display: grid;
-  gap: 16px;
-  min-height: 100px;
-}
-.layout-column {
-  min-height: 100px;
   position: relative;
+  display: block;
+  min-height: 80px;
 }
-/* Let cards use height:100% + inner scroll instead of growing the whole layout row. */
-.layout-column:not(.empty-column) {
+.layout-slot {
+  position: absolute;
   min-width: 0;
-  min-height: 0;
+  box-sizing: border-box;
 }
-.layout-column.empty-column {
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  min-height: 100px;
-}
-.layout-column.empty-column.dragging-active {
-  border: 2px dashed var(--border);
-  background: var(--panel2);
-}
-.layout-column.empty-column.dragging-active:hover,
-.layout-column.empty-column.drag-over {
-  border-color: var(--accent);
-  background: var(--panel);
-}
-.layout-column.drag-over {
-  border-color: var(--accent) !important;
-  background: var(--panel) !important;
-}
-.empty-column-hint {
-  color: var(--muted);
-  font-size: 13px;
-  pointer-events: none;
-}
-.layout-column.empty-column.dragging-active .empty-column-hint {
-  display: block !important;
-}
-.layout-column:not(.empty-column) .card {
+.layout-slot .card {
   width: 100%;
   height: auto;
+  margin: 0 !important;
 }
-.split-column {
-  position: relative;
-  align-items: stretch;
-  min-width: 0;
-  min-height: 0;
-}
-.split-slot {
-  border-radius: 0;
-  transition: all 0.2s;
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
-}
-.split-slot .card {
-  height: auto;
-  overflow: visible;
-  flex: 0 1 auto;
-  min-height: 0;
-}
-/* Next Todos must clip + scroll inside the card (split-slot .card uses overflow:visible by default). */
-.split-slot .card[data-module="todo"],
-.layout-column:not(.empty-column) > .card[data-module="todo"] {
-  overflow: hidden;
+.layout-slot.drag-over .card {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent) !important;
+  transform: scale(1.02);
 }
 /* Per-module height system */
 :root {
   --card-min-h: 220px;
 }
-.layout-column:not(.empty-column) > .card,
-.split-slot > .card {
+.layout-slot > .card {
   min-height: var(--card-min-h);
   max-height: calc(var(--card-min-h) * 2);
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
-.layout-column:not(.empty-column) > .card > h3,
-.split-slot > .card > h3 {
+.layout-slot > .card > h3 {
   flex-shrink: 0;
 }
-.layout-column:not(.empty-column) > .card > .card-body-scroll,
-.split-slot > .card > .card-body-scroll {
+.layout-slot > .card > .card-body-scroll {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-}
- /* Split wrappers use overflow:hidden for flex sizing; theme .card:hover translateY clips top border/corners */
-.split-slot .card:hover,
-.split-slot .card.drag-over {
-  transform: none;
-}
-.split-slot.empty-split {
-  border: 1px solid transparent;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60px;
-  transition: all 0.2s;
-}
-.split-slot.empty-split.dragging-active {
-  border: 2px dashed var(--border);
-  background: var(--panel2);
-}
-.split-slot.empty-split.dragging-active:hover,
-.split-slot.empty-split.drag-over {
-  border-color: var(--accent);
-  background: var(--panel);
-}
-.split-slot.empty-split.dragging-active .empty-column-hint {
-  display: block !important;
 }
 .layout-row-editor {
   padding: 12px;
@@ -1881,6 +1798,11 @@ body {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+.module-layout-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .quicklinks-list-grid .module-item .module-controls {
   gap: 4px;
@@ -2285,8 +2207,7 @@ body {
   /* Cap when the card is not in a height-constrained column (e.g. before layout init). */
   max-height: min(320px, 50vh);
 }
-.layout-column:not(.empty-column) .card[data-module="todo"] #nextTodosList,
-.split-slot .card[data-module="todo"] #nextTodosList {
+.layout-slot .card[data-module="todo"] #nextTodosList {
   max-height: none;
 }
 #nextTodosList .todo-reorder-handle {
