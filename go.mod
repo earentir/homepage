@@ -1,13 +1,13 @@
 module homepage
 
-go 1.26.2
+go 1.27.3
 
 require (
 	github.com/earentir/cpuid v1.0.8
 	github.com/earentir/gosmbios v1.0.3
 	github.com/gorilla/websocket v1.5.3
-	github.com/gosnmp/gosnmp v1.43.2
-	github.com/miekg/dns v1.1.72
+	github.com/gosnmp/gosnmp v1.47.0
+	github.com/miekg/dns v1.1.73
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/cobra v1.10.2
 )
